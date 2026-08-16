@@ -62,3 +62,62 @@ body {
 .react-flow__background pattern circle {
   fill: #3a4857;
 }
+
+.entity-node {
+  width: 240px;
+  overflow: hidden;
+  border: 1px solid #506276;
+  border-radius: 10px;
+  background: #1b2733;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 25%);
+}
+
+.entity-node__chrome {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  border-bottom: 1px solid #3a4857;
+  background: #243342;
+}
+
+.entity-node__chrome div {
+  display: grid;
+  gap: 2px;
+}
+
+.entity-node__chrome small {
+  color: #a7b4c2;
+}
+
+.entity-node__drag-handle {
+  padding: 4px 7px;
+  border: 1px solid #63778c;
+  border-radius: 5px;
+  color: #e7edf4;
+  background: #17212b;
+  cursor: grab;
+}
+
+.entity-node__drag-handle:active {
+  cursor: grabbing;
+}
+
+.entity-node__body {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+}
+
+.entity-node__body p {
+  margin: 0;
+  color: #c2cfdb;
+}
+
+.entity-node__body button {
+  padding: 8px;
+  border: 1px solid #506276;
+  border-radius: 5px;
+  color: #e7edf4;
+  background: #111820;
+}

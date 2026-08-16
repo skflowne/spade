@@ -1,25 +1,73 @@
-import { Background, ReactFlow, type Edge, type Node } from '@xyflow/react'
+import { Background, ReactFlow, useNodesState, type Edge, type NodeTypes } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { DOMAIN_RECORD_VERSION, type CanvasEdge, type CanvasNode } from '@shared/domain'
+import { createNode, spawnConnectedNode } from '@shared/canvasCommands'
+import { DOMAIN_RECORD_VERSION } from '@shared/domain'
+import { EntityRegistry, createDeterministicMockAdapter } from '@shared/entities'
+import { GenericEntityNode, type EntityFlowNode } from './GenericEntityNode'
 import './app.css'
 
-const canvasNodes: readonly CanvasNode[] = []
-const canvasEdges: readonly CanvasEdge[] = []
+const registry = new EntityRegistry()
+registry.register({
+  type: 'note',
+  version: 1,
+  displayName: 'Note',
+  adapter: createDeterministicMockAdapter<{ body: string }>('note')
+})
 
-const flowNodes: Node[] = canvasNodes.map((node) => ({
-  id: node.id,
-  position: node.position,
-  data: { label: node.title }
-}))
+let nextNodeId = 1
+let nextEdgeId = 1
+const commandEnvironment = {
+  registry,
+  createNodeId: () => `node-${nextNodeId++}`,
+  createEdgeId: () => `edge-${nextEdgeId++}`,
+  now: () => '2026-01-01T00:00:00.000Z'
+}
 
-const flowEdges: Edge[] = canvasEdges.map((edge) => ({
+const sourceNode = createNode(commandEnvironment, {
+  type: 'note',
+  config: { body: 'Issue foundation' },
+  placement: {
+    position: { x: 120, y: 140 },
+    projectId: 'mock-project',
+    workItemId: 'mock-work-item',
+    workspaceId: null
+  },
+  title: 'Issue #4',
+  shortDescription: 'Canvas-node foundation'
+})
+const spawned = spawnConnectedNode(commandEnvironment, { nodes: [sourceNode], edges: [] }, {
+  sourceNodeId: sourceNode.id,
+  type: 'note',
+  config: { body: 'Connected node' },
+  relation: 'spawned',
+  position: { x: 440, y: 140 },
+  title: 'Connected node'
+})
+
+const initialNodes: EntityFlowNode[] = [sourceNode, spawned.node].map((entity) => {
+  registry.resolve(entity.entityType)
+
+  return {
+    id: entity.id,
+    type: 'entity',
+    position: entity.position,
+    dragHandle: '.entity-node__drag-handle',
+    data: { entity }
+  }
+})
+
+const flowEdges: Edge[] = [spawned.edge].map((edge) => ({
   id: edge.id,
   source: edge.fromNodeId,
   target: edge.toNodeId,
   label: edge.label
 }))
 
+const nodeTypes = { entity: GenericEntityNode } satisfies NodeTypes
+
 export function App(): React.JSX.Element {
+  const [nodes, , onNodesChange] = useNodesState<EntityFlowNode>(initialNodes)
+
   return (
     <main className="app-shell">
       <header className="app-header">
@@ -28,10 +76,11 @@ export function App(): React.JSX.Element {
       </header>
       <section className="canvas" aria-label="GADE canvas">
         <ReactFlow
-          nodes={flowNodes}
+          nodes={nodes}
           edges={flowEdges}
+          nodeTypes={nodeTypes}
+          onNodesChange={onNodesChange}
           nodesConnectable={false}
-          nodesDraggable={false}
           elementsSelectable={false}
         >
           <Background />
