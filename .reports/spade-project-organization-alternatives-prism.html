@@ -1,0 +1,331 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="dark">
+<link rel="icon" href="data:,">
+<title>Beyond Sidebar vs Global Canvas — SPADE Project Organization Alternatives</title>
+<style>
+:root{
+  --frame:#0c0f14;--canvas:#0f1319;--panel:#171c24;--raised:#1d2430;--border:#2b3442;
+  --muted:#8792a3;--text:#e8edf5;--blue:#69a3ff;--green:#55c995;--amber:#efb85a;--red:#ef7373;
+  --purple:#b894ff;--line:#394455;--r:9px;--shadow:0 18px 55px rgba(0,0,0,.28);
+}
+*{box-sizing:border-box}
+html{scroll-behavior:smooth;background:var(--frame)}
+body{margin:0;background:var(--frame);color:var(--text);font:400 15px/1.65 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",sans-serif}
+a{color:var(--blue);text-underline-offset:3px}
+a:hover{color:#9bc2ff}
+a:focus-visible,summary:focus-visible{outline:2px solid var(--blue);outline-offset:4px;border-radius:4px}
+.shell{max-width:1440px;margin:auto;display:grid;grid-template-columns:240px minmax(0,1fr)}
+.nav{position:sticky;top:0;height:100vh;padding:28px 22px;border-right:1px solid var(--border);background:#0d1117}
+.brand{display:flex;gap:12px;align-items:center;color:var(--text);text-decoration:none;margin-bottom:46px}
+.mark{display:grid;place-items:center;width:34px;height:34px;border-radius:7px;background:var(--blue);color:#08111e;font-weight:850}
+.brand b{display:block;letter-spacing:.05em}.brand small{display:block;color:var(--muted);font-size:11px}
+.nav-label,.eyebrow,.kicker,.pill,.fact-label{font-size:11px;font-weight:800;letter-spacing:.14em;text-transform:uppercase}
+.nav-label{color:#566071;margin:0 0 10px}
+.nav nav{display:grid;gap:4px}
+.nav nav a{padding:8px 10px;color:var(--muted);text-decoration:none;border-radius:6px;font-size:13px}
+.nav nav a:hover{background:var(--panel);color:var(--text)}
+.nav-note{position:absolute;left:22px;right:22px;bottom:25px;padding-top:16px;border-top:1px solid var(--border);color:var(--muted);font-size:11px}
+main{min-width:0}
+.hero{padding:86px clamp(24px,6vw,92px) 62px;border-bottom:1px solid var(--border);background:radial-gradient(circle at 82% 20%,rgba(105,163,255,.14),transparent 31%),linear-gradient(135deg,#0d1219,#101720 64%,#0d1117)}
+.eyebrow{color:var(--blue);margin-bottom:22px}
+h1{max-width:950px;margin:0;font-size:clamp(42px,7vw,88px);line-height:.96;letter-spacing:-.055em;font-weight:760}
+.hero-lede{max-width:810px;margin:28px 0 0;color:#b7c0cf;font-size:clamp(17px,2vw,23px);line-height:1.48}
+.hero-meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:32px}
+.pill{padding:6px 9px;border:1px solid var(--border);border-radius:999px;color:var(--muted);background:rgba(23,28,36,.7)}
+.content{padding:0 clamp(24px,6vw,92px) 90px;max-width:1200px}
+section{padding:68px 0;border-bottom:1px solid var(--border);scroll-margin-top:20px}
+.section-head{display:grid;grid-template-columns:120px 1fr;gap:22px;margin-bottom:34px}
+.kicker{color:var(--blue);padding-top:8px}
+h2{margin:0;font-size:clamp(28px,4vw,48px);line-height:1.08;letter-spacing:-.035em}
+h3{margin:0;font-size:22px;line-height:1.2;letter-spacing:-.02em}
+p{margin:0 0 16px}.muted{color:var(--muted)}
+.lead{font-size:19px;color:#c9d1dd;max-width:850px}
+.summary-grid{display:grid;grid-template-columns:1.25fr .75fr;gap:18px}
+.callout,.card,.candidate,.comparison-wrap,details{background:var(--panel);border:1px solid var(--border);border-radius:var(--r)}
+.callout{padding:28px;box-shadow:var(--shadow)}
+.callout strong{display:block;font-size:27px;line-height:1.25;letter-spacing:-.025em;margin-bottom:14px}
+.callout.recommend{border-top:3px solid var(--green)}
+.rule-list{display:grid;gap:10px}
+.rule{display:grid;grid-template-columns:29px 1fr;gap:12px;padding:14px 16px;background:var(--panel);border:1px solid var(--border);border-radius:7px}
+.rule i{display:grid;place-items:center;width:26px;height:26px;border-radius:50%;font-style:normal;font-size:11px;font-weight:800;background:var(--raised);color:var(--blue)}
+.rule b{display:block;font-size:13px}.rule span{color:var(--muted);font-size:13px}
+.axis-map{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;align-items:stretch}
+.axis{padding:18px 15px;background:var(--panel);border:1px solid var(--border);border-radius:7px;min-height:158px}
+.axis.existing{border-top:3px solid var(--muted)}.axis.new{border-top:3px solid var(--blue)}
+.axis .symbol{font:700 26px/1 ui-monospace,monospace;color:var(--blue);margin-bottom:24px}
+.axis b{display:block;margin-bottom:5px}.axis small{display:block;color:var(--muted);line-height:1.45}
+.candidate-list{display:grid;gap:22px}
+.candidate{overflow:hidden}
+.candidate-head{display:grid;grid-template-columns:minmax(0,1.2fr) minmax(310px,.8fr);border-bottom:1px solid var(--border)}
+.candidate-copy{padding:28px}.candidate-art{min-height:270px;padding:20px;background:#10151d;border-left:1px solid var(--border);display:grid;place-items:center}
+.rank{display:flex;align-items:center;gap:9px;margin-bottom:15px}.rank .num{font:800 11px/1 ui-monospace,monospace;color:#0b1410;background:var(--green);padding:6px 7px;border-radius:4px}.rank .status{color:var(--green);font-size:11px;font-weight:800;letter-spacing:.12em}
+.candidate h3{font-size:31px;margin-bottom:10px}.one-line{font-size:17px;color:#c7d0dc}
+.candidate-body{display:grid;grid-template-columns:repeat(3,1fr);gap:0}
+.candidate-body>div{padding:23px;border-right:1px solid var(--border)}.candidate-body>div:last-child{border-right:0}
+.candidate-body h4{margin:0 0 9px;color:var(--muted);font-size:11px;letter-spacing:.13em;text-transform:uppercase}
+.candidate-body p,.candidate-body li{font-size:13px;color:#b6c0ce}.candidate-body ul{padding-left:18px;margin:0}
+.question{color:var(--text)!important;font-weight:650}
+svg{width:100%;height:auto;display:block}.svgbg{fill:#0f141c}.svgbox{fill:#1d2430;stroke:#435064;stroke-width:1.5}.svgactive{fill:#17304f;stroke:#69a3ff;stroke-width:2}.svggreen{fill:#153528;stroke:#55c995;stroke-width:2}.svgline{fill:none;stroke:#566071;stroke-width:2;stroke-dasharray:5 5}.svgtxt{fill:#e8edf5;font:600 12px system-ui,sans-serif}.svgmuted{fill:#8792a3;font:500 10px system-ui,sans-serif}.svgdot{fill:#69a3ff}
+.cite{font-size:11px;font-weight:800;vertical-align:super;text-decoration:none;margin-left:2px}
+.comparison-wrap{overflow:auto}
+table{width:100%;border-collapse:collapse;min-width:790px}
+th,td{padding:15px 16px;text-align:left;border-bottom:1px solid var(--border);vertical-align:top;font-size:13px}
+th{color:var(--muted);font-size:10px;letter-spacing:.11em;text-transform:uppercase;background:#11171f}tr:last-child td{border-bottom:0}
+.good{color:var(--green);font-weight:700}.mid{color:var(--amber);font-weight:700}.weak{color:var(--red);font-weight:700}
+.sequence{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;counter-reset:seq}
+.step{position:relative;padding:23px 18px 18px;background:var(--panel);border:1px solid var(--border);border-radius:7px;counter-increment:seq}
+.step::before{content:"0" counter(seq);display:block;color:var(--blue);font:800 11px/1 ui-monospace,monospace;margin-bottom:26px}.step b{display:block;margin-bottom:7px}.step p{color:var(--muted);font-size:13px}
+.exclusions{display:grid;grid-template-columns:1fr 1fr;gap:12px}.card{padding:21px}.card h3{font-size:17px;margin-bottom:9px}.card p{font-size:13px;color:var(--muted)}
+details{margin-top:14px;padding:0 20px}summary{cursor:pointer;padding:18px 0;font-weight:700;color:#cdd5e1}details>div{padding:0 0 20px;color:var(--muted)}
+.source-list{counter-reset:source;display:grid;gap:10px}.source{counter-increment:source;display:grid;grid-template-columns:34px 1fr;gap:12px;padding:15px 0;border-top:1px solid var(--border)}.source::before{content:"[" counter(source) "]";color:var(--blue);font:700 11px/1.6 ui-monospace,monospace}.source b{display:block}.source span{display:block;color:var(--muted);font-size:12px}.source a{overflow-wrap:anywhere}
+.fact-note{display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:22px}.fact-note>div{padding:19px;border-left:3px solid var(--blue);background:var(--panel)}.fact-note>div:last-child{border-color:var(--amber)}.fact-label{color:var(--blue);display:block;margin-bottom:7px}.fact-note>div:last-child .fact-label{color:var(--amber)}
+.footer{padding:26px 0;color:#697486;font-size:12px}
+@media(max-width:980px){.shell{grid-template-columns:1fr}.nav{display:none}.axis-map{grid-template-columns:repeat(2,1fr)}.candidate-head{grid-template-columns:1fr}.candidate-art{border-left:0;border-top:1px solid var(--border)}.candidate-body{grid-template-columns:1fr}.candidate-body>div{border-right:0;border-bottom:1px solid var(--border)}.candidate-body>div:last-child{border-bottom:0}.sequence{grid-template-columns:repeat(2,1fr)}}
+@media(max-width:620px){.hero{padding-top:52px}.content{padding-left:18px;padding-right:18px}.section-head{grid-template-columns:1fr;gap:5px}.kicker{padding:0}.summary-grid,.exclusions,.fact-note,.axis-map,.sequence{grid-template-columns:1fr}.candidate-copy{padding:22px}.candidate h3{font-size:26px}.candidate-art{min-height:220px;padding:10px}.axis{min-height:120px}.hero-meta{display:none}}
+@media(prefers-reduced-motion:reduce){html{scroll-behavior:auto}}
+@media print{*{box-shadow:none!important}body{background:white;color:#111;font-size:10pt}.shell{display:block}.nav{display:none}.hero{padding:28px 0;background:white;border-bottom:2px solid #111}.content{max-width:none;padding:0}.hero-lede,.lead,.muted,.candidate-body p,.candidate-body li,.card p,.step p,.source span{color:#333}section{padding:28px 0;break-inside:auto}.callout,.card,.candidate,.comparison-wrap,details,.axis,.step,.rule,.fact-note>div{background:white;border-color:#bbb;break-inside:avoid}.candidate-art{background:#fff}.candidate-head,.candidate-body>div{border-color:#bbb}.candidate-art{display:none}h1{font-size:38pt}h2{font-size:25pt}a{color:#111}a[href^="http"]::after{content:" (" attr(href) ")";font-size:7pt;overflow-wrap:anywhere}.cite::after{content:""!important}.footer{display:none}}
+</style>
+</head>
+<body>
+<div class="shell">
+  <aside class="nav" aria-label="Report navigation">
+    <a class="brand" href="#top"><span class="mark">S</span><span><b>SPADE</b><small>Prism decision report</small></span></a>
+    <div class="nav-label">Report</div>
+    <nav>
+      <a href="#brief">Executive brief</a>
+      <a href="#geometry">The design space</a>
+      <a href="#candidates">Four alternatives</a>
+      <a href="#compare">Comparison</a>
+      <a href="#prototype">Prototype order</a>
+      <a href="#exclusions">Not alternatives</a>
+      <a href="#method">Evidence & sources</a>
+    </nav>
+    <div class="nav-note">Prepared 16 Aug 2026<br>Decision scope: project organization only</div>
+  </aside>
+
+  <main id="top">
+    <header class="hero">
+      <div class="eyebrow">SPADE / PROJECT ORGANIZATION FIELD GUIDE</div>
+      <h1>Projects need a geometry.</h1>
+      <p class="hero-lede">Sidebar canvases choose <em>isolation</em>. A global canvas chooses <em>territory</em>. Four other geometries are worth seeing before SPADE commits: <strong>scale, tiling, focus, and routes.</strong></p>
+      <div class="hero-meta"><span class="pill">4+ active projects</span><span class="pill">same records</span><span class="pill">no dashboards</span><span class="pill">no cosmetic variants</span></div>
+    </header>
+
+    <div class="content">
+      <section id="brief">
+        <div class="section-head"><div class="kicker">01 / Executive brief</div><h2>Add three prototypes; keep one as a wild card.</h2></div>
+        <div class="summary-grid">
+          <article class="callout recommend">
+            <strong>Prototype Atlas, Mosaic, and Rooms beside the two Issue #10 baselines.</strong>
+            <p class="lead">They test genuinely different organizing commitments: one nested world entered by scale, several independent worlds composed at once, and separate worlds connected by memorable adjacency. Keep the Fisheye Constellation as the higher-risk fourth condition if time permits.</p>
+            <p class="muted">This is a design recommendation, not evidence that any model is superior. The available research supports interaction principles; only SPADE prototype use can establish fit.</p>
+          </article>
+          <div class="rule-list" aria-label="Boundary rules">
+            <div class="rule"><i>1</i><div><b>Same truth</b><span>Every condition reads the same Project, WorkItem, Workspace, CanvasNode, and CanvasEdge records.</span></div></div>
+            <div class="rule"><i>2</i><div><b>Project stays owner</b><span>A visual location never silently changes project membership.</span></div></div>
+            <div class="rule"><i>3</i><div><b>Edges stay provenance</b><span>No road, corridor, or orbit becomes an execution pipeline.</span></div></div>
+            <div class="rule"><i>4</i><div><b>Organization, not garnish</b><span>A candidate must change the primary project container and the way users move among projects.</span></div></div>
+          </div>
+        </div>
+        <div class="fact-note">
+          <div><span class="fact-label">Sourced fact</span>Issue #10 compares dedicated project canvases with a global canvas over shared mock records, and requires per-project viewport restoration.<a class="cite" href="#s1">[1]</a></div>
+          <div><span class="fact-label">Design inference</span>The unresolved choice is broader than “sidebar or canvas.” It is which spatial rule should make project ownership, awareness, and return location legible.</div>
+        </div>
+      </section>
+
+      <section id="geometry">
+        <div class="section-head"><div class="kicker">02 / The design space</div><h2>Six geometries cover the meaningful territory.</h2></div>
+        <p class="lead" style="margin-bottom:28px">The two current options occupy the first two cells. The remaining four change the top-level spatial law—not merely the control used to switch views.</p>
+        <div class="axis-map" role="list" aria-label="Taxonomy of project organization geometries">
+          <article class="axis existing" role="listitem"><div class="symbol">□</div><b>Isolation</b><small>One bounded project world at a time. Current sidebar baseline.</small></article>
+          <article class="axis existing" role="listitem"><div class="symbol">▦</div><b>Territory</b><small>One shared plane partitioned into project regions. Current global baseline.</small></article>
+          <article class="axis new" role="listitem"><div class="symbol">⊡</div><b>Scale</b><small>Projects are nested places. Enter detail by semantic zoom.</small></article>
+          <article class="axis new" role="listitem"><div class="symbol">▥</div><b>Composition</b><small>Independent project worlds occupy persistent tiles.</small></article>
+          <article class="axis new" role="listitem"><div class="symbol">◎</div><b>Focus</b><small>One project expands while the rest remain compressed context.</small></article>
+          <article class="axis new" role="listitem"><div class="symbol">⌂</div><b>Route</b><small>Projects are rooms; adjacency and thresholds organize movement.</small></article>
+        </div>
+      </section>
+
+      <section id="candidates">
+        <div class="section-head"><div class="kicker">03 / Four alternatives</div><h2>Different worlds, different questions.</h2></div>
+        <div class="candidate-list">
+
+          <article class="candidate">
+            <div class="candidate-head">
+              <div class="candidate-copy"><div class="rank"><span class="num">01</span><span class="status">PROTOTYPE FIRST</span></div><h3>Zoomable Project Atlas</h3><p class="one-line">The portfolio is a map. Each project is a stable portal into its own full-resolution canvas.</p></div>
+              <div class="candidate-art">
+                <svg viewBox="0 0 420 240" role="img" aria-labelledby="atlas-title atlas-desc">
+                  <title id="atlas-title">Zoomable project atlas diagram</title><desc id="atlas-desc">Four project portals appear on an atlas. One portal expands through semantic zoom into a detailed project canvas.</desc>
+                  <rect class="svgbox" x="18" y="28" width="118" height="75" rx="8"/><text class="svgtxt" x="33" y="55">CLIENT</text><circle class="svgdot" cx="42" cy="78" r="4"/><circle class="svgdot" cx="63" cy="78" r="4"/><circle class="svgdot" cx="84" cy="78" r="4"/>
+                  <rect class="svgactive" x="18" y="132" width="118" height="75" rx="8"/><text class="svgtxt" x="33" y="159">API</text><text class="svgmuted" x="33" y="183">enter portal</text>
+                  <rect class="svgbox" x="158" y="28" width="118" height="75" rx="8"/><text class="svgtxt" x="173" y="55">DOCS</text>
+                  <rect class="svgbox" x="158" y="132" width="118" height="75" rx="8"/><text class="svgtxt" x="173" y="159">INFRA</text>
+                  <path class="svgline" d="M146 169 C195 169,215 119,257 119"/>
+                  <rect class="svggreen" x="286" y="55" width="116" height="130" rx="10"/><text class="svgtxt" x="303" y="80">API CANVAS</text><circle class="svgdot" cx="318" cy="111" r="8"/><circle class="svgdot" cx="368" cy="104" r="8"/><circle class="svgdot" cx="349" cy="148" r="8"/><path d="M326 110 L360 105 M322 118 L344 142 M363 112 L353 141" stroke="#69a3ff" stroke-width="2"/>
+                </svg>
+              </div>
+            </div>
+            <div class="candidate-body">
+              <div><h4>Borrowed from</h4><p>Zoomable interfaces and cartography: preserve a landmark while changing representation with scale. Pad++ established zoom as an interface substrate; SpaceTree later argued for semantic rather than unreadably tiny geometric scaling.<a class="cite" href="#s10">[10]</a><a class="cite" href="#s12">[12]</a></p></div>
+              <div><h4>Why it fits / fails</h4><ul><li>Cross-project awareness without four full graphs.</li><li>Project location can remain stable.</li><li>Risk: thumbnails become a stealth dashboard.</li><li>Risk: scale transitions can disorient.</li></ul></div>
+              <div><h4>Decisive test</h4><p class="question">Can someone scan four projects, enter a specific issue, and return to the portfolio without losing their place?</p><p>Minimum: four anchored portals, saved atlas and project viewports, one bounded thumbnail grammar.</p></div>
+            </div>
+          </article>
+
+          <article class="candidate">
+            <div class="candidate-head">
+              <div class="candidate-copy"><div class="rank"><span class="num">02</span><span class="status">PROTOTYPE SECOND</span></div><h3>Project Mosaic</h3><p class="one-line">A persistent tiling workbench shows several independent project canvases at once—no shared coordinates, no global graph.</p></div>
+              <div class="candidate-art">
+                <svg viewBox="0 0 420 240" role="img" aria-labelledby="mosaic-title mosaic-desc">
+                  <title id="mosaic-title">Project mosaic diagram</title><desc id="mosaic-desc">Four independent project canvases are arranged as resizable tiles. Each tile has its own internal node layout.</desc>
+                  <rect class="svgactive" x="15" y="18" width="240" height="126" rx="8"/><text class="svgtxt" x="29" y="41">CLIENT · 52%</text><circle class="svgdot" cx="62" cy="77" r="7"/><circle class="svgdot" cx="132" cy="91" r="7"/><circle class="svgdot" cx="208" cy="68" r="7"/><path d="M69 78 L125 89 M139 89 L201 70" stroke="#69a3ff" stroke-width="2"/>
+                  <rect class="svgbox" x="265" y="18" width="140" height="126" rx="8"/><text class="svgtxt" x="279" y="41">API · 31%</text><circle class="svgdot" cx="298" cy="79" r="6"/><circle class="svgdot" cx="365" cy="101" r="6"/>
+                  <rect class="svgbox" x="15" y="154" width="190" height="70" rx="8"/><text class="svgtxt" x="29" y="177">DOCS · COMPACT</text><text class="svgmuted" x="29" y="200">3 active work items</text>
+                  <rect class="svgbox" x="215" y="154" width="190" height="70" rx="8"/><text class="svgtxt" x="229" y="177">INFRA · COMPACT</text><text class="svgmuted" x="229" y="200">1 review</text>
+                </svg>
+              </div>
+            </div>
+            <div class="candidate-body">
+              <div><h4>Borrowed from</h4><p>Tiling window managers, control rooms, and split-screen workbenches: compose independent contexts rather than merge them. Research comparing tiled and overlapping windows found task- and user-dependent trade-offs—not a universal winner.<a class="cite" href="#s13">[13]</a></p></div>
+              <div><h4>Why it fits / fails</h4><ul><li>Best expression of simultaneous activity.</li><li>Each project keeps its own mental map.</li><li>Risk: tiny nodes and heavy rendering.</li><li>Risk: the desktop becomes another canvas to clean.</li></ul></div>
+              <div><h4>Decisive test</h4><p class="question">Does seeing two to four live local canvases improve cross-repository work enough to justify reduced canvas size?</p><p>Minimum: 2×2 and split layouts, compact semantic rendering, independent pan/zoom.</p></div>
+            </div>
+          </article>
+
+          <article class="candidate">
+            <div class="candidate-head">
+              <div class="candidate-copy"><div class="rank"><span class="num">03</span><span class="status">WILD CARD</span></div><h3>Fisheye Constellation</h3><p class="one-line">The active project expands to readable scale; neighboring projects remain compressed, stable context around it.</p></div>
+              <div class="candidate-art">
+                <svg viewBox="0 0 420 240" role="img" aria-labelledby="fish-title fish-desc">
+                  <title id="fish-title">Fisheye constellation diagram</title><desc id="fish-desc">One large active project canvas occupies the center, with three smaller project summaries around it connected only by visual neighborhood lines.</desc>
+                  <circle class="svgline" cx="210" cy="120" r="87"/>
+                  <rect class="svggreen" x="122" y="60" width="176" height="122" rx="14"/><text class="svgtxt" x="141" y="86">API · ACTIVE</text><circle class="svgdot" cx="160" cy="125" r="7"/><circle class="svgdot" cx="213" cy="112" r="7"/><circle class="svgdot" cx="255" cy="145" r="7"/><path d="M167 123 L206 113 M219 117 L249 140" stroke="#69a3ff" stroke-width="2"/>
+                  <rect class="svgbox" x="17" y="24" width="82" height="54" rx="9"/><text class="svgtxt" x="30" y="47">CLIENT</text><text class="svgmuted" x="30" y="64">4 active</text>
+                  <rect class="svgbox" x="321" y="38" width="82" height="54" rx="9"/><text class="svgtxt" x="334" y="61">DOCS</text><text class="svgmuted" x="334" y="78">2 active</text>
+                  <rect class="svgbox" x="291" y="181" width="98" height="44" rx="9"/><text class="svgtxt" x="305" y="207">INFRA</text>
+                </svg>
+              </div>
+            </div>
+            <div class="candidate-body">
+              <div><h4>Borrowed from</h4><p>Focus+context visualizations: detailed “neighborhoods” near the focus and compressed landmarks farther away. Furnas formalized fisheye views; SpaceTree showed the value of stable relative positions and readable-or-aggregated levels.<a class="cite" href="#s11">[11]</a><a class="cite" href="#s12">[12]</a></p></div>
+              <div><h4>Why it fits / fails</h4><ul><li>Awareness survives while one project dominates.</li><li>Switching can feel continuous, not modal.</li><li>Risk: motion and resizing erase spatial memory.</li><li>Risk: it collapses into styled global groups.</li></ul></div>
+              <div><h4>Decisive test</h4><p class="question">Can adaptive focus preserve orientation better than a hard canvas switch without making the scene unstable?</p><p>It only qualifies as new if inactive projects are semantic summaries, not tiny full groups on one global plane.</p></div>
+            </div>
+          </article>
+
+          <article class="candidate">
+            <div class="candidate-head">
+              <div class="candidate-copy"><div class="rank"><span class="num">04</span><span class="status">TEST WITH RELATED REPOS</span></div><h3>Project Rooms</h3><p class="one-line">Each project is a room; a persistent floor plan and deliberate doorways make adjacency the navigation structure.</p></div>
+              <div class="candidate-art">
+                <svg viewBox="0 0 420 240" role="img" aria-labelledby="rooms-title rooms-desc">
+                  <title id="rooms-title">Project rooms diagram</title><desc id="rooms-desc">Four project rooms form a floor plan with doorways and a corridor. The API room is active and contains a local project graph.</desc>
+                  <path d="M20 20 H400 V220 H20 Z M20 118 H400 M210 20 V92 M210 146 V220" fill="none" stroke="#435064" stroke-width="4"/>
+                  <path d="M91 118 H125 M284 118 H318 M210 68 V92 M210 146 V170" stroke="#0f141c" stroke-width="8"/>
+                  <text class="svgtxt" x="39" y="46">CLIENT</text><text class="svgtxt" x="231" y="46">API</text><rect class="svgactive" x="228" y="58" width="152" height="45" rx="6"/><circle class="svgdot" cx="252" cy="80" r="5"/><circle class="svgdot" cx="296" cy="80" r="5"/><circle class="svgdot" cx="340" cy="80" r="5"/>
+                  <text class="svgmuted" x="168" y="136">CORRIDOR</text><text class="svgtxt" x="39" y="175">DOCS</text><text class="svgtxt" x="231" y="175">INFRA</text>
+                  <path d="M120 118 Q108 101 91 118 M318 118 Q301 101 284 118" fill="none" stroke="#55c995" stroke-width="2"/>
+                </svg>
+              </div>
+            </div>
+            <div class="candidate-body">
+              <div><h4>Borrowed from</h4><p>Architecture, indoor maps, and game hubs: bounded rooms, doors, corridors, and levels create memorable thresholds. Indoor-map standards explicitly distinguish these place types; Task Gallery explored task grouping in a navigable spatial environment.<a class="cite" href="#s8">[8]</a><a class="cite" href="#s14">[14]</a></p></div>
+              <div><h4>Why it fits / fails</h4><ul><li>Separation stays concrete; routes add continuity.</li><li>Strong for stable product families.</li><li>Risk: invented adjacency implies coupling.</li><li>Risk: corridors become decorative overhead.</li></ul></div>
+              <div><h4>Decisive test</h4><p class="question">Do users remember and use repository adjacency—or does the metaphor merely slow direct switching?</p><p>Run both related and unrelated four-project scenarios; the contrast is mandatory.</p></div>
+            </div>
+          </article>
+        </div>
+      </section>
+
+      <section id="compare">
+        <div class="section-head"><div class="kicker">04 / Comparison</div><h2>No candidate wins every constraint.</h2></div>
+        <div class="comparison-wrap" role="region" aria-label="Scrollable candidate comparison" tabindex="0">
+          <table>
+            <thead><tr><th>Model</th><th>Primary rule</th><th>Ambient awareness</th><th>Local canvas space</th><th>Stable landmarks</th><th>40-project path</th><th>Distinct from #10?</th></tr></thead>
+            <tbody>
+              <tr><td>Dedicated canvases</td><td>Select one isolated world</td><td class="weak">Low</td><td class="good">High</td><td class="mid">Per-project only</td><td class="good">List scales</td><td>Existing baseline</td></tr>
+              <tr><td>Global groups</td><td>Partition one shared plane</td><td class="good">High</td><td class="weak">Contested</td><td class="good">Global</td><td class="weak">Density risk</td><td>Existing baseline</td></tr>
+              <tr><td><strong>Atlas</strong></td><td>Nest worlds by scale</td><td class="good">High at overview</td><td class="good">High in detail</td><td class="good">Strong</td><td class="good">Aggregate by level</td><td class="good">Yes</td></tr>
+              <tr><td><strong>Mosaic</strong></td><td>Tile independent worlds</td><td class="good">Highest for active set</td><td class="mid">Shared screen</td><td class="good">Strong</td><td class="mid">Park/collapse</td><td class="good">Yes</td></tr>
+              <tr><td><strong>Fisheye</strong></td><td>Expand focus, compress context</td><td class="good">High</td><td class="mid">Focus dominates</td><td class="mid">Animation-sensitive</td><td class="mid">Aggregate periphery</td><td class="mid">Only if semantic</td></tr>
+              <tr><td><strong>Rooms</strong></td><td>Navigate bounded places by route</td><td class="mid">Neighbor awareness</td><td class="good">High</td><td class="good">Very strong</td><td class="weak">Floor-plan burden</td><td class="good">Yes</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="muted" style="margin-top:14px">Ratings are reasoned design expectations for prototype prioritization, not measured outcomes.</p>
+      </section>
+
+      <section id="prototype">
+        <div class="section-head"><div class="kicker">05 / Prototype order</div><h2>Change one spatial law at a time.</h2></div>
+        <div class="sequence">
+          <article class="step"><b>Retain both baselines</b><p>Sidebar canvases and global project groups remain the controls. Use the existing realistic shared fixture.<a class="cite" href="#s1">[1]</a></p></article>
+          <article class="step"><b>Add Atlas</b><p>Lowest domain-model risk. Tests overview-to-detail continuity and cross-project scanning.</p></article>
+          <article class="step"><b>Add Mosaic</b><p>Tests genuine simultaneous work. Keep project coordinate systems independent.</p></article>
+          <article class="step"><b>Gate Rooms + Fisheye</b><p>Rooms needs meaningful adjacency; Fisheye needs stable, low-motion transitions.</p></article>
+        </div>
+        <details>
+          <summary>Common task script for all conditions</summary>
+          <div>
+            <ol>
+              <li>Locate the project with a blocked review while two other projects have active agent work.</li>
+              <li>Resume one issue, inspect its five workspaces, then move to a related issue in another project.</li>
+              <li>Return to the exact first-project work-item view without using search.</li>
+              <li>Explain which project, work item, and workspace the focused node belongs to.</li>
+              <li>Describe what one visible edge means. Reject any condition that invites “this runs next” interpretations.</li>
+            </ol>
+            <p>Observe route choice, hesitation, wrong-project landings, viewport recovery, and the participant’s explanation of the spatial model. Do not turn visual preference into a productivity conclusion.</p>
+          </div>
+        </details>
+      </section>
+
+      <section id="exclusions">
+        <div class="section-head"><div class="kicker">06 / Boundary check</div><h2>Interesting does not mean organizational.</h2></div>
+        <div class="exclusions">
+          <article class="card"><h3>Tabs, switchers, recents, search</h3><p>Ways to access dedicated canvases. They do not change what the primary project space is.</p></article>
+          <article class="card"><h3>Minimaps, dashboards, status decks</h3><p>Awareness layers. Useful later, but they sit on top of an organization model.</p></article>
+          <article class="card"><h3>Colors, planets, hull shapes</h3><p>Visual skins for the global-territory baseline unless they alter containment and navigation semantics.</p></article>
+          <article class="card"><h3>Metro lines and pipelines</h3><p>They elevate sequence and hand-off, conflicting with SPADE edges as provenance rather than execution.<a class="cite" href="#s2">[2]</a></p></article>
+          <article class="card"><h3>Project × work-item matrix</h3><p>A grid can give fixed addresses, but it shifts SPADE toward a board and compresses branching provenance into cells.</p></article>
+          <article class="card"><h3>3D buildings</h3><p>Depth is not required for the Rooms hypothesis. Test 2D adjacency and thresholds before accepting occlusion and navigation cost.</p></article>
+        </div>
+      </section>
+
+      <section id="method">
+        <div class="section-head"><div class="kicker">07 / Evidence & limits</div><h2>Precedent suggests; prototypes decide.</h2></div>
+        <p class="lead">Research combined SPADE’s canonical model, the live issue, implementation documentation, and primary HCI/platform precedents. Load-bearing claims were checked directly. Historical sources are used for durable interaction principles, not as proof that an old interface should be copied.</p>
+        <div class="fact-note">
+          <div><span class="fact-label">What is established</span>SPADE’s records separate project, work item, workspace, node, and edge; React Flow can express subflows; virtual desktops establish an isolation/visibility boundary; HCI literature documents zoom, fisheye, tiling, and spatial-task metaphors.<a class="cite" href="#s3">[3]</a><a class="cite" href="#s6">[6]</a></div>
+          <div><span class="fact-label">What remains unknown</span>No cited controlled study compares these models for spatial agent-development work. Their cognitive cost, density limits, and operational fit remain hypotheses.</div>
+        </div>
+
+        <h3 style="margin:42px 0 10px">Sources</h3>
+        <div class="source-list">
+          <div class="source" id="s1"><div><b>Issue #10 — [SPADE-10] Prototype 1: Project Management Strategies Battle</b><span>SPADE / GitHub · accessed 16 Aug 2026</span><a href="https://github.com/skflowne/spade/issues/10">github.com/skflowne/spade/issues/10</a></div></div>
+          <div class="source" id="s2"><div><b>SPADE Plan</b><span>SPADE · canonical product direction · updated 15 Aug 2026</span><a href="../docs/plan.html">../docs/plan.html</a></div></div>
+          <div class="source" id="s3"><div><b>Foundation</b><span>SPADE · canonical current-system invariants · accessed 16 Aug 2026</span><a href="../docs/foundation.html">../docs/foundation.html</a></div></div>
+          <div class="source" id="s4"><div><b>Architecture</b><span>SPADE · canonical boundaries and relationships · accessed 16 Aug 2026</span><a href="../docs/architecture.html">../docs/architecture.html</a></div></div>
+          <div class="source" id="s5"><div><b>The Viewport</b><span>React Flow / xyflow · slippy-map pan/zoom behavior · updated 10 Aug 2026</span><a href="https://reactflow.dev/learn/concepts/the-viewport">reactflow.dev/learn/concepts/the-viewport</a></div></div>
+          <div class="source" id="s6"><div><b>Sub Flows</b><span>React Flow / xyflow · parent-relative positioning and cross-boundary edges · accessed 16 Aug 2026</span><a href="https://reactflow.dev/learn/layouting/sub-flows">reactflow.dev/learn/layouting/sub-flows</a></div></div>
+          <div class="source" id="s7"><div><b>IVirtualDesktopManager</b><span>Microsoft Learn · authoritative inactive-desktop visibility behavior · accessed 16 Aug 2026</span><a href="https://learn.microsoft.com/en-us/windows/win32/api/shobjidl_core/nn-shobjidl_core-ivirtualdesktopmanager">learn.microsoft.com/.../ivirtualdesktopmanager</a></div></div>
+          <div class="source" id="s8"><div><b>Simple Indoor Tagging</b><span>OpenStreetMap Wiki · rooms, corridors, doors, and levels · accessed 16 Aug 2026</span><a href="https://wiki.openstreetmap.org/wiki/Simple_Indoor_Tagging">wiki.openstreetmap.org/wiki/Simple_Indoor_Tagging</a></div></div>
+          <div class="source" id="s9"><div><b>Presenting windows and spaces</b><span>Apple Developer Documentation · window/space isolation precedent · accessed 16 Aug 2026</span><a href="https://developer.apple.com/documentation/visionos/presenting-windows-and-spaces/">developer.apple.com/documentation/visionos/presenting-windows-and-spaces</a></div></div>
+          <div class="source" id="s10"><div><b>Pad++: A Zoomable Graphical Sketchpad for Exploring Alternate Interface Physics</b><span>Bederson et al. · Journal of Visual Languages & Computing 7(1), 1996</span><a href="https://doi.org/10.1006/jvlc.1996.0002">doi.org/10.1006/jvlc.1996.0002</a></div></div>
+          <div class="source" id="s11"><div><b>Generalized Fisheye Views</b><span>G. W. Furnas · ACM SIGCHI Bulletin 17(4), 1986</span><a href="https://doi.org/10.1145/22339.22342">doi.org/10.1145/22339.22342</a></div></div>
+          <div class="source" id="s12"><div><b>SpaceTree: Supporting Exploration in Large Node Link Tree</b><span>Plaisant, Grosjean & Bederson · IEEE InfoVis, 2002 · HCIL primary project/paper page</span><a href="https://www.cs.umd.edu/hcil/spacetree/">cs.umd.edu/hcil/spacetree</a></div></div>
+          <div class="source" id="s13"><div><b>A Comparison of Tiled and Overlapping Windows</b><span>Bly & Rosenberg · ACM SIGCHI Bulletin 17(4), 1986</span><a href="https://doi.org/10.1145/22339.22356">doi.org/10.1145/22339.22356</a></div></div>
+          <div class="source" id="s14"><div><b>The Task Gallery: A 3D Window Manager</b><span>Robertson et al. · CHI 2000 · used only for the spatial task/place precedent</span><a href="https://doi.org/10.1145/332040.332482">doi.org/10.1145/332040.332482</a></div></div>
+        </div>
+        <details>
+          <summary>Method and evidence limitations</summary>
+          <div><p>The Explore research pass searched for organizational primitives rather than app feature inventories, then classified candidates by their authoritative top-level container: isolated surface, shared territory, nested scale, composed windows, adaptive focus, or routed rooms. Concepts that only add retrieval, status, or decoration were excluded.</p><p>Source dates span 1986–2026 because the report concerns enduring interaction structures. Citation does not imply direct transferability. In particular, no evidence here demonstrates that semantic zoom, fisheye views, tiling, or room metaphors improve SPADE task time or cognitive load.</p></div>
+        </details>
+      </section>
+      <footer class="footer">SPADE Prism report · standalone HTML · no runtime network requests</footer>
+    </div>
+  </main>
+</div>
+</body>
+</html>
