@@ -35,6 +35,20 @@ export type CanvasProjection = {
   edges: Edge[]
 }
 
+export function canonicalNodePosition(
+  nodes: readonly PrototypeFlowNode[],
+  nodeId: string,
+  position: CanvasNode['position']
+): CanvasNode['position'] {
+  const node = nodes.find(({ id }) => id === nodeId)
+  if (!node?.parentId?.startsWith('work-item-')) return position
+
+  const workItemGroup = nodes.find(({ id }) => id === node.parentId)
+  return workItemGroup
+    ? { x: position.x + workItemGroup.position.x, y: position.y + workItemGroup.position.y }
+    : position
+}
+
 export const defaultDedicatedViewport: Viewport = { x: 24, y: 30, zoom: 0.82 }
 export const defaultGlobalViewport: Viewport = { x: 32, y: 32, zoom: 0.34 }
 

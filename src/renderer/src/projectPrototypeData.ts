@@ -40,7 +40,7 @@ const projects = [
 ]
 
 const workItems = [
-  workItem('spade-10', 'spade', '[SPADE-10] Project management prototype', 'review', '#10'),
+  workItem('spade-10', 'spade', '[SPADE-10] Project management prototype', 'done', '#10'),
   workItem('spade-12', 'spade', '[SPADE-12] Browser composition spike', 'active', '#12'),
   workItem('spade-8', 'spade', '[SPADE-8] Canvas focus history', 'blocked', '#8'),
   workItem('paseo-41', 'paseo', '[PASEO-41] Durable agent recovery', 'active', '#41'),
@@ -79,11 +79,11 @@ const nodes = [
   node('spade-10-fix-2', 'spade', 'spade-10', 'ws-spade-10-f2', 'Fix workspace 2', 880, 210, 'fix', 'fix', 'Resolves grouping findings'),
   node('spade-10-subagents', 'spade', 'spade-10', 'ws-spade-10-main', 'Delegated scouts · 3', 320, 250, 'agent', 'collapsed', 'Retired delegated stages remain discoverable'),
   node('spade-10-diff', 'spade', 'spade-10', 'ws-spade-10-main', 'Working diff', 600, 390, 'diff', 'changed', 'src/ +842 −64 · docs/ +22 −4'),
-  node('spade-10-pr', 'spade', 'spade-10', 'ws-spade-10-main', 'Pull request #14', 880, 390, 'pull-request', 'ready', 'Open for human review'),
+  node('spade-10-pr', 'spade', 'spade-10', 'ws-spade-10-main', 'Pull request #14', 880, 390, 'pull-request', 'done', 'active → review → done · open for human review'),
 
   node('spade-12-issue', 'spade', 'spade-12', null, 'Browser composition', 40, 590, 'issue', 'active', 'Compare webview and native overlay'),
   node('spade-12-agent', 'spade', 'spade-12', 'ws-spade-12', 'Exploration agent', 320, 590, 'agent', 'exploration', 'Running interaction checks'),
-  node('spade-8-task', 'spade', 'spade-8', null, 'Focus history', 600, 590, 'task', 'blocked', 'Waiting for navigation direction'),
+  node('spade-8-issue', 'spade', 'spade-8', null, 'Focus history', 600, 590, 'task', 'blocked', 'Waiting for navigation direction'),
 
   node('paseo-41-issue', 'paseo', 'paseo-41', null, 'Durable recovery', 40, 70, 'issue', 'active', 'Restore interrupted sessions'),
   node('paseo-41-agent', 'paseo', 'paseo-41', 'ws-paseo-41-main', 'Recovery author', 320, 70, 'agent', 'implementation', 'Checkpoint protocol in progress'),
