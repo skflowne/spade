@@ -1,0 +1,430 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark light">
+  <link rel="icon" href="data:,">
+  <title>Beyond Two Canvases — SPADE Project Organization Strategy</title>
+  <style>
+    :root {
+      --ink-950:#090c11; --ink-900:#0f1319; --ink-850:#151b23; --ink-800:#1c2430;
+      --ink-700:#2b3646; --ink-600:#435067; --ink-400:#94a0b3; --ink-300:#b9c2d0;
+      --ink-100:#eef3fa; --blue:#6ea8fe; --cyan:#55d6be; --amber:#f3bf61; --red:#f27d87;
+      --violet:#b8a1ff; --green:#74d59a; --paper:#f7f4ed;
+      --radius:14px; --shadow:0 18px 52px rgba(0,0,0,.28); --max:1180px;
+    }
+    * { box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body {
+      margin:0; color:var(--ink-100); background:
+        radial-gradient(circle at 82% -10%, rgba(110,168,254,.12), transparent 34rem),
+        radial-gradient(circle at 10% 24%, rgba(85,214,190,.06), transparent 28rem),
+        var(--ink-950);
+      font-family:Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height:1.58;
+    }
+    a { color:var(--blue); text-underline-offset:.2em; }
+    a:hover { color:#a9ccff; }
+    a:focus-visible, summary:focus-visible { outline:2px solid var(--blue); outline-offset:4px; border-radius:3px; }
+    .skip { position:absolute; left:-9999px; top:10px; z-index:20; background:var(--paper); color:#111; padding:.7rem 1rem; }
+    .skip:focus { left:10px; }
+    .wrap { width:min(calc(100% - 40px), var(--max)); margin-inline:auto; }
+    header.hero { min-height:82vh; display:grid; align-items:center; padding:7rem 0 5rem; border-bottom:1px solid var(--ink-700); }
+    .eyebrow { display:flex; align-items:center; gap:.65rem; color:var(--cyan); font:700 .74rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.14em; text-transform:uppercase; }
+    .eyebrow::before { content:""; width:28px; height:2px; background:currentColor; }
+    h1 { max-width:930px; margin:1.2rem 0 1.3rem; font-size:clamp(3rem, 8vw, 7.2rem); line-height:.92; letter-spacing:-.065em; font-weight:760; }
+    .hero .lede { max-width:830px; color:var(--ink-300); font-size:clamp(1.08rem,2vw,1.35rem); }
+    .hero .lede strong { color:var(--ink-100); }
+    .verdict-strip { margin-top:2.2rem; padding:1rem 1.15rem; max-width:910px; border-left:3px solid var(--amber); background:linear-gradient(90deg, rgba(243,191,97,.11), transparent); color:#f7e5c2; }
+    .meta { display:flex; flex-wrap:wrap; gap:.6rem; margin-top:2.4rem; }
+    .pill, .tag { display:inline-flex; align-items:center; min-height:28px; padding:.2rem .65rem; border:1px solid var(--ink-700); border-radius:999px; color:var(--ink-300); background:rgba(21,27,35,.72); font:650 .72rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.04em; }
+    nav.report-nav { position:sticky; top:0; z-index:10; border-bottom:1px solid var(--ink-700); background:rgba(9,12,17,.9); backdrop-filter:blur(16px); }
+    nav.report-nav .wrap { display:flex; gap:1.1rem; overflow:auto; scrollbar-width:thin; }
+    nav.report-nav a { flex:none; padding:.85rem 0; color:var(--ink-300); text-decoration:none; font-size:.84rem; font-weight:650; }
+    nav.report-nav a:hover { color:white; }
+    main section { padding:5.2rem 0; border-bottom:1px solid rgba(43,54,70,.7); }
+    .section-head { display:grid; grid-template-columns:minmax(0, .65fr) minmax(260px, 1.35fr); gap:2rem; align-items:start; margin-bottom:2.5rem; }
+    .kicker { color:var(--blue); font:700 .73rem/1.2 ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing:.12em; text-transform:uppercase; }
+    h2 { margin:.55rem 0 0; font-size:clamp(2rem,4vw,3.7rem); line-height:1.02; letter-spacing:-.045em; }
+    h3 { margin:.1rem 0 .55rem; font-size:1.14rem; line-height:1.25; }
+    h4 { margin:0 0 .35rem; font-size:.94rem; }
+    p { margin:.6rem 0 1rem; }
+    .section-intro { color:var(--ink-300); font-size:1.08rem; max-width:680px; }
+    .grid-2, .grid-3, .grid-4 { display:grid; gap:1rem; }
+    .grid-2 { grid-template-columns:repeat(2,minmax(0,1fr)); }
+    .grid-3 { grid-template-columns:repeat(3,minmax(0,1fr)); }
+    .grid-4 { grid-template-columns:repeat(4,minmax(0,1fr)); }
+    .card { background:linear-gradient(145deg, rgba(28,36,48,.9), rgba(15,19,25,.92)); border:1px solid var(--ink-700); border-radius:var(--radius); padding:1.25rem; box-shadow:0 1px 0 rgba(255,255,255,.025) inset; }
+    .card p, .card li { color:var(--ink-300); }
+    .card ul { padding-left:1.1rem; margin:.65rem 0 0; }
+    .card li + li { margin-top:.35rem; }
+    .number { display:grid; place-items:center; width:34px; height:34px; margin-bottom:1rem; border-radius:50%; background:var(--ink-700); color:var(--cyan); font:700 .8rem ui-monospace, monospace; }
+    .summary-card { position:relative; overflow:hidden; padding:1.55rem; }
+    .summary-card::after { content:""; position:absolute; width:110px; height:110px; right:-48px; top:-50px; border:1px solid var(--ink-600); border-radius:50%; }
+    .summary-card strong { display:block; margin-bottom:.55rem; font-size:1.3rem; }
+    .summary-card p { margin:0; }
+    .fact { border-top:3px solid var(--blue); }
+    .interpretation { border-top:3px solid var(--violet); }
+    .recommendation { border-top:3px solid var(--cyan); }
+    .axis-grid { display:grid; grid-template-columns:repeat(5,minmax(0,1fr)); gap:1px; background:var(--ink-700); border:1px solid var(--ink-700); border-radius:var(--radius); overflow:hidden; }
+    .axis { min-height:210px; padding:1.25rem; background:var(--ink-850); }
+    .axis.issue { background:linear-gradient(160deg, rgba(110,168,254,.18), var(--ink-850)); }
+    .axis .glyph { font-size:1.7rem; color:var(--cyan); }
+    .axis p { color:var(--ink-400); font-size:.88rem; }
+    .axis small { display:block; color:var(--amber); font-weight:700; text-transform:uppercase; letter-spacing:.08em; }
+    .diagram { margin:2rem 0 0; padding:1rem; border:1px solid var(--ink-700); border-radius:var(--radius); background:var(--ink-900); overflow:hidden; }
+    .diagram svg { display:block; width:100%; height:auto; }
+    .callout { margin:1.5rem 0; padding:1.1rem 1.25rem; border-left:3px solid var(--cyan); background:rgba(85,214,190,.07); }
+    .callout strong { color:#c5fff1; }
+    .ranked { counter-reset:rank; display:grid; gap:1rem; }
+    .concept { display:grid; grid-template-columns:62px minmax(0,1fr) minmax(230px,.72fr); gap:1.2rem; align-items:start; padding:1.3rem; border:1px solid var(--ink-700); border-radius:var(--radius); background:var(--ink-850); }
+    .concept::before { counter-increment:rank; content:counter(rank, decimal-leading-zero); color:var(--cyan); font:750 1.3rem/1 ui-monospace, monospace; padding-top:.2rem; }
+    .concept .why { color:var(--ink-300); }
+    .concept .test { padding-left:1rem; border-left:1px solid var(--ink-700); }
+    .concept .test span { color:var(--ink-400); font-size:.78rem; text-transform:uppercase; letter-spacing:.08em; font-weight:700; }
+    .tier-now { box-shadow:inset 3px 0 var(--cyan); }
+    .tier-next { box-shadow:inset 3px 0 var(--amber); }
+    .spec-grid { display:grid; grid-template-columns:1fr 1fr; gap:1rem; }
+    .spec { padding:1.35rem; border:1px solid var(--ink-700); border-radius:var(--radius); background:var(--ink-850); }
+    .spec header { display:flex; align-items:flex-start; justify-content:space-between; gap:1rem; padding-bottom:1rem; border-bottom:1px solid var(--ink-700); }
+    .spec dl { display:grid; grid-template-columns:115px 1fr; gap:.7rem 1rem; margin:1rem 0 0; }
+    .spec dt { color:var(--ink-400); font-size:.78rem; font-weight:750; text-transform:uppercase; letter-spacing:.07em; }
+    .spec dd { margin:0; color:var(--ink-300); }
+    .tag.now { color:#bff8e8; border-color:rgba(85,214,190,.5); }
+    .tag.conditional { color:#f7dfaf; border-color:rgba(243,191,97,.5); }
+    .table-wrap { overflow:auto; border:1px solid var(--ink-700); border-radius:var(--radius); }
+    table { width:100%; min-width:940px; border-collapse:collapse; background:var(--ink-900); }
+    th, td { padding:.8rem .9rem; border-bottom:1px solid var(--ink-700); text-align:left; vertical-align:top; }
+    th { position:sticky; top:0; z-index:1; color:var(--ink-100); background:var(--ink-800); font-size:.76rem; text-transform:uppercase; letter-spacing:.07em; }
+    td { color:var(--ink-300); font-size:.87rem; }
+    tr:last-child td { border-bottom:0; }
+    td:first-child { color:var(--ink-100); font-weight:700; }
+    .verdict { white-space:nowrap; font-weight:750; }
+    .v-now { color:var(--cyan); } .v-next { color:var(--amber); } .v-fold { color:var(--blue); } .v-defer { color:var(--ink-400); } .v-reject { color:var(--red); }
+    .scenario { display:grid; grid-template-columns:1.05fr .95fr; gap:1rem; }
+    .scenario .panel { border:1px solid var(--ink-700); border-radius:var(--radius); background:var(--ink-850); padding:1.35rem; }
+    .task-list { list-style:none; padding:0; margin:0; counter-reset:task; }
+    .task-list li { counter-increment:task; display:grid; grid-template-columns:32px 1fr; gap:.7rem; padding:.7rem 0; border-bottom:1px solid var(--ink-700); color:var(--ink-300); }
+    .task-list li::before { content:counter(task); display:grid; place-items:center; width:25px; height:25px; border:1px solid var(--ink-600); border-radius:50%; color:var(--blue); font:700 .72rem ui-monospace, monospace; }
+    .task-list li:last-child { border-bottom:0; }
+    .metric-grid { display:grid; grid-template-columns:1fr 1fr; gap:.7rem; }
+    .metric { padding:.8rem; border:1px solid var(--ink-700); border-radius:9px; }
+    .metric strong { display:block; font-size:.84rem; }
+    .metric small { color:var(--ink-400); }
+    details { border:1px solid var(--ink-700); border-radius:10px; background:var(--ink-850); }
+    details + details { margin-top:.7rem; }
+    summary { cursor:pointer; padding:1rem; font-weight:700; }
+    details > div { padding:0 1rem 1rem; color:var(--ink-300); }
+    .source-list { margin:0; padding-left:1.5rem; }
+    .source-list li { padding:.55rem 0 .75rem .35rem; color:var(--ink-300); }
+    .source-list li::marker { color:var(--blue); font-weight:750; }
+    .source-list strong { color:var(--ink-100); }
+    .cite { font:700 .7rem ui-monospace, monospace; vertical-align:super; text-decoration:none; }
+    footer { padding:2.5rem 0 4rem; color:var(--ink-400); }
+    .footer-row { display:flex; justify-content:space-between; gap:1rem; border-top:1px solid var(--ink-700); padding-top:1.2rem; }
+    @media (max-width:900px) {
+      .grid-4, .axis-grid { grid-template-columns:repeat(2,minmax(0,1fr)); }
+      .grid-3 { grid-template-columns:1fr; }
+      .concept { grid-template-columns:48px 1fr; }
+      .concept .test { grid-column:2; padding:1rem 0 0; border-left:0; border-top:1px solid var(--ink-700); }
+      .spec-grid, .scenario { grid-template-columns:1fr; }
+    }
+    @media (max-width:650px) {
+      .wrap { width:min(calc(100% - 24px), var(--max)); }
+      header.hero { min-height:auto; padding:5rem 0 3.5rem; }
+      .section-head, .grid-2, .grid-4, .axis-grid { grid-template-columns:1fr; }
+      main section { padding:3.8rem 0; }
+      .axis { min-height:0; }
+      .concept { grid-template-columns:36px 1fr; gap:.7rem; }
+      .spec dl { grid-template-columns:1fr; gap:.2rem; }
+      .spec dd { margin-bottom:.7rem; }
+      .metric-grid { grid-template-columns:1fr; }
+      .footer-row { flex-direction:column; }
+    }
+    @media (prefers-reduced-motion:reduce) { html { scroll-behavior:auto; } }
+    @media print {
+      :root { --ink-100:#111; --ink-300:#333; --ink-400:#555; --ink-700:#bbb; --ink-850:#fff; --ink-900:#fff; --ink-950:#fff; }
+      body { background:#fff; color:#111; font-size:10pt; }
+      nav.report-nav, .skip { display:none; }
+      header.hero { min-height:auto; padding:1cm 0; }
+      main section { padding:1cm 0; break-inside:auto; }
+      .card, .spec, .concept, details, .diagram, .panel { break-inside:avoid; box-shadow:none; }
+      .verdict-strip, .callout { color:#222; background:#fff; border-color:#666; }
+      .verdict-strip strong, .callout strong { color:#111; }
+      .pill, .tag { color:#222; background:#fff; border-color:#888; }
+      .grid-3 { grid-template-columns:repeat(3,1fr); }
+      .axis-grid { grid-template-columns:repeat(5,1fr); }
+      a::after { content:" (" attr(href) ")"; font-size:8pt; overflow-wrap:anywhere; }
+      .cite::after, nav a::after { content:""; }
+      details > div { display:block; }
+    }
+  </style>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to report</a>
+  <header class="hero">
+    <div class="wrap">
+      <div class="eyebrow">SPADE / Product strategy research</div>
+      <h1>Don’t choose one map.</h1>
+      <p class="lede"><strong>Issue #10 tests where project work should live.</strong> It does not test how a developer decides what needs attention, enters one objective, follows a cross-project initiative, or jumps to a known destination. The highest-value prototype is therefore a small stack of complementary organizers—not a third all-purpose canvas.</p>
+      <div class="verdict-strip"><strong>Recommendation:</strong> retain sidebar-versus-global as the territorial baseline, then add three orthogonal experiments now: an <strong>Attention Deck</strong>, a <strong>Work-item Portal</strong>, and a <strong>Command Jump</strong>. Gate Initiative Lens, Focus Sets, and Atlas navigation behind evidence.</div>
+      <div class="meta">
+        <span class="pill">Decision brief</span><span class="pill">Issue #10</span><span class="pill">18 primary / canonical sources</span><span class="pill">Prototype scope only</span><span class="pill">Prepared 2026</span>
+      </div>
+    </div>
+  </header>
+
+  <nav class="report-nav" aria-label="Report sections">
+    <div class="wrap">
+      <a href="#brief">Brief</a><a href="#gap">Missing dimensions</a><a href="#shortlist">Shortlist</a><a href="#specs">Prototype cards</a><a href="#inventory">Full inventory</a><a href="#experiment">Experiment design</a><a href="#guardrails">Guardrails</a><a href="#sources">Sources</a>
+    </div>
+  </nav>
+
+  <main id="main">
+    <section id="brief">
+      <div class="wrap">
+        <div class="section-head">
+          <div><div class="kicker">01 / Executive brief</div><h2>The territorial decision is real—but incomplete.</h2></div>
+          <p class="section-intro">SPADE’s own plan frames the canvas as a mind map of ongoing work, separates project, work item, and execution workspace, and makes Issue #10’s two views projections over the same records.<a class="cite" href="#s2">[2]</a><a class="cite" href="#s3">[3]</a> That gives the prototype unusual freedom: new ways of entering and viewing work can be tested without creating new truth.</p>
+        </div>
+        <div class="grid-3">
+          <article class="card summary-card fact"><span class="tag">SOURCED FACT</span><strong>Issue #10 tests territory.</strong><p>Dedicated project canvases versus one global grouped canvas answer “where does repository work live?” with the same four-project mock record set.<a class="cite" href="#s1">[1]</a></p></article>
+          <article class="card summary-card interpretation"><span class="tag">INTERPRETATION</span><strong>Most switching starts elsewhere.</strong><p>A developer may begin from urgency, an objective, a known issue ID, or a temporary cross-repo task. Those are different navigation intents, not alternative geometries.</p></article>
+          <article class="card summary-card recommendation"><span class="tag">RECOMMENDATION</span><strong>Prototype layers, not rival worlds.</strong><p>Keep one canonical record set. Compare entry, focus, retrieval, and strategic lenses while project/work-item/workspace identity remains explicit.</p></article>
+        </div>
+        <div class="callout"><strong>The product bet:</strong> SPADE should behave less like a folder tree with a canvas attached and more like a control room with several legitimate doors into the same spatial evidence.</div>
+      </div>
+    </section>
+
+    <section id="gap">
+      <div class="wrap">
+        <div class="section-head">
+          <div><div class="kicker">02 / Reframe</div><h2>Five organizing questions, not one.</h2></div>
+          <p class="section-intro">Unrelated products repeatedly separate canonical ownership from personal attention, strategic intent, direct retrieval, and temporary context. Linear groups projects around objectives; VS Code preserves multi-root workspaces; PagerDuty prioritizes actionable incidents; Airtable presents many views over one dataset.<a class="cite" href="#s7">[7]</a><a class="cite" href="#s8">[8]</a><a class="cite" href="#s17">[17]</a><a class="cite" href="#s12">[12]</a></p>
+        </div>
+        <div class="axis-grid" role="list" aria-label="Five organizing questions">
+          <article class="axis issue" role="listitem"><div class="glyph">⌂</div><h3>Territory</h3><p>Where does this work belong?</p><small>Issue #10 tests this</small></article>
+          <article class="axis" role="listitem"><div class="glyph">!</div><h3>Attention</h3><p>What needs me now?</p><small>Operational queues</small></article>
+          <article class="axis" role="listitem"><div class="glyph">◎</div><h3>Intent</h3><p>Why is this work together?</p><small>Initiatives / missions</small></article>
+          <article class="axis" role="listitem"><div class="glyph">⌕</div><h3>Retrieval</h3><p>I know the target—take me there.</p><small>Search / command</small></article>
+          <article class="axis" role="listitem"><div class="glyph">◇</div><h3>Session</h3><p>What temporary set am I doing?</p><small>Multi-root focus sets</small></article>
+        </div>
+        <figure class="diagram">
+          <svg viewBox="0 0 1080 410" role="img" aria-labelledby="layers-title layers-desc">
+            <title id="layers-title">Recommended layered project organization model</title>
+            <desc id="layers-desc">Canonical project and work-item records sit below project canvas or global canvas territory. Work-item portals focus spatial context, while attention, initiative, and command layers provide alternate entry routes to the same records.</desc>
+            <defs><linearGradient id="g" x1="0" x2="1"><stop stop-color="#55d6be" stop-opacity=".2"/><stop offset="1" stop-color="#6ea8fe" stop-opacity=".2"/></linearGradient></defs>
+            <rect x="40" y="320" width="1000" height="56" rx="12" fill="#151b23" stroke="#435067"/>
+            <text x="540" y="344" text-anchor="middle" fill="#eef3fa" font-size="18" font-weight="700">CANONICAL RECORDS</text>
+            <text x="540" y="363" text-anchor="middle" fill="#94a0b3" font-size="12">Project · Work item · Workspace · Node · Edge</text>
+            <rect x="190" y="226" width="700" height="64" rx="12" fill="url(#g)" stroke="#55d6be"/>
+            <text x="540" y="253" text-anchor="middle" fill="#eef3fa" font-size="18" font-weight="700">TERRITORY — ISSUE #10</text>
+            <text x="540" y="274" text-anchor="middle" fill="#b9c2d0" font-size="13">Dedicated project canvases  ↔  one global grouped canvas</text>
+            <rect x="350" y="132" width="380" height="62" rx="12" fill="#1c2430" stroke="#b8a1ff"/>
+            <text x="540" y="157" text-anchor="middle" fill="#eef3fa" font-size="17" font-weight="700">WORK-ITEM PORTAL</text>
+            <text x="540" y="178" text-anchor="middle" fill="#b9c2d0" font-size="13">focus without inventing another canvas</text>
+            <rect x="52" y="34" width="280" height="62" rx="12" fill="#151b23" stroke="#f3bf61"/>
+            <text x="192" y="59" text-anchor="middle" fill="#eef3fa" font-size="16" font-weight="700">ATTENTION DECK</text>
+            <text x="192" y="80" text-anchor="middle" fill="#b9c2d0" font-size="12">resume · blocked · review</text>
+            <rect x="400" y="34" width="280" height="62" rx="12" fill="#151b23" stroke="#55d6be"/>
+            <text x="540" y="59" text-anchor="middle" fill="#eef3fa" font-size="16" font-weight="700">COMMAND JUMP</text>
+            <text x="540" y="80" text-anchor="middle" fill="#b9c2d0" font-size="12">known target · exact focus</text>
+            <rect x="748" y="34" width="280" height="62" rx="12" fill="#151b23" stroke="#6ea8fe"/>
+            <text x="888" y="59" text-anchor="middle" fill="#eef3fa" font-size="16" font-weight="700">INITIATIVE LENS</text>
+            <text x="888" y="80" text-anchor="middle" fill="#b9c2d0" font-size="12">purpose · cross-project roll-up</text>
+            <path d="M192 96 C192 150 285 165 350 165" fill="none" stroke="#f3bf61" stroke-width="2" stroke-dasharray="5 5"/>
+            <path d="M540 96 L540 132" fill="none" stroke="#55d6be" stroke-width="2" stroke-dasharray="5 5"/>
+            <path d="M888 96 C888 150 795 165 730 165" fill="none" stroke="#6ea8fe" stroke-width="2" stroke-dasharray="5 5"/>
+            <path d="M540 194 L540 226" fill="none" stroke="#b8a1ff" stroke-width="2"/>
+            <path d="M540 290 L540 320" fill="none" stroke="#55d6be" stroke-width="2"/>
+          </svg>
+        </figure>
+      </div>
+    </section>
+
+    <section id="shortlist">
+      <div class="wrap">
+        <div class="section-head">
+          <div><div class="kicker">03 / Prototype runway</div><h2>Six concepts. Three now, three gated.</h2></div>
+          <p class="section-intro">Order is based on distinct learning value, fit to SPADE’s present domain model, and how little new authority each mock requires. It is not a production roadmap.</p>
+        </div>
+        <div class="ranked">
+          <article class="concept tier-now"><div><h3>Attention Deck</h3><p class="why">A calm launch surface for active, blocked, review, and recent work—borrowed from incident triage, not from task boards.</p></div><div class="test"><span>Tests</span><p>Whether the natural starting point is “what needs me?” rather than “which repository?”</p></div></article>
+          <article class="concept tier-now"><div><h3>Work-item Portal</h3><p class="why">A temporary focus lens around one issue/objective, with provenance, workspaces, and breadcrumbs back to territory.</p></div><div class="test"><span>Tests</span><p>Whether the objective—not the project—is the best unit for resuming and reviewing agent work.</p></div></article>
+          <article class="concept tier-now"><div><h3>Command Jump</h3><p class="why">A keyboard route to a project, issue, workspace, node, or status query that lands on the exact spatial target.</p></div><div class="test"><span>Tests</span><p>Known-item retrieval versus visual browsing, plus orientation after arrival.</p></div></article>
+          <article class="concept tier-next"><div><h3>Initiative Lens</h3><p class="why">An intentional cross-project roll-up around a mission, without replacing project execution context.</p></div><div class="test"><span>Gate</span><p>Only when a real cross-repository coordination scenario is observed; otherwise it manufactures hierarchy.</p></div></article>
+          <article class="concept tier-next"><div><h3>Focus Set</h3><p class="why">A personal, temporary multi-project session modeled after IDE multi-root workspaces, with independent viewport restoration.</p></div><div class="test"><span>Gate</span><p>Only when users repeatedly assemble the same cross-project task context. Never call it a “workspace.”</p></div></article>
+          <article class="concept tier-next"><div><h3>Atlas + Waypoints</h3><p class="why">Named spatial destinations and overview navigation, borrowed from whiteboard frames and game-map points of interest.</p></div><div class="test"><span>Gate</span><p>Only if the global canvas remains valuable at realistic density but panning becomes the failure mode.</p></div></article>
+        </div>
+      </div>
+    </section>
+
+    <section id="specs">
+      <div class="wrap">
+        <div class="section-head">
+          <div><div class="kicker">04 / Prototype cards</div><h2>What to build—and what would falsify it.</h2></div>
+          <p class="section-intro">Each concept is deliberately thin. A prototype should expose a decision, not quietly become a new subsystem.</p>
+        </div>
+        <div class="spec-grid">
+          <article class="spec">
+            <header><div><h3>Attention Deck</h3><p>Operational entry</p></div><span class="tag now">TEST NOW</span></header>
+            <dl><dt>Interaction</dt><dd>Home panel with Needs attention, Active now, Waiting for review, and Recent. Every row identifies project, work item, status, workspace role/count, and Focus.</dd><dt>Task</dt><dd>“Find what you should resume first after returning from lunch, then explain why.”</dd><dt>Success</dt><dd>User identifies the intended action without opening unrelated projects and understands the spatial context after Focus.</dd><dt>Failure</dt><dd>The deck duplicates status, becomes a mandatory dashboard, or hides provenance needed to decide.</dd><dt>Distinct from #10</dt><dd>Tests attention-first entry; does not choose a spatial boundary.</dd></dl>
+          </article>
+          <article class="spec">
+            <header><div><h3>Work-item Portal</h3><p>Objective-level focus</p></div><span class="tag now">TEST NOW</span></header>
+            <dl><dt>Interaction</dt><dd>Focus/fit the work-item hull; show root issue, agent lineage, terminals/diffs, workspace badges, connected references, and breadcrumb <em>Project › Work item</em>.</dd><dt>Task</dt><dd>“Resume issue #10, identify its review state, then return to the surrounding project.”</dd><dt>Success</dt><dd>User recovers provenance and workspace state, then exits without losing orientation.</dd><dt>Failure</dt><dd>User thinks the lens is another persisted canvas or cannot tell what context was filtered out.</dd><dt>Distinct from #10</dt><dd>Tests whether the navigation unit is the objective rather than the repository.</dd></dl>
+          </article>
+          <article class="spec">
+            <header><div><h3>Command Jump</h3><p>Direct retrieval</p></div><span class="tag now">TEST NOW</span></header>
+            <dl><dt>Interaction</dt><dd><kbd>Ctrl/Cmd+K</kbd> searches project names, issue IDs/titles, workspace branches, node titles, and commands such as “show blocked.” Results disclose type, project, status, and context trail.</dd><dt>Task</dt><dd>Reach a known workspace, then locate an unknown blocked item.</dd><dt>Success</dt><dd>User reaches exact targets and can state where they landed.</dd><dt>Failure</dt><dd>Ranking or scope causes wrong jumps, or users rely on search only because visible navigation is broken.</dd><dt>Distinct from #10</dt><dd>Tests retrieval versus browsing across either baseline.</dd></dl>
+          </article>
+          <article class="spec">
+            <header><div><h3>Initiative Lens</h3><p>Purpose across repositories</p></div><span class="tag conditional">CONDITIONAL</span></header>
+            <dl><dt>Interaction</dt><dd>Two read-only, explicit collections such as “SPADE release readiness,” showing contributing projects/work items and jump-to-portal actions. Never infer membership from geometry.</dd><dt>Task</dt><dd>Explain progress toward the mission and locate the work blocking it.</dd><dt>Success</dt><dd>User sees contributors and blockers while retaining project identity.</dd><dt>Failure</dt><dd>Initiative and project feel synonymous, or the lens simply mirrors every project once.</dd><dt>Distinct from #10</dt><dd>Tests strategic coherence rather than simultaneous visibility.</dd></dl>
+          </article>
+          <article class="spec">
+            <header><div><h3>Focus Set</h3><p>Temporary personal context</p></div><span class="tag conditional">CONDITIONAL</span></header>
+            <dl><dt>Interaction</dt><dd>A named personal set—“Release review”—contains chosen project canvases or portals. Members retain viewports; add/remove never changes ownership.</dd><dt>Task</dt><dd>Resume a review that spans SPADE and a tooling repository.</dd><dt>Success</dt><dd>User reduces switching and correctly identifies every item’s canonical project.</dd><dt>Failure</dt><dd>The set becomes a permanent pseudo-project or is confused with SPADE’s checkout/worktree Workspace.</dd><dt>Distinct from #10</dt><dd>Tests episodic multi-project context rather than organization-wide structure.</dd></dl>
+          </article>
+          <article class="spec">
+            <header><div><h3>Atlas + Waypoints</h3><p>Global spatial wayfinding</p></div><span class="tag conditional">CONDITIONAL</span></header>
+            <dl><dt>Interaction</dt><dd>In the global condition only, show a minimap plus labeled project/work-item waypoints and click-to-focus. Labels/icons accompany color.</dd><dt>Task</dt><dd>Reach an off-screen review, then describe where it sits relative to project and work item.</dd><dt>Success</dt><dd>Less pan/zoom hunting with preserved global awareness.</dd><dt>Failure</dt><dd>The atlas becomes a more usable sidebar—evidence that the global canvas is not carrying navigation.</dd><dt>Distinct from #10</dt><dd>Tests whether wayfinding rescues a promising but dense global world.</dd></dl>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="inventory">
+      <div class="wrap">
+        <div class="section-head">
+          <div><div class="kicker">05 / Candidate inventory</div><h2>Broad scan, explicit verdicts.</h2></div>
+          <p class="section-intro">The list deliberately spans project tools, operating systems, IDEs, whiteboards, incident command, knowledge systems, developer catalogs, and game-map wayfinding. Dismissals are based on present SPADE fit—not whether the pattern is useful elsewhere.</p>
+        </div>
+        <div class="table-wrap" role="region" aria-label="Candidate organization strategies" tabindex="0">
+          <table>
+            <thead><tr><th>Model</th><th>Outside analogy</th><th>Transfer to SPADE</th><th>Cost / primary risk</th><th>Verdict</th></tr></thead>
+            <tbody>
+              <tr><td>Dedicated project canvases</td><td>macOS Spaces isolate windows by context.<a class="cite" href="#s14">[14]</a></td><td>Stable repository context and restored local viewport.</td><td>Low / hidden cross-project activity.</td><td class="verdict v-fold">#10 BASELINE</td></tr>
+              <tr><td>One global grouped canvas</td><td>FigJam sections cluster, move, hide, and deep-link board regions.<a class="cite" href="#s10">[10]</a></td><td>One world with persistent spatial relationships.</td><td>Low / density and travel distance.</td><td class="verdict v-fold">#10 BASELINE</td></tr>
+              <tr><td>Attention deck</td><td>PagerDuty’s incident page filters actionable status and supports action from the queue.<a class="cite" href="#s17">[17]</a></td><td>Derived launch view for blocked, review, active, and recent work.</td><td>Low–medium / false operational certainty from mocks.</td><td class="verdict v-now">TEST NOW</td></tr>
+              <tr><td>Work-item portal</td><td>Miro frames structure and navigate a large board; FigJam links directly to sections.<a class="cite" href="#s9">[9]</a><a class="cite" href="#s10">[10]</a></td><td>Named focus destination over explicit work-item membership.</td><td>Low / mistaken for separate persistence.</td><td class="verdict v-now">TEST NOW</td></tr>
+              <tr><td>Initiative lens</td><td>Linear Initiatives intentionally group projects around objectives without replacing project views.<a class="cite" href="#s7">[7]</a></td><td>Read-only cross-project mission roll-up.</td><td>Medium / premature ownership, health, and roll-up semantics.</td><td class="verdict v-next">TEST IF NEEDED</td></tr>
+              <tr><td>Focus set</td><td>VS Code and IntelliJ collect distinct projects in restorable multi-root workspaces.<a class="cite" href="#s8">[8]</a><a class="cite" href="#s15">[15]</a></td><td>Personal temporary multi-project context with canonical origins intact.</td><td>Medium / collision with SPADE’s Workspace term.</td><td class="verdict v-next">TEST IF REPEATED</td></tr>
+              <tr><td>Command jump</td><td>Notion scopes search by teamspace; Compass searches component metadata.<a class="cite" href="#s13">[13]</a><a class="cite" href="#s16">[16]</a></td><td>Exact jump to project, issue, workspace, node, or derived query.</td><td>Low / opaque ranking and poor landing orientation.</td><td class="verdict v-now">TEST NOW</td></tr>
+              <tr><td>Atlas + waypoints</td><td>Miro frame navigation and game-map points of interest turn a large world into named destinations.<a class="cite" href="#s9">[9]</a></td><td>Overview plus labeled spatial jumps for the global canvas.</td><td>Low–medium / redundant second navigation system.</td><td class="verdict v-next">GLOBAL ONLY</td></tr>
+              <tr><td>Role / lens projections</td><td>Airtable defines views as different organizations of one underlying table.<a class="cite" href="#s12">[12]</a></td><td>Reviewer, integrator, blocked, or recent projections over the same records.</td><td>Medium / filter proliferation and “missing” nodes.</td><td class="verdict v-fold">FOLD INTO DECK</td></tr>
+              <tr><td>Personal collections</td><td>Slack sidebar sections are personal and have independent filtering/sorting.<a class="cite" href="#s11">[11]</a></td><td>Favorites or custom destination groups without changing ownership.</td><td>Low / optimizes retrieval, not base information architecture.</td><td class="verdict v-defer">DEFER</td></tr>
+              <tr><td>Recents / adaptive switching</td><td>OS switching and personalized sidebars surface repeated context.</td><td>Recent projects and restored viewport as a convenience.</td><td>Low / masks first-use IA problems; needs usage data.</td><td class="verdict v-fold">INSTRUMENT ONLY</td></tr>
+              <tr><td>Service catalog graph</td><td>Compass centers components, ownership, dependencies, activity, and health.<a class="cite" href="#s16">[16]</a></td><td>Could organize microservices by system rather than repository.</td><td>High / SPADE has no authoritative service ontology.</td><td class="verdict v-defer">NOT YET</td></tr>
+              <tr><td>Timeline / roadmap</td><td>Portfolio tools group by dates, milestones, and health.</td><td>A possible later projection of work items.</td><td>High / no authoritative dates, estimates, or milestones.</td><td class="verdict v-reject">REJECT THIS CYCLE</td></tr>
+              <tr><td>Kanban as primary IA</td><td>Task products make workflow stage the main location.</td><td>Could later provide a task-board projection.</td><td>High / confuses provenance edges with process execution.</td><td class="verdict v-reject">REJECT AS PRIMARY</td></tr>
+              <tr><td>Manual spatial folders</td><td>Freeform whiteboards let users draw arbitrary containers.</td><td>Visual hulls are useful presentation, but not authority.</td><td>Medium / conflicts with automatic explicit work-item membership.<a class="cite" href="#s2">[2]</a></td><td class="verdict v-reject">REJECT AS TRUTH</td></tr>
+              <tr><td>AI auto-clustering</td><td>Adaptive workspaces infer related material.</td><td>Could someday suggest a lens.</td><td>High / opaque grouping, no corpus, unclear authority.</td><td class="verdict v-reject">REJECT NOW</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+    <section id="experiment">
+      <div class="wrap">
+        <div class="section-head">
+          <div><div class="kicker">06 / Experiment design</div><h2>One dataset. Six tasks. No decorative metrics.</h2></div>
+          <p class="section-intro">Reuse Issue #10’s records and preserve its hull-versus-parent-group comparison. The added prototypes are routes and projections, so observed differences are less likely to come from different content.</p>
+        </div>
+        <div class="scenario">
+          <article class="panel">
+            <h3>Shared scenario</h3>
+            <p>Four projects remain simultaneously represented. At least two have parallel issues. Statuses include active, blocked, review, done, and quiet. Workspaces vary across implementation, review, fix, and exploration.</p>
+            <div class="callout"><strong>Add one cross-project story:</strong> SPADE release work depends on a tooling fix; one review is waiting; one quiet project contains a failed/blocked item. Records, edges, membership, labels, and viewports stay identical in every condition.</div>
+            <h4>Task sequence</h4>
+            <ol class="task-list">
+              <li>Resume the most appropriate item after returning to work.</li>
+              <li>Open a known issue and explain its current provenance.</li>
+              <li>Find the exact review workspace for a known branch.</li>
+              <li>Identify the blocker across two repositories.</li>
+              <li>Switch to unrelated work, then return to the original spatial context.</li>
+              <li>Explain what is active elsewhere without opening every project.</li>
+            </ol>
+          </article>
+          <article class="panel">
+            <h3>Observe, don’t grade</h3>
+            <p>No benchmark thresholds are asserted before pilot data exists. Record these comparable observations per task:</p>
+            <div class="metric-grid">
+              <div class="metric"><strong>Completion path</strong><small>Sequence of views/actions</small></div>
+              <div class="metric"><strong>Backtracking</strong><small>Wrong destination or scope</small></div>
+              <div class="metric"><strong>Time to next action</strong><small>From prompt to justified choice</small></div>
+              <div class="metric"><strong>Reorientation</strong><small>Can the user say where they landed?</small></div>
+              <div class="metric"><strong>Cross-project awareness</strong><small>What else can they accurately describe?</small></div>
+              <div class="metric"><strong>Confidence + reason</strong><small>Rating plus qualitative explanation</small></div>
+            </div>
+            <h3 style="margin-top:1.4rem">Recommended comparison order</h3>
+            <ol>
+              <li>Run Issue #10 baselines first.</li>
+              <li>Add Portal and Command Jump to both.</li>
+              <li>Add Attention Deck as an alternate starting state.</li>
+              <li>Prototype Initiative only for the cross-project task.</li>
+              <li>Test Atlas only in the global condition.</li>
+              <li>Test Focus Set only after recurring multi-project behavior appears.</li>
+            </ol>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="guardrails">
+      <div class="wrap">
+        <div class="section-head">
+          <div><div class="kicker">07 / Guardrails</div><h2>Learn broadly without bloating Issue #10.</h2></div>
+          <p class="section-intro">The architecture says planned boundaries remain proposals until a prototype proves them.<a class="cite" href="#s4">[4]</a> Treat every added concept as a removable presentation layer.</p>
+        </div>
+        <div class="grid-2">
+          <article class="card"><div class="number">01</div><h3>Never duplicate truth</h3><p>All conditions read the same Project, WorkItem, Workspace, CanvasNode, and CanvasEdge records. Geometry never silently changes membership.<a class="cite" href="#s2">[2]</a><a class="cite" href="#s6">[6]</a></p></article>
+          <article class="card"><div class="number">02</div><h3>Keep decisions orthogonal</h3><p>Issue #10 chooses territorial boundary and grouping treatment. Deck tests attention; Portal tests focus unit; Command tests retrieval; Initiative tests purpose.</p></article>
+          <article class="card"><div class="number">03</div><h3>Protect domain language</h3><p>“Workspace” already means a concrete checkout/worktree. Use “Focus Set” or “Session” for temporary multi-project context.<a class="cite" href="#s3">[3]</a><a class="cite" href="#s6">[6]</a></p></article>
+          <article class="card"><div class="number">04</div><h3>Make spatial state accessible</h3><p>Pair color with labels/icons, preserve visible keyboard focus, avoid hover-only actions, and respect reduced motion.<a class="cite" href="#s5">[5]</a></p></article>
+        </div>
+        <div style="margin-top:1rem">
+          <details open><summary>What this research does not prove</summary><div>Documentation from Linear, VS Code, PagerDuty, Miro, FigJam, Slack, Airtable, Notion, JetBrains, Apple, and Atlassian proves that the referenced interaction mechanisms exist—not that SPADE users will prefer them. Only direct prototype sessions in SPADE’s agent-development scenario can answer that.</div></details>
+          <details><summary>Material uncertainty</summary><div>SPADE does not yet have live GitHub/Paseo project management. Mock status may overstate operational truth. Initiative health, permissions, dates, ownership, ranking, and adaptive recommendations would all be speculative production semantics and remain outside these prototypes.</div></details>
+          <details><summary>Decision trigger after testing</summary><div>If Deck + Portal outperform territorial browsing for resumption while users still use project canvases for sensemaking, adopt a layered model. If users ignore every derived view and navigate spatially with confidence, keep the product canvas-first and add only Command Jump as an accelerator. If Atlas behaves like a sidebar, prefer explicit project navigation over preserving a global world for its own sake.</div></details>
+        </div>
+      </div>
+    </section>
+
+    <section id="sources">
+      <div class="wrap">
+        <div class="section-head">
+          <div><div class="kicker">08 / Method & sources</div><h2>Evidence, interpretation, limitation.</h2></div>
+          <p class="section-intro">Research combined SPADE’s canonical documentation and issue with current primary product documentation from deliberately unrelated organizing domains. Load-bearing SPADE, Linear, VS Code, FigJam, Airtable, Slack, Notion, Compass, IntelliJ, Miro, and PagerDuty claims were checked directly. Product analogies are interpretations, not evidence of user preference.</p>
+        </div>
+        <ol class="source-list">
+          <li id="s1"><strong>“[SPADE-10] Prototype 1 — Project Management Strategies Battle.”</strong> SPADE GitHub issue, 2026. Baselines, shared scenario, viewport restoration, grouping question, and scope. <a href="https://github.com/skflowne/spade/issues/10">Source</a></li>
+          <li id="s2"><strong>“SPADE Plan.”</strong> SPADE, canonical product direction, current repository revision. Spatial mind-map model; separation of projects, work items, and workspaces; project navigation hypothesis; explicit automatic membership; focus commands. <a href="https://github.com/skflowne/spade/blob/a4be33eb94e4752ec473a8298e05ef6e7153ed37/docs/plan.html#L35-L64">Core pillars</a>; <a href="https://github.com/skflowne/spade/blob/a4be33eb94e4752ec473a8298e05ef6e7153ed37/docs/plan.html#L276-L319">Project and work-item model</a>; <a href="https://github.com/skflowne/spade/blob/a4be33eb94e4752ec473a8298e05ef6e7153ed37/docs/plan.html#L376-L387">Canvas commands</a></li>
+          <li id="s3"><strong>“Foundation.”</strong> SPADE, canonical current-system invariants. Early prototype state and record meanings. <a href="https://github.com/skflowne/spade/blob/a4be33eb94e4752ec473a8298e05ef6e7153ed37/docs/foundation.html#L27-L54">Source</a></li>
+          <li id="s4"><strong>“Architecture.”</strong> SPADE, canonical architecture. Generic canvas ownership, shared-record contract, provenance edges, and prototype-before-boundary rule. <a href="https://github.com/skflowne/spade/blob/a4be33eb94e4752ec473a8298e05ef6e7153ed37/docs/architecture.html#L212-L219">Source</a></li>
+          <li id="s5"><strong>“Control Room style guide.”</strong> SPADE, canonical visual direction. Content-first hierarchy, semantic color redundancy, keyboard focus, reduced motion, and no hover-only essential actions. <a href="https://github.com/skflowne/spade/blob/a4be33eb94e4752ec473a8298e05ef6e7153ed37/docs/style/style-guide.html#L28-L66">Foundation and color</a>; <a href="https://github.com/skflowne/spade/blob/a4be33eb94e4752ec473a8298e05ef6e7153ed37/docs/style/style-guide.html#L146-L168">Interaction rules</a></li>
+          <li id="s6"><strong>“Domain records.”</strong> SPADE, TypeScript source. Explicit Project, WorkItem, Workspace, CanvasNode, and CanvasEdge fields. <a href="https://github.com/skflowne/spade/blob/a4be33eb94e4752ec473a8298e05ef6e7153ed37/src/shared/domain.ts#L1-L85">Source</a></li>
+          <li id="s7"><strong>“Initiatives.”</strong> Linear Docs, accessed 2026. Initiatives group projects around objectives; intentional cross-project collections do not replace project views. <a href="https://linear.app/docs/initiatives">Source</a></li>
+          <li id="s8"><strong>“What is a VS Code workspace?”</strong> Microsoft, accessed 2026. Multi-root collections, workspace-scoped state, and restoration. <a href="https://code.visualstudio.com/docs/editing/workspaces/workspaces">Source</a></li>
+          <li id="s9"><strong>“Frames.”</strong> Miro Help Center, accessed 2026. Frames structure board content and support easy navigation/presentation. <a href="https://help.miro.com/hc/en-us/articles/360018261813-Frames">Source</a></li>
+          <li id="s10"><strong>“Organize your FigJam board with sections.”</strong> Figma Help Center, accessed 2026. Sections cluster, move, hide/reveal, and deep-link board content. <a href="https://help.figma.com/hc/en-us/articles/4939765379351-Organize-your-FigJam-board-with-sections">Source</a></li>
+          <li id="s11"><strong>“Organize your sidebar with custom sections.”</strong> Slack Help Center, accessed 2026. Personal sections, independent filters/sorting, and custom collections. <a href="https://slack.com/help/articles/360043207674-Organize-your-sidebar-with-custom-sections">Source</a></li>
+          <li id="s12"><strong>“Organizing Airtable views.”</strong> Airtable Support, accessed 2026. A view is a particular organization of one underlying table; one table can have multiple view types. <a href="https://support.airtable.com/docs/organizing-airtable-views">Source</a></li>
+          <li id="s13"><strong>“Structure your sidebar for more focused work with teamspaces.”</strong> Notion Help Center, accessed 2026. Cross-functional teamspaces, favorites, collapsible context, and teamspace-filtered search. <a href="https://www.notion.com/help/guides/structure-sidebar-focused-work-teamspaces">Source</a></li>
+          <li id="s14"><strong>“Work in multiple spaces on Mac.”</strong> Apple Support, accessed 2026. Context-isolated desktop spaces and app-to-space assignment. <a href="https://support.apple.com/en-ca/guide/mac-help/mh14112/mac">Source</a></li>
+          <li id="s15"><strong>“Workspace.”</strong> JetBrains IntelliJ IDEA Documentation, 3 November 2025. Multiple projects in one workspace, separate project configuration, and load/unload behavior. <a href="https://www.jetbrains.com/help/idea/workspaces.html">Source</a></li>
+          <li id="s16"><strong>“Compass Features.”</strong> Atlassian, accessed 2026. Component catalog, search, dependencies, activity, and health—the basis for the deferred service-centric model. <a href="https://www.atlassian.com/software/compass/features">Source</a></li>
+          <li id="s17"><strong>“Navigate the Incidents Page.”</strong> PagerDuty Knowledge Base, accessed 2026. Actionable incident views filtered by assignment and status. <a href="https://support.pagerduty.com/main/docs/navigate-the-incidents-page">Source</a></li>
+          <li id="s18"><strong>“Incident Command Center.”</strong> PagerDuty MCP Server Documentation, accessed 2026. Interactive incident dashboard for viewing, triaging, and acting without leaving the work surface. <a href="https://pagerduty.github.io/pagerduty-mcp-server/docs/experimental/incident-command-center">Source</a></li>
+        </ol>
+      </div>
+    </section>
+  </main>
+
+  <footer>
+    <div class="wrap footer-row"><span>SPADE project organization strategy · Prism research report</span><span>Standalone HTML · no runtime network requests</span></div>
+  </footer>
+</body>
+</html>
