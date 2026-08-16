@@ -12,7 +12,7 @@ const createdAt = '2026-01-01T00:00:00.000Z'
 const project = {
   version: DOMAIN_RECORD_VERSION,
   id: 'project-opaque-id',
-  name: 'GADE',
+  name: 'SPADE',
   canvasId: 'canvas-opaque-id'
 } satisfies Project
 

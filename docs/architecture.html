@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Architecture — SPADE documentation</title>
+  <link rel="stylesheet" href="style/docs.css">
+  <link rel="stylesheet" href="style/architecture.css">
+  <script defer src="style/docs-tools.js"></script>
+</head>
+<body>
+  <div class="docs-shell site-shell">
+    <aside class="docs-nav site-sidebar">
+      <a class="docs-brand site-brand" href="index.html"><span class="docs-brand__mark site-brand__mark">S</span><span><b>SPADE</b><small>Project documentation</small></span></a>
+      <div class="docs-nav__label site-nav-label">DOCUMENTS</div>
+      <nav aria-label="Project documentation">
+        <a href="index.html">Overview</a>
+        <a href="foundation.html">Foundation</a>
+        <a href="architecture.html" aria-current="page">Architecture</a>
+        <a href="plan.html">Plan</a>
+        <a href="testing.html">Testing</a>
+      </nav>
+      <a class="docs-nav__style site-sidebar__footer" href="style/style-guide.html">Control Room style guide</a>
+    </aside>
+    <main class="docs-main">
+      <header class="docs-hero">
+        <p class="docs-eyebrow">SPADE DOCUMENTATION</p>
+        <h1>Architecture</h1>
+        <p>How the current application fits together and where planned integrations belong.</p>
+      </header>
+      <article class="docs-content architecture-content">
+<p>This page is a visual map. The <a href="foundation.html">foundation</a> describes what is implemented today; the <a href="plan.html">plan</a> contains detailed product decisions and proposals.</p>
+<div class="architecture-key" aria-label="Diagram status key">
+  <span><i class="architecture-key__line"></i>Implemented</span>
+  <span><i class="architecture-key__line architecture-key__line--planned"></i>Planned boundary</span>
+</div>
+
+<h2 id="current-application">Current application</h2>
+<p>SPADE currently has one Electron window, one React renderer, and a small shared core. There are no external integrations or persistent storage.</p>
+<figure class="architecture-figure">
+  <div class="architecture-diagram-wrap">
+    <svg class="architecture-diagram" viewBox="0 0 1080 500" role="img" aria-labelledby="current-title current-desc">
+      <title id="current-title">Current SPADE application architecture</title>
+      <desc id="current-desc">The Electron shell contains the React canvas user interface and shared core. The user interacts directly with the canvas. The canvas uses shared records, entity definitions, canvas commands, and the current mock note adapter.</desc>
+      <defs>
+        <marker id="current-arrow" class="diagram-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z"></path>
+        </marker>
+      </defs>
+
+      <rect class="diagram-box diagram-box--neutral" x="20" y="210" width="120" height="92" rx="10"></rect>
+      <text class="diagram-title" x="80" y="246" text-anchor="middle">User</text>
+      <text class="diagram-copy" x="80" y="270" text-anchor="middle">mouse · keyboard</text>
+
+      <rect class="diagram-boundary" x="180" y="35" width="850" height="420" rx="18"></rect>
+      <text class="diagram-kicker" x="212" y="72">ELECTRON SHELL</text>
+      <text class="diagram-copy" x="212" y="99">Window lifecycle · sandboxed renderer · no Node access</text>
+
+      <rect class="diagram-box diagram-box--green" x="240" y="145" width="330" height="240" rx="12"></rect>
+      <text class="diagram-kicker" x="270" y="182">REACT RENDERER</text>
+      <text class="diagram-title" x="270" y="220">Canvas UI</text>
+      <text class="diagram-copy" x="270" y="255">React Flow canvas</text>
+      <text class="diagram-copy" x="270" y="280">Generic node view</text>
+      <text class="diagram-copy" x="270" y="305">In-memory state</text>
+      <line class="diagram-divider" x1="270" y1="329" x2="540" y2="329"></line>
+      <text class="diagram-note" x="270" y="356">User interaction happens here</text>
+
+      <rect class="diagram-box" x="650" y="145" width="320" height="240" rx="12"></rect>
+      <text class="diagram-kicker" x="680" y="182">SHARED CORE</text>
+      <text class="diagram-title" x="680" y="220">Domain and commands</text>
+      <text class="diagram-copy" x="680" y="255">Record definitions</text>
+      <text class="diagram-copy" x="680" y="280">Entity registry</text>
+      <text class="diagram-copy" x="680" y="305">Canvas commands</text>
+      <line class="diagram-divider" x1="680" y1="329" x2="940" y2="329"></line>
+      <text class="diagram-note" x="680" y="356">Contains the mock note adapter</text>
+
+      <path class="diagram-line" d="M 140 256 L 240 256" marker-end="url(#current-arrow)"></path>
+      <path class="diagram-line" d="M 570 256 L 650 256" marker-start="url(#current-arrow)" marker-end="url(#current-arrow)"></path>
+    </svg>
+  </div>
+  <figcaption>The Electron shell is the application container. The user interacts with the canvas UI, and the UI uses the shared core; the shell itself does not sit in that interaction flow.</figcaption>
+</figure>
+
+<h2 id="domain-relationships">Core data relationships</h2>
+<p>The model separates the work being done from the place where it is done and from the items visible on the canvas. These are TypeScript records today; they are not persisted yet.</p>
+<figure class="architecture-figure">
+  <div class="architecture-diagram-wrap">
+    <svg class="architecture-diagram" viewBox="0 0 1080 600" role="img" aria-labelledby="domain-title domain-desc">
+      <title id="domain-title">SPADE core data hierarchy and relationships</title>
+      <desc id="domain-desc">A project contains its work items, workspaces, and canvas. The canvas contains nodes joined by canvas edges. Nodes may refer to a work item, workspace, and external resource.</desc>
+      <defs>
+        <marker id="domain-arrow" class="diagram-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z"></path>
+        </marker>
+      </defs>
+
+      <rect class="diagram-boundary diagram-boundary--accent" x="30" y="35" width="800" height="520" rx="18"></rect>
+      <text class="diagram-kicker" x="60" y="72">PROJECT</text>
+      <text class="diagram-title" x="60" y="105">Project and its SPADE canvas</text>
+
+      <rect class="diagram-box diagram-box--green" x="80" y="135" width="220" height="105" rx="12"></rect>
+      <text class="diagram-kicker" x="105" y="168">WORK</text>
+      <text class="diagram-title" x="105" y="199">Work item</text>
+      <text class="diagram-copy" x="105" y="222">Issue · task · investigation</text>
+
+      <rect class="diagram-box diagram-box--amber" x="550" y="135" width="230" height="105" rx="12"></rect>
+      <text class="diagram-kicker" x="575" y="168">LOCATION</text>
+      <text class="diagram-title" x="575" y="199">Workspace</text>
+      <text class="diagram-copy" x="575" y="222">Checkout or worktree</text>
+
+      <rect class="diagram-boundary" x="80" y="285" width="700" height="220" rx="14"></rect>
+      <text class="diagram-kicker" x="105" y="320">CANVAS</text>
+
+      <rect class="diagram-box" x="120" y="350" width="200" height="110" rx="12"></rect>
+      <text class="diagram-kicker" x="145" y="382">CANVAS NODE</text>
+      <text class="diagram-title" x="145" y="413">Source node</text>
+      <text class="diagram-copy" x="145" y="437">Type · position · state</text>
+
+      <rect class="diagram-box" x="540" y="350" width="200" height="110" rx="12"></rect>
+      <text class="diagram-kicker" x="565" y="382">CANVAS NODE</text>
+      <text class="diagram-title" x="565" y="413">Connected node</text>
+      <text class="diagram-copy" x="565" y="437">Type · position · state</text>
+
+      <path class="diagram-line" d="M 320 405 L 540 405" marker-end="url(#domain-arrow)"></path>
+      <text class="diagram-edge-label" x="365" y="392">CanvasEdge · spawned</text>
+
+      <path class="diagram-line diagram-line--muted" d="M 220 350 L 220 240"></path>
+      <text class="diagram-edge-label" x="232" y="270">optional work item</text>
+      <path class="diagram-line diagram-line--muted" d="M 640 350 L 640 240"></path>
+      <text class="diagram-edge-label" x="650" y="270">optional workspace</text>
+
+      <rect class="diagram-box diagram-box--neutral" x="870" y="350" width="180" height="110" rx="12"></rect>
+      <text class="diagram-kicker" x="895" y="382">OPTIONAL</text>
+      <text class="diagram-title" x="895" y="413">Resource ref</text>
+      <text class="diagram-copy" x="895" y="437">External identity</text>
+      <path class="diagram-line diagram-line--muted" d="M 740 430 L 870 430" marker-end="url(#domain-arrow)"></path>
+      <text class="diagram-edge-label" x="772" y="418">points to</text>
+    </svg>
+  </div>
+  <figcaption>The project is the parent boundary. Work-item and workspace associations remain explicit on each node, while a canvas edge only describes the relationship between two nodes.</figcaption>
+</figure>
+
+<h2 id="entity-integration-boundary">Entity and integration boundary</h2>
+<p>Canvas behavior stays generic. A node type is registered through an entity definition, which currently provides its metadata and creation adapter. The plan extends this boundary with entity-specific renderers, actions, and production integrations.</p>
+<figure class="architecture-figure">
+  <div class="architecture-diagram-wrap">
+    <svg class="architecture-diagram" viewBox="0 0 1080 600" role="img" aria-labelledby="entity-title entity-desc">
+      <title id="entity-title">SPADE entity and external integration boundary</title>
+      <desc id="entity-desc">Generic canvas commands resolve an entity definition. The current mock adapter creates a resource reference. Planned entity adapters will communicate through dedicated SPADE service adapters with Paseo, GitHub, the filesystem, terminals, and browsers. Entity renderers do not call external systems directly.</desc>
+      <defs>
+        <marker id="entity-arrow" class="diagram-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M 0 0 L 10 5 L 0 10 z"></path>
+        </marker>
+      </defs>
+
+      <rect class="diagram-boundary" x="25" y="35" width="640" height="510" rx="18"></rect>
+      <text class="diagram-kicker" x="55" y="72">SPADE-OWNED</text>
+
+      <rect class="diagram-box diagram-box--accent" x="65" y="120" width="210" height="120" rx="12"></rect>
+      <text class="diagram-kicker" x="90" y="155">GENERIC</text>
+      <text class="diagram-title" x="90" y="189">Canvas commands</text>
+      <text class="diagram-copy" x="90" y="216">Create · spawn · connect</text>
+
+      <rect class="diagram-box diagram-box--green" x="385" y="120" width="230" height="120" rx="12"></rect>
+      <text class="diagram-kicker" x="410" y="155">PER NODE TYPE</text>
+      <text class="diagram-title" x="410" y="189">Entity definition</text>
+      <text class="diagram-copy" x="410" y="216">Type · version · adapter</text>
+
+      <rect class="diagram-box" x="65" y="370" width="210" height="120" rx="12"></rect>
+      <text class="diagram-kicker" x="90" y="405">IMPLEMENTED</text>
+      <text class="diagram-title" x="90" y="439">Mock note adapter</text>
+      <text class="diagram-copy" x="90" y="466">Deterministic local data</text>
+
+      <rect class="diagram-box diagram-box--planned" x="385" y="330" width="230" height="160" rx="12"></rect>
+      <text class="diagram-kicker" x="410" y="365">PLANNED</text>
+      <text class="diagram-title" x="410" y="399">Service adapters</text>
+      <text class="diagram-copy" x="410" y="428">Paseo adapter</text>
+      <text class="diagram-copy" x="410" y="453">GitHub · filesystem</text>
+      <text class="diagram-copy" x="410" y="478">Electron capabilities</text>
+
+      <rect class="diagram-boundary diagram-boundary--planned" x="750" y="35" width="300" height="510" rx="18"></rect>
+      <text class="diagram-kicker" x="780" y="72">EXTERNAL SYSTEMS</text>
+
+      <rect class="diagram-box diagram-box--planned diagram-box--neutral" x="790" y="115" width="220" height="82" rx="10"></rect>
+      <text class="diagram-title" x="815" y="150">Paseo</text>
+      <text class="diagram-copy" x="815" y="175">Agents and workspaces</text>
+
+      <rect class="diagram-box diagram-box--planned diagram-box--neutral" x="790" y="230" width="220" height="82" rx="10"></rect>
+      <text class="diagram-title" x="815" y="265">GitHub</text>
+      <text class="diagram-copy" x="815" y="290">Issues and pull requests</text>
+
+      <rect class="diagram-box diagram-box--planned diagram-box--neutral" x="790" y="345" width="220" height="82" rx="10"></rect>
+      <text class="diagram-title" x="815" y="380">Local tools</text>
+      <text class="diagram-copy" x="815" y="405">Files · terminals · editors</text>
+
+      <rect class="diagram-box diagram-box--planned diagram-box--neutral" x="790" y="460" width="220" height="62" rx="10"></rect>
+      <text class="diagram-title" x="815" y="498">Browser content</text>
+
+      <path class="diagram-line" d="M 275 180 L 385 180" marker-end="url(#entity-arrow)"></path>
+      <text class="diagram-edge-label" x="300" y="167">resolves</text>
+      <path class="diagram-line" d="M 440 240 C 390 300, 300 330, 230 370" marker-end="url(#entity-arrow)"></path>
+      <text class="diagram-edge-label" x="286" y="307">current</text>
+      <path class="diagram-line diagram-line--planned" d="M 500 240 L 500 330" marker-end="url(#entity-arrow)"></path>
+      <text class="diagram-edge-label" x="515" y="292">planned</text>
+      <path class="diagram-line diagram-line--planned" d="M 615 410 L 750 410" marker-end="url(#entity-arrow)"></path>
+      <text class="diagram-edge-label" x="640" y="397">provider APIs</text>
+    </svg>
+  </div>
+  <figcaption>External APIs stay behind SPADE-owned adapters. Node renderers present data and actions; they do not spread provider-specific calls through the UI.</figcaption>
+</figure>
+
+<h2 id="architecture-rules">Architecture rules</h2>
+<ul>
+<li>The generic canvas owns node position, size, selection, connections, and lifecycle.</li>
+<li>An entity renderer owns only the content and actions specific to its node type.</li>
+<li>Shared records are the common contract across application areas.</li>
+<li>Connections describe provenance and context; they are not an execution graph.</li>
+<li>External systems are accessed through dedicated adapters.</li>
+<li>Planned boundaries remain proposals until a prototype proves them.</li>
+</ul>
+        <footer class="docs-footer">SPADE documentation</footer>
+      </article>
+    </main>
+  </div>
+</body>
+</html>

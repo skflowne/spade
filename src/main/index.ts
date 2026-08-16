@@ -6,7 +6,7 @@ const supportedProjectVersion: Project['version'] = DOMAIN_RECORD_VERSION
 
 function createWindow(): void {
   const window = new BrowserWindow({
-    title: `GADE · domain v${supportedProjectVersion}`,
+    title: `SPADE · domain v${supportedProjectVersion}`,
     width: 1200,
     height: 800,
     minWidth: 720,

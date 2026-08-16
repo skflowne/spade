@@ -1,0 +1,84 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Foundation — SPADE documentation</title>
+  <link rel="stylesheet" href="style/docs.css">
+  <script defer src="style/docs-tools.js"></script>
+</head>
+<body>
+  <div class="docs-shell site-shell">
+    <aside class="docs-nav site-sidebar">
+      <a class="docs-brand site-brand" href="index.html"><span class="docs-brand__mark site-brand__mark">S</span><span><b>SPADE</b><small>Project documentation</small></span></a>
+      <div class="docs-nav__label site-nav-label">DOCUMENTS</div>
+      <nav aria-label="Project documentation">
+        <a href="index.html">Overview</a>
+        <a href="foundation.html" aria-current="page">Foundation</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="plan.html">Plan</a>
+        <a href="testing.html">Testing</a>
+      </nav>
+      <a class="docs-nav__style site-sidebar__footer" href="style/style-guide.html">Control Room style guide</a>
+    </aside>
+    <main class="docs-main">
+      <header class="docs-hero">
+        <p class="docs-eyebrow">SPADE DOCUMENTATION</p>
+        <h1>Foundation</h1>
+        <p>What SPADE does today and the rules the current code relies on.</p>
+      </header>
+      <article class="docs-content">
+<h2 id="current-state">Current state</h2>
+<p>SPADE is an early desktop prototype. It opens an Electron window and displays a React Flow canvas with two connected mock note nodes. The nodes can be dragged, and their positions are kept in memory until the app closes.</p>
+<p>There is no persistence, project loading, agent connection, GitHub connection, or workspace management yet. The <a href="plan.html">plan</a> describes the intended product; this page describes only what exists now.</p>
+<h2 id="core-concepts">Core concepts</h2>
+<p>The shared data model defines the main things SPADE will place and track:</p>
+<table>
+<thead>
+<tr><th>Concept</th><th>Meaning</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Project</code></td><td>A project and its SPADE canvas, optionally linked to a local folder or Git remote.</td></tr>
+<tr><td><code>WorkItem</code></td><td>A piece of work, such as a GitHub issue, task, or investigation.</td></tr>
+<tr><td><code>Workspace</code></td><td>A specific checkout or worktree where work happens.</td></tr>
+<tr><td><code>CanvasNode</code></td><td>An item shown on the canvas. It belongs to a project and can be associated with a work item and workspace.</td></tr>
+<tr><td><code>CanvasEdge</code></td><td>A relationship between two nodes, such as “spawned,” “delegated,” “references,” or “derived.”</td></tr>
+</tbody>
+</table>
+<h2 id="rules">Rules already enforced</h2>
+<ul>
+<li>All five records use the same data-format version so future changes can be identified.</li>
+<li>Every node belongs to a project. Work-item and workspace associations are stored explicitly rather than guessed from names, branches, or connections.</li>
+<li>A workspace ID identifies the workspace. Its path and branch are descriptive details and may change.</li>
+<li>Edges describe how nodes relate; they do not execute or schedule work.</li>
+<li>A node created from another node inherits its project, work item, and workspace.</li>
+<li>The Electron and renderer code use the same record definitions from <code>src/shared/domain.ts</code>.</li>
+</ul>
+<h2 id="code-structure">Code structure</h2>
+<table>
+<thead>
+<tr><th>Area</th><th>Responsibility</th></tr>
+</thead>
+<tbody>
+<tr><td><code>src/main</code></td><td>Starts Electron and opens a sandboxed window. It does not run canvas workflows.</td></tr>
+<tr><td><code>src/renderer</code></td><td>Renders the canvas and keeps the current prototype state in memory.</td></tr>
+<tr><td><code>src/shared</code></td><td>Defines the records, node types, and basic commands used to create and connect nodes.</td></tr>
+</tbody>
+</table>
+<p>The only registered node type is currently a mock note. It provides deterministic data for developing the canvas without depending on an external service. See the <a href="architecture.html">architecture diagrams</a> for how these areas connect.</p>
+<h2 id="developer-commands">Developer commands</h2>
+<ul>
+<li><code>npm install</code> — install dependencies from the lockfile.</li>
+<li><code>npm run dev</code> — start the desktop app for development.</li>
+<li><code>npm run build</code> — build the Electron and renderer code.</li>
+<li><code>npm run docs:compare</code> — serve the documentation with side-by-side comparison against the base branch. Use <code>-- --base &lt;ref&gt; --page docs/&lt;page&gt;.html</code> to override the defaults.</li>
+<li><code>npm run typecheck</code> — check TypeScript types.</li>
+<li><code>npm run lint</code> — check source and configuration files.</li>
+<li><code>npm test</code> — build the app and run its automated checks.</li>
+</ul>
+        <footer class="docs-footer">SPADE documentation</footer>
+      </article>
+    </main>
+  </div>
+</body>
+</html>

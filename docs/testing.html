@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Testing — SPADE documentation</title>
+  <link rel="stylesheet" href="style/docs.css">
+  <script defer src="style/docs-tools.js"></script>
+</head>
+<body>
+  <div class="docs-shell site-shell">
+    <aside class="docs-nav site-sidebar">
+      <a class="docs-brand site-brand" href="index.html"><span class="docs-brand__mark site-brand__mark">S</span><span><b>SPADE</b><small>Project documentation</small></span></a>
+      <div class="docs-nav__label site-nav-label">DOCUMENTS</div>
+      <nav aria-label="Project documentation">
+        <a href="index.html">Overview</a>
+        <a href="foundation.html">Foundation</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="plan.html">Plan</a>
+        <a href="testing.html" aria-current="page">Testing</a>
+      </nav>
+      <a class="docs-nav__style site-sidebar__footer" href="style/style-guide.html">Control Room style guide</a>
+    </aside>
+    <main class="docs-main">
+      <header class="docs-hero">
+        <p class="docs-eyebrow">SPADE DOCUMENTATION</p>
+        <h1>Testing</h1>
+        <p>Automated-test policy and verification guidance.</p>
+      </header>
+      <article class="docs-content">
+<p>Automated-test policy for SPADE. <a href="../AGENTS.md"><code>AGENTS.md</code></a> owns the verification gate.</p>
+<h2 id="layers">Layers</h2>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Where</th>
+<th>Owns</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Type contracts</td>
+<td><code>tests/domain.contract.ts</code></td>
+<td>Shared record exports and compile-time shapes</td>
+</tr>
+<tr>
+<td>Deterministic behavior</td>
+<td>Non-Electron specs in <code>tests/e2e</code></td>
+<td>Domain and renderer behavior without a process boundary</td>
+</tr>
+<tr>
+<td>Electron end-to-end</td>
+<td><code>tests/e2e/startup.spec.ts</code></td>
+<td>Startup, rendering, and interaction in the real desktop shell</td>
+</tr>
+</tbody>
+</table>
+<p>Test at the lowest deterministic layer that can fail for the reason under test. Cross-process and real-UI behavior belongs in Electron end-to-end coverage; static TypeScript contracts belong in the contract fixture.</p>
+<h2 id="behavioral-changes">Behavioral changes</h2>
+<ol>
+<li>Write or extend the test first.</li>
+<li>Confirm it fails against unchanged production code for the expected reason.</li>
+<li>Implement the complete behavior.</li>
+<li>Run focused tests, then the full gate in <code>AGENTS.md</code>.</li>
+</ol>
+<p>User-visible bug fixes require regression coverage. A skipped test is not a pass.</p>
+<h2 id="test-integrity">Test integrity</h2>
+<ul>
+<li>Name tests after durable behavior, never issues, PRs, authors, or review rounds.</li>
+<li>Extend the existing behavior area instead of creating a parallel regression file.</li>
+<li>Derive expected values independently of the production decision under test.</li>
+<li>Never weaken or remove an assertion merely to make a test pass.</li>
+</ul>
+        <footer class="docs-footer">SPADE documentation</footer>
+      </article>
+    </main>
+  </div>
+</body>
+</html>

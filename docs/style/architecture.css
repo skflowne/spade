@@ -1,0 +1,31 @@
+.architecture-content > p:first-child { max-width: 780px; font-size: var(--cr-text-md); }
+.architecture-key { display: flex; flex-wrap: wrap; gap: 18px; margin: 24px 0 8px; color: var(--cr-ink-400); font: var(--cr-text-sm) var(--cr-font-mono); }
+.architecture-key span { display: inline-flex; align-items: center; gap: 8px; }
+.architecture-key__line { display: inline-block; width: 28px; border-top: 2px solid var(--cr-blue-400); }
+.architecture-key__line--planned { border-top-style: dashed; border-color: var(--cr-ink-400); }
+.architecture-figure { margin: 24px 0 44px; }
+.architecture-diagram-wrap { max-width: 100%; overflow-x: auto; border: var(--cr-border); border-radius: var(--cr-radius-panel); background: var(--cr-ink-950); -webkit-overflow-scrolling: touch; }
+.architecture-diagram { display: block; width: 100%; min-width: 760px; height: auto; }
+.architecture-figure figcaption { max-width: 920px; margin-top: 10px; color: var(--cr-ink-400); font-size: var(--cr-text-sm); }
+.diagram-boundary { fill: rgb(23 28 36 / 55%); stroke: var(--cr-ink-700); stroke-width: 1.5; }
+.diagram-boundary--accent { fill: rgb(110 168 254 / 4%); stroke: var(--cr-blue-400); }
+.diagram-boundary--planned { fill: rgb(23 28 36 / 25%); stroke-dasharray: 9 7; }
+.diagram-box { fill: var(--cr-ink-850); stroke: var(--cr-ink-700); stroke-width: 1.5; }
+.diagram-box--accent { fill: rgb(110 168 254 / 9%); stroke: var(--cr-blue-400); }
+.diagram-box--green { fill: rgb(71 199 138 / 8%); stroke: var(--cr-green-400); }
+.diagram-box--amber { fill: rgb(239 185 93 / 8%); stroke: var(--cr-amber-400); }
+.diagram-box--neutral { fill: var(--cr-ink-900); }
+.diagram-box--planned { stroke-dasharray: 8 6; }
+.diagram-kicker { fill: var(--cr-ink-400); font: 700 11px var(--cr-font-mono); letter-spacing: 1.2px; }
+.diagram-title { fill: var(--cr-ink-100); font: 700 17px var(--cr-font-sans); }
+.diagram-copy { fill: var(--cr-ink-400); font: 13px var(--cr-font-sans); }
+.diagram-note { fill: var(--cr-ink-400); font: 12px var(--cr-font-mono); }
+.diagram-divider { stroke: var(--cr-ink-700); stroke-width: 1; }
+.diagram-line { fill: none; stroke: var(--cr-blue-400); stroke-width: 2; }
+.diagram-line--muted { stroke: var(--cr-ink-400); }
+.diagram-line--planned { stroke: var(--cr-ink-400); stroke-dasharray: 7 6; }
+.diagram-edge-label { fill: var(--cr-ink-400); font: 11px var(--cr-font-mono); }
+.diagram-arrow path { fill: var(--cr-blue-400); }
+@media (max-width: 760px) {
+  .architecture-diagram-wrap { margin-right: -24px; border-right: 0; border-radius: var(--cr-radius-panel) 0 0 var(--cr-radius-panel); }
+}
