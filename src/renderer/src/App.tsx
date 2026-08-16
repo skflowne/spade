@@ -1,8 +1,10 @@
-import { Background, ReactFlow, useNodesState, type Edge, type NodeTypes } from '@xyflow/react'
+import { useCallback, useMemo, useState } from 'react'
+import { Background, ReactFlow, type Edge, type NodeChange, type NodeTypes } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { createNode, spawnConnectedNode } from '@shared/canvasCommands'
-import { DOMAIN_RECORD_VERSION } from '@shared/domain'
+import { DOMAIN_RECORD_VERSION, type CanvasNode } from '@shared/domain'
 import { EntityRegistry, createDeterministicMockAdapter } from '@shared/entities'
+import { applyCanvasNodePositionChanges } from './canvasNodeState'
 import { GenericEntityNode, type EntityFlowNode } from './GenericEntityNode'
 import './app.css'
 
@@ -44,7 +46,9 @@ const spawned = spawnConnectedNode(commandEnvironment, { nodes: [sourceNode], ed
   title: 'Connected node'
 })
 
-const initialNodes: EntityFlowNode[] = [sourceNode, spawned.node].map((entity) => {
+const initialEntities: readonly CanvasNode[] = [sourceNode, spawned.node]
+
+function toFlowNode(entity: CanvasNode): EntityFlowNode {
   registry.resolve(entity.entityType)
 
   return {
@@ -54,7 +58,7 @@ const initialNodes: EntityFlowNode[] = [sourceNode, spawned.node].map((entity) =
     dragHandle: '.entity-node__chrome',
     data: { entity }
   }
-})
+}
 
 const flowEdges: Edge[] = [spawned.edge].map((edge) => ({
   id: edge.id,
@@ -66,7 +70,11 @@ const flowEdges: Edge[] = [spawned.edge].map((edge) => ({
 const nodeTypes = { entity: GenericEntityNode } satisfies NodeTypes
 
 export function App(): React.JSX.Element {
-  const [nodes, , onNodesChange] = useNodesState<EntityFlowNode>(initialNodes)
+  const [entities, setEntities] = useState(initialEntities)
+  const nodes = useMemo(() => entities.map(toFlowNode), [entities])
+  const onNodesChange = useCallback((changes: NodeChange<EntityFlowNode>[]) => {
+    setEntities((current) => applyCanvasNodePositionChanges(current, changes))
+  }, [])
 
   return (
     <main className="app-shell">
