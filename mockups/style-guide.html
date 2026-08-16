@@ -1,0 +1,176 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Control Room style guide — GADE</title>
+  <link rel="stylesheet" href="./style-guide.css">
+</head>
+<body>
+  <div class="guide-shell">
+    <aside class="guide-nav">
+      <a class="guide-brand" href="./index.html"><span class="brand-mark">G</span><span><b>GADE</b><small>Control Room system</small></span></a>
+      <div class="nav-label">FOUNDATIONS</div>
+      <nav aria-label="Style guide sections">
+        <a href="#overview"><span>01</span>Overview</a>
+        <a href="#color"><span>02</span>Color</a>
+        <a href="#type"><span>03</span>Typography</a>
+        <a href="#space"><span>04</span>Space & shape</a>
+        <a href="#controls"><span>05</span>Controls</a>
+        <a href="#node"><span>06</span>Entity node</a>
+        <a href="#interaction"><span>07</span>Interaction</a>
+        <a href="#implementation"><span>08</span>Implementation</a>
+      </nav>
+      <div class="guide-version"><b>Foundation guide</b><span>Selected direction · v0.1</span></div>
+    </aside>
+
+    <main class="guide-main">
+      <header class="guide-hero">
+        <div class="eyebrow">SELECTED VISUAL FOUNDATION</div>
+        <h1>Control Room</h1>
+        <p>A calm, dense, operational system that gives spatial work a clear frame without competing with its content.</p>
+        <div class="hero-meta"><span class="meta-chip selected">DARK FOUNDATION</span><span class="meta-chip">4PX GRID</span><span class="meta-chip">CONTENT FIRST</span></div>
+      </header>
+
+      <div class="guide-content">
+        <section class="guide-section" id="overview">
+          <div class="section-heading"><span class="section-number">01</span><div><h2>Overview</h2><p>The design language is quiet by default, precise under interaction, and consistent across shared canvas surfaces.</p></div></div>
+          <div class="section-body">
+            <div class="scope-note"><i>i</i><div><b>Foundation, not a feature specification</b><p>This guide defines visual tokens, common controls, the canvas, and generic entity-node presentation. It does not introduce product capabilities or entity-specific interfaces.</p></div></div>
+            <div class="principle-grid">
+              <article class="principle"><span>01 / PRIORITY</span><h3>Work first</h3><p>Chrome creates hierarchy and orientation, then gets out of the way.</p></article>
+              <article class="principle"><span>02 / TONE</span><h3>Quiet by default</h3><p>Neutral surfaces dominate. Color appears only when it communicates meaning.</p></article>
+              <article class="principle"><span>03 / DENSITY</span><h3>Dense, not cramped</h3><p>Compact metadata coexists with readable type and reliable interaction targets.</p></article>
+              <article class="principle"><span>04 / BEHAVIOR</span><h3>Explicit boundaries</h3><p>Node chrome owns dragging. Node bodies preserve selection and interaction.</p></article>
+            </div>
+          </div>
+        </section>
+
+        <section class="guide-section" id="color">
+          <div class="section-heading"><span class="section-number">02</span><div><h2>Color</h2><p>Neutral depth establishes structure. One blue interaction accent and three semantic colors provide meaning.</p></div></div>
+          <div class="section-body">
+            <div class="subsection"><div class="subsection-header"><h3>Neutral surfaces</h3><p>Move one step at a time between adjacent layers.</p></div>
+              <div class="color-grid">
+                <article class="color-card"><div class="color-swatch" style="background:#0c0f14"></div><div><b>Frame</b><code>#0c0f14 · ink-950</code></div></article>
+                <article class="color-card"><div class="color-swatch" style="background:#0f1319"></div><div><b>Canvas</b><code>#0f1319 · ink-900</code></div></article>
+                <article class="color-card"><div class="color-swatch" style="background:#171c24"></div><div><b>Panel</b><code>#171c24 · ink-850</code></div></article>
+                <article class="color-card"><div class="color-swatch" style="background:#1d2430"></div><div><b>Raised</b><code>#1d2430 · ink-800</code></div></article>
+                <article class="color-card"><div class="color-swatch" style="background:#2b3442"></div><div><b>Border</b><code>#2b3442 · ink-700</code></div></article>
+                <article class="color-card"><div class="color-swatch" style="background:#566071"></div><div><b>Decorative</b><code>#566071 · ink-500</code></div></article>
+                <article class="color-card"><div class="color-swatch" style="background:#8792a3"></div><div><b>Secondary text</b><code>#8792a3 · ink-400</code></div></article>
+                <article class="color-card"><div class="color-swatch" style="background:#e8edf5"></div><div><b>Primary text</b><code>#e8edf5 · ink-100</code></div></article>
+              </div>
+            </div>
+            <div class="subsection"><div class="subsection-header"><h3>Semantic accents</h3><p>Color reinforces a label, icon, or state—never replaces it.</p></div>
+              <div class="semantic-row">
+                <article class="semantic-card blue"><i></i><b>Interaction</b><small>Focus, selection, primary action</small></article>
+                <article class="semantic-card green"><i></i><b>Success</b><small>Healthy or complete</small></article>
+                <article class="semantic-card amber"><i></i><b>Attention</b><small>Caution or delay</small></article>
+                <article class="semantic-card red"><i></i><b>Danger</b><small>Failure or destructive action</small></article>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section class="guide-section" id="type">
+          <div class="section-heading"><span class="section-number">03</span><div><h2>Typography</h2><p>Sans-serif carries the interface. Monospace is reserved for identifiers, coordinates, metadata, and code-adjacent values.</p></div></div>
+          <div class="section-body">
+            <div class="subsection type-specimen">
+              <div class="type-row display"><span>Display</span><b>Spatial work</b><code>32 / 37 · 650</code></div>
+              <div class="type-row title"><span>Section title</span><b>Canvas foundations</b><code>20 / 25 · 650</code></div>
+              <div class="type-row component"><span>Component title</span><b>Connected node</b><code>16 / 21 · 600</code></div>
+              <div class="type-row body"><span>Body</span><b>Content remains readable inside a dense desktop environment.</b><code>13 / 20 · 400</code></div>
+              <div class="type-row meta"><span>Metadata</span><b>ENTITY TYPE · NODE-02</b><code>11 / 15 · 700</code></div>
+            </div>
+            <div class="rule-list">
+              <div class="rule"><i>01</i><div><b>Minimum size</b><p>Do not use interface text below 11px. Default application text is 13px.</p></div></div>
+              <div class="rule"><i>02</i><div><b>Case</b><p>Use sentence case. Uppercase is limited to short metadata with added tracking.</p></div></div>
+              <div class="rule"><i>03</i><div><b>Numbers</b><p>Use tabular numerals for counts that update in place.</p></div></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="guide-section" id="space">
+          <div class="section-heading"><span class="section-number">04</span><div><h2>Space & shape</h2><p>A 4px grid, compact radii, and restrained elevation keep the system precise.</p></div></div>
+          <div class="section-body">
+            <div class="subsection"><div class="subsection-header"><h3>Spacing scale</h3><p>2px and 6px are compact half-steps.</p></div>
+              <div class="spacing-scale">
+                <div class="space-step" style="--size:2px"><i></i><code>2</code></div><div class="space-step" style="--size:4px"><i></i><code>4</code></div><div class="space-step" style="--size:6px"><i></i><code>6</code></div><div class="space-step" style="--size:8px"><i></i><code>8</code></div><div class="space-step" style="--size:12px"><i></i><code>12</code></div><div class="space-step" style="--size:16px"><i></i><code>16</code></div><div class="space-step" style="--size:20px"><i></i><code>20</code></div><div class="space-step" style="--size:24px"><i></i><code>24</code></div><div class="space-step" style="--size:32px"><i></i><code>32</code></div><div class="space-step" style="--size:40px"><i></i><code>40</code></div><div class="space-step" style="--size:48px"><i></i><code>48</code></div>
+              </div>
+            </div>
+            <div class="subsection foundation-pair">
+              <article class="specimen-panel"><span class="specimen-label">RADIUS</span><div class="radius-row"><div class="radius-box r4">4px</div><div class="radius-box r6">6px</div><div class="radius-box r9">9px</div></div></article>
+              <article class="specimen-panel"><span class="specimen-label">ELEVATION</span><div class="shadow-row"><div class="shadow-box s1">Raised</div><div class="shadow-box s2">Floating</div></div></article>
+            </div>
+          </div>
+        </section>
+
+        <section class="guide-section" id="controls">
+          <div class="section-heading"><span class="section-number">05</span><div><h2>Common controls</h2><p>Presentation primitives are defined here without implying a product workflow that uses them.</p></div></div>
+          <div class="section-body">
+            <div class="subsection component-stage">
+              <span class="specimen-label">BUTTONS</span>
+              <div class="control-row"><button class="cr-button primary">Primary action</button><button class="cr-button">Secondary</button><button class="cr-button ghost">Ghost</button><button class="cr-button danger">Destructive</button><button class="cr-button icon" aria-label="Example icon button">＋</button><button class="cr-button" disabled>Unavailable</button></div>
+              <div class="field-grid">
+                <div class="field"><label for="sample-field">Visible label</label><input id="sample-field" class="cr-input" placeholder="Optional placeholder"></div>
+                <div class="field error"><label for="error-field">Field with error</label><input id="error-field" class="cr-input" value="Invalid value" aria-invalid="true"><small>Describe the specific problem.</small></div>
+              </div>
+              <div class="badge-row"><span class="badge">METADATA</span><span class="badge info">FOCUSED</span><span class="badge good">SUCCESS</span><span class="badge warn">ATTENTION</span><span class="badge bad">FAILED</span></div>
+            </div>
+            <div class="rule-list">
+              <div class="rule"><i>01</i><div><b>One primary action per region</b><p>Do not turn every available action blue.</p></div></div>
+              <div class="rule"><i>02</i><div><b>Stable states</b><p>Hover, focus, loading, and disabled states preserve control dimensions.</p></div></div>
+              <div class="rule"><i>03</i><div><b>Visible labels</b><p>Placeholder text is not a field label. Icon-only controls need accessible names.</p></div></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="guide-section" id="node">
+          <div class="section-heading"><span class="section-number">06</span><div><h2>Generic entity node</h2><p>The shared container owns the canvas boundary and drag surface. The entity renderer owns the body.</p></div></div>
+          <div class="section-body">
+            <div class="subsection component-stage node-stage">
+              <div class="guide-grid"></div><div class="guide-edge"></div>
+              <article class="guide-node"><header class="guide-node__chrome"><span class="guide-node__icon">N</span><div class="guide-node__title"><b>Connected node</b><span>NOTE · NODE-02</span></div></header><div class="guide-node__body"><p>Renderer-owned content stays independent of canvas dragging.</p><button class="cr-button">Interactive content</button></div></article>
+              <span class="guide-handle left"></span><span class="guide-handle right"></span>
+              <span class="anatomy a1">Draggable chrome</span><span class="anatomy a2">Descriptive edge</span><span class="anatomy a3">Renderer-owned body</span><span class="anatomy a4">Source / target handles</span>
+            </div>
+            <div class="rule-list">
+              <div class="rule"><i>01</i><div><b>Shared ownership</b><p>The container owns chrome, border, handles, and canvas interaction.</p></div></div>
+              <div class="rule"><i>02</i><div><b>Body ownership</b><p>Entity renderers own body content while consuming shared visual tokens.</p></div></div>
+              <div class="rule"><i>03</i><div><b>No speculative chrome</b><p>Add no status, menu, badge, or entity action until its behavior exists and ownership is settled.</p></div></div>
+            </div>
+          </div>
+        </section>
+
+        <section class="guide-section" id="interaction">
+          <div class="section-heading"><span class="section-number">07</span><div><h2>Interaction & access</h2><p>Fast, stable feedback with visible focus and no dependence on color alone.</p></div></div>
+          <div class="section-body">
+            <div class="subsection do-grid">
+              <article class="do-card"><h3>Do</h3><ul><li>Use 120ms feedback and 180ms surface transitions.</li><li>Keep a visible 2px keyboard focus ring.</li><li>Pair semantic color with a label or icon.</li><li>Preserve text selection inside node bodies.</li><li>Respect reduced-motion preferences.</li></ul></article>
+              <article class="do-card dont"><h3>Don't</h3><ul><li>Animate the canvas after direct manipulation stops.</li><li>Use continuous glow, pulse, or scanning effects.</li><li>Translate or scale nodes on hover.</li><li>Use decorative gray for essential text.</li><li>Let hover be the only way to discover essential actions.</li></ul></article>
+            </div>
+          </div>
+        </section>
+
+        <section class="guide-section" id="implementation">
+          <div class="section-heading"><span class="section-number">08</span><div><h2>Implementation contract</h2><p>Central tokens and native interaction states keep shared primitives consistent.</p></div></div>
+          <div class="section-body">
+            <pre class="token-block"><code><span class="property">background</span>: <span class="value">var(--cr-ink-850)</span>;
+<span class="property">color</span>: <span class="value">var(--cr-ink-100)</span>;
+<span class="property">border</span>: <span class="value">var(--cr-border)</span>;
+<span class="property">border-radius</span>: <span class="value">var(--cr-radius-panel)</span>;
+<span class="property">transition</span>: border-color <span class="value">var(--cr-duration-fast)</span> <span class="value">var(--cr-ease-standard)</span>;</code></pre>
+            <div class="rule-list">
+              <div class="rule"><i>01</i><div><b>Centralize values</b><p>Consume semantic aliases rather than scattering hex values.</p></div></div>
+              <div class="rule"><i>02</i><div><b>Keep primitives neutral</b><p>Base components must not encode entity type or application capability.</p></div></div>
+              <div class="rule"><i>03</i><div><b>Use native states</b><p>Prefer <code>:focus-visible</code>, <code>:disabled</code>, and accessible state attributes.</p></div></div>
+            </div>
+          </div>
+        </section>
+
+        <footer class="footer"><span>Tokens: <code>src/styles/control-room-tokens.css</code></span><a href="./graphite.html">Open Control Room mockup →</a></footer>
+      </div>
+    </main>
+  </div>
+</body>
+</html>
