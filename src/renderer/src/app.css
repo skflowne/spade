@@ -79,6 +79,11 @@ body {
   padding: 10px;
   border-bottom: 1px solid #3a4857;
   background: #243342;
+  cursor: grab;
+}
+
+.entity-node__chrome:active {
+  cursor: grabbing;
 }
 
 .entity-node__chrome div {
@@ -88,19 +93,6 @@ body {
 
 .entity-node__chrome small {
   color: #a7b4c2;
-}
-
-.entity-node__drag-handle {
-  padding: 4px 7px;
-  border: 1px solid #63778c;
-  border-radius: 5px;
-  color: #e7edf4;
-  background: #17212b;
-  cursor: grab;
-}
-
-.entity-node__drag-handle:active {
-  cursor: grabbing;
 }
 
 .entity-node__body {
