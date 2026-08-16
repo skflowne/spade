@@ -2,6 +2,7 @@
 node_modules/
 dist/
 out/
+artifacts/
 playwright-report/
 test-results/
 .DS_Store
