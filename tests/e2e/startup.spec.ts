@@ -7,10 +7,10 @@ test('renders generic nodes and drags them only from the full header', async () 
   try {
     const window = await application.firstWindow()
 
-    await expect(window).toHaveTitle('GADE')
-    await expect(window.getByRole('heading', { name: 'GADE' })).toBeVisible()
+    await expect(window).toHaveTitle('SPADE')
+    await expect(window.getByRole('heading', { name: 'SPADE' })).toBeVisible()
 
-    const canvas = window.getByRole('region', { name: 'GADE canvas' })
+    const canvas = window.getByRole('region', { name: 'SPADE canvas' })
     await expect(canvas).toBeVisible()
     await expect(canvas.locator('.react-flow__renderer')).toBeVisible()
 
@@ -53,7 +53,7 @@ test('renders generic nodes and drags them only from the full header', async () 
       .poll(async () => (await firstNode.boundingBox())?.x)
       .toBeGreaterThan(initialPosition!.x + 40)
 
-    await window.screenshot({ path: test.info().outputPath('gade-canvas.png') })
+    await window.screenshot({ path: test.info().outputPath('spade-canvas.png') })
   } finally {
     await application.close()
   }

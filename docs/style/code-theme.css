@@ -1,0 +1,36 @@
+/* Control Room syntax theme for highlight.js fenced code blocks. */
+.hljs-comment,
+.hljs-quote {
+  color: var(--cr-ink-400);
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-literal {
+  color: var(--cr-blue-400);
+}
+
+.hljs-title,
+.hljs-title.function_,
+.hljs-property,
+.hljs-attr {
+  color: var(--cr-green-400);
+}
+
+.hljs-string,
+.hljs-meta .hljs-string {
+  color: var(--cr-amber-400);
+}
+
+.hljs-number,
+.hljs-type,
+.hljs-params,
+.hljs-variable,
+.hljs-template-variable {
+  color: var(--cr-red-400);
+}
+
+.hljs-punctuation,
+.hljs-operator {
+  color: var(--cr-ink-400);
+}

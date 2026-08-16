@@ -1,0 +1,1180 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>SPADE Plan — SPADE documentation</title>
+  <link rel="stylesheet" href="style/docs.css">
+  <script defer src="style/docs-tools.js"></script>
+  <script defer src="style/vendor/highlight.js-11.12.0/highlight.min.js"></script>
+  <script defer src="style/code-highlight.js"></script>
+</head>
+<body>
+  <div class="docs-shell site-shell">
+    <aside class="docs-nav site-sidebar">
+      <a class="docs-brand site-brand" href="index.html"><span class="docs-brand__mark site-brand__mark">S</span><span><b>SPADE</b><small>Project documentation</small></span></a>
+      <div class="docs-nav__label site-nav-label">DOCUMENTS</div>
+      <nav aria-label="Project documentation">
+        <a href="index.html">Overview</a>
+        <a href="foundation.html">Foundation</a>
+        <a href="architecture.html">Architecture</a>
+        <a href="plan.html" aria-current="page">Plan</a>
+        <a href="testing.html">Testing</a>
+      </nav>
+      <a class="docs-nav__style site-sidebar__footer" href="style/style-guide.html">Control Room style guide</a>
+    </aside>
+    <main class="docs-main">
+      <header class="docs-hero">
+        <p class="docs-eyebrow">SPADE DOCUMENTATION</p>
+        <h1>SPADE Plan</h1>
+        <p>Product direction, proposed capabilities, prototypes, and open decisions.</p>
+      </header>
+      <article class="docs-content">
+<p><em>Last updated: 2026-08-15</em></p>
+<h2 id="1-product-vision">1. Product vision</h2>
+<p>SPADE (Spatial Agent Development Environment) is a desktop, graph/canvas-based development environment built around a spatial representation of agent work.</p>
+<p>The canvas is a <strong>mind map of ongoing work</strong>, not an executable dataflow engine. Nodes represent live resources and durable artifacts: agent conversations, terminals, workspaces, diffs, browsers, files, whiteboards, and later task boards. Directed connections record where work came from, what it references, and how it branched over time.</p>
+<p>The central workflow is:</p>
+<pre><code class="language-text">GitHub issues browser
+  -&gt; spawn connected agent
+  -&gt; create/attach branch-backed worktree workspace
+  -&gt; agent works in that workspace
+  -&gt; diff, terminal, file, and browser nodes remain attached to it
+  -&gt; agent-created subagents appear as connected collapsed conversation nodes
+  -&gt; commit / open PR from the workspace diff surface
+</code></pre>
+<h2 id="2-core-design-pillars">2. Core design pillars</h2>
+<ol>
+<li>
+<p><strong>Spatial work representation</strong></p>
+<ul>
+<li>Position and grouping communicate meaning.</li>
+<li>Connections communicate provenance, references, delegation, and chronology.</li>
+<li>Connections do not trigger execution.</li>
+</ul>
+</li>
+<li>
+<p><strong>Everything useful can become a node</strong></p>
+<ul>
+<li>Live resources and static artifacts use the same outer node behavior.</li>
+<li>Any node can spawn a connected node or connect an existing node.</li>
+</ul>
+</li>
+<li>
+<p><strong>Projects, logical work, and execution workspaces are separate concepts</strong></p>
+<ul>
+<li>Current hypothesis: one project owns one canvas, selected from an expandable sidebar.</li>
+<li>Issues and ad-hoc tasks become logical work items that are grouped automatically on that canvas.</li>
+<li>A logical work item may contain many Paseo workspaces, branches, and agents created by implementation, review, and fix stages.</li>
+<li>A workspace remains the concrete checkout/worktree/cwd execution fact; it is visible on nodes but is not the primary manual grouping unit.</li>
+</ul>
+</li>
+<li>
+<p><strong>Paseo is the initial control plane</strong></p>
+<ul>
+<li>SPADE should use an unmodified Paseo daemon where possible.</li>
+<li>SPADE owns the canvas, entity registry, renderers, and spatial persistence.</li>
+<li>Paseo remains the source of truth for agents, terminals, workspaces, Git state, and normalized conversation events.</li>
+</ul>
+</li>
+<li>
+<p><strong>Rich rendering without rebuilding every tool</strong></p>
+<ul>
+<li>Agent answers render as structured Markdown, Mermaid, full custom HTML/JavaScript, code, tool calls, file reads, and diffs.</li>
+<li>Full IDE support initially means opening the current workspace/file in a configured external IDE.</li>
+<li>Whiteboards remain a later entity if real workflows prove them useful.</li>
+</ul>
+</li>
+<li>
+<p><strong>Prototype uncertain interaction boundaries before fixing the architecture</strong></p>
+<ul>
+<li>Workspace creation and agent creation ordering.</li>
+<li>Browser rendering inside transformed canvas nodes.</li>
+<li>Heavy interactive child surfaces inside React Flow.</li>
+<li>Paseo subagent identity and reconnect behavior.</li>
+</ul>
+</li>
+</ol>
+<h2 id="3-initial-technology-direction">3. Initial technology direction</h2>
+<table>
+<thead>
+<tr>
+<th>Layer</th>
+<th>Initial direction</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Desktop shell</td>
+<td>Electron baseline; Tauri does not remove the native-webview positioning problem, so compare only if the Electron browser spike fails or footprint becomes decisive</td>
+</tr>
+<tr>
+<td>Outer canvas</td>
+<td>React Flow / xyflow</td>
+</tr>
+<tr>
+<td>Whiteboard node</td>
+<td>Deferred until the core workflow proves a real need; tldraw production use would require a commercial/hobby license key</td>
+</tr>
+<tr>
+<td>Agent control plane</td>
+<td>Unmodified Paseo daemon</td>
+</tr>
+<tr>
+<td>Terminal</td>
+<td>Paseo terminal protocol rendered with xterm.js</td>
+</tr>
+<tr>
+<td>Agent conversation</td>
+<td>Paseo normalized timeline rendered as native SPADE HTML</td>
+</tr>
+<tr>
+<td>Embedded editor</td>
+<td>Monaco plus a small workspace LSP service</td>
+</tr>
+<tr>
+<td>Full IDE</td>
+<td>External open action; VS Code/Remote-WSL first, configurable commands later</td>
+</tr>
+<tr>
+<td>Markdown</td>
+<td>Markdown renderer with configurable conversation expansion</td>
+</tr>
+<tr>
+<td>Diagrams</td>
+<td>Mermaid blocks inside Markdown/rich responses</td>
+</tr>
+<tr>
+<td>Rich HTML</td>
+<td>Full agent-authored HTML/JavaScript blocks in an unsandboxed iframe/document runtime, with a SPADE interaction bridge</td>
+</tr>
+<tr>
+<td>Browser</td>
+<td>Electron guest <code>&lt;webview&gt;</code> prototype; compare a bounds-synchronized native overlay only if required</td>
+</tr>
+<tr>
+<td>Git/GitHub</td>
+<td>Paseo workspace/forge/Git operations first; GitHub App only when webhook/organization automation is needed</td>
+</tr>
+<tr>
+<td>Execution</td>
+<td>Current host user environment; no Docker/container isolation in v1</td>
+</tr>
+<tr>
+<td>Persistence</td>
+<td>SPADE persists canvas/layout/entity references; resource owners persist their own state</td>
+</tr>
+</tbody>
+</table>
+<h3 id="explicit-deferrals">Explicit deferrals</h3>
+<ul>
+<li>No executable workflow/dataflow engine.</li>
+<li>No containerized repository setup or execution isolation.</li>
+<li>No embedded full IDE in v1.</li>
+<li>No X6 dependency in v1. Mermaid and rich HTML should first prove insufficient for architecture diagrams.</li>
+<li>No tldraw integration until the issue workflow and core entities are validated.</li>
+<li>No ACP or SPADE-owned MCP integration in v1.</li>
+<li>No security hardening or sandbox restrictions for agent-authored HTML/JavaScript in the prototype; runtime isolation may still be used to prevent CSS/lifecycle collisions.</li>
+<li>No assumption that branch name is workspace identity.</li>
+</ul>
+<h2 id="4-domain-model">4. Domain model</h2>
+<h3 id="4-1-canvas-node">4.1 Canvas node</h3>
+<p>A canvas node is a durable SPADE record pointing at content or a live resource owned elsewhere.</p>
+<pre><code class="language-ts">type CanvasNode = {
+  version: DomainRecordVersion;
+  id: string;
+  entityType: string;
+  entityVersion: number;
+  title: string;
+  shortDescription?: string;
+
+  position: { x: number; y: number };
+  size?: { width: number; height: number };
+  collapsed: boolean;
+  projectId: string;
+  workItemId: string | null;
+  workspaceId: string | null;
+
+  config: unknown;              // versioned and validated by the entity definition
+  resourceRef: ResourceRef | null;
+  cachedPresentation?: {
+    revision?: string;
+    summary?: string;
+    updatedAt: string;
+  };
+
+  createdAt: string;
+  updatedAt: string;
+};
+</code></pre>
+<p>A node does not copy a file, agent transcript, Git diff, PTY, or browser page into the canvas record as its source of truth. It stores a locator and may retain a bounded presentation cache.</p>
+<h3 id="4-2-resource-reference">4.2 Resource reference</h3>
+<pre><code class="language-ts">type ResourceRef = {
+  provider: &quot;paseo&quot; | &quot;filesystem&quot; | &quot;electron&quot; | &quot;spade&quot; | string;
+  kind: string;
+  id: string;
+  revision?: string;
+};
+</code></pre>
+<p>Examples:</p>
+<ul>
+<li>Paseo agent ID</li>
+<li>Paseo terminal ID</li>
+<li>Paseo workspace ID</li>
+<li>Filesystem path plus workspace identity</li>
+<li>Electron browser instance ID</li>
+<li>SPADE whiteboard document ID</li>
+<li>SPADE board document ID</li>
+</ul>
+<h3 id="4-3-workspace">4.3 Workspace</h3>
+<p>A workspace is a durable SPADE identity mapped to a concrete checkout.</p>
+<pre><code class="language-ts">type Workspace = {
+  version: DomainRecordVersion;
+  id: string;
+  paseoWorkspaceId?: string;
+  projectId: string;
+  workItemId: string | null;
+
+  cwd: string;
+  worktreeRoot?: string | null;
+  mainRepoRoot?: string | null;
+
+  baseRef?: string | null;
+  baseRevision?: string | null;
+  branch?: string | null;
+
+  name: string;
+  role?: &quot;integrator&quot; | &quot;review&quot; | &quot;fix&quot; | &quot;exploration&quot; | string;
+  createdAt: string;
+};
+</code></pre>
+<h4 id="workspace-identity-rule">Workspace identity rule</h4>
+<p>A branch is <strong>not</strong> workspace identity:</p>
+<ul>
+<li>Branches can be renamed or switched.</li>
+<li>Two worktrees can temporarily point at the same branch.</li>
+<li>A checkout can be detached.</li>
+<li>Paseo already uses opaque workspace IDs and stores branch as mutable metadata.</li>
+</ul>
+<p>The workspace is the checkout/worktree instance. Its base reference determines the intended comparison lineage, while <code>branch</code> reports the current head branch.</p>
+<h4 id="workspace-membership-rule">Workspace membership rule</h4>
+<p>Membership is explicit through <code>node.workspaceId</code>; it is not inferred from an edge or branch name.</p>
+<p>Typical membership:</p>
+<ul>
+<li>Agent, terminal, diff and edited-file nodes: workspace-bound and also assigned to a logical work item.</li>
+<li>GitHub issue browser: project-scoped; assigning it to a work item makes it the logical root.</li>
+<li>PR browser: normally assigned to the work item and optionally to the workspace that produced it.</li>
+<li>Whiteboard and board, if added: project-scoped or work-item-scoped, and only workspace-bound when that relationship is useful.</li>
+</ul>
+<p>A work item may own several workspaces. Workspace badges/details communicate branch, cwd, role, lifecycle, and diff base without forcing the user to arrange separate workspace groups manually.</p>
+<h3 id="4-4-project">4.4 Project</h3>
+<p>A project represents the repository/product context independently of an individual checkout.</p>
+<pre><code class="language-ts">type Project = {
+  version: DomainRecordVersion;
+  id: string;
+  paseoProjectId?: string;
+  projectKey?: string;
+  rootPath?: string;
+  gitRemote?: string;
+  name: string;
+  canvasId: string;
+};
+</code></pre>
+<p>This lets an issue browser be associated with a repository before any worktree exists.</p>
+<h4 id="project-navigation-hypothesis">Project navigation hypothesis</h4>
+<p>The leading design is an expandable global sidebar for switching projects, with one persisted canvas per project. This keeps repository navigation stable and lets the canvas organize logical work rather than repository boundaries.</p>
+<p>The competing design—one global canvas with projects as colored groups—must remain a lightweight prototype view over the same records until the navigation test resolves it. Do not build separate persistence models for the two views.</p>
+<h3 id="4-5-logical-work-item">4.5 Logical work item</h3>
+<p>A work item is the automatic organizational unit for an issue, request, investigation, or ad-hoc objective.</p>
+<pre><code class="language-ts">type WorkItem = {
+  version: DomainRecordVersion;
+  id: string;
+  projectId: string;
+  title: string;
+  kind: &quot;github_issue&quot; | &quot;task&quot; | &quot;investigation&quot; | &quot;ad_hoc&quot;;
+  sourceUrl?: string;
+  sourceIdentifier?: string;
+  status: &quot;active&quot; | &quot;blocked&quot; | &quot;review&quot; | &quot;done&quot; | &quot;archived&quot;;
+  rootNodeId?: string;
+  createdAt: string;
+};
+</code></pre>
+<p>Membership is explicit through <code>node.workItemId</code>, but assignment is automatic:</p>
+<ul>
+<li>A node spawned from a work-item node inherits its <code>projectId</code> and <code>workItemId</code>.</li>
+<li>A newly created implementation/review/fix workspace is assigned to the same work item.</li>
+<li>Subagents inherit the parent agent's work item.</li>
+<li>A user may reassign membership, but normal workflows should not require manual grouping.</li>
+</ul>
+<p>The canvas draws a background hull or auto-sized group around all visible nodes sharing a work item. Moving a node does not silently change membership. Completed operational stages may collapse automatically while remaining inspectable.</p>
+<h3 id="4-6-connections">4.6 Connections</h3>
+<pre><code class="language-ts">type CanvasEdge = {
+  version: DomainRecordVersion;
+  id: string;
+  fromNodeId: string;
+  toNodeId: string;
+  relation: &quot;spawned&quot; | &quot;delegated&quot; | &quot;references&quot; | &quot;derived&quot;;
+  label?: string;
+  createdAt: string;
+};
+</code></pre>
+<p>Relations:</p>
+<ul>
+<li><code>spawned</code>: the source node initiated creation of the target.</li>
+<li><code>delegated</code>: a parent agent created or owns a subagent.</li>
+<li><code>references</code>: the target was given the source as relevant context.</li>
+<li><code>derived</code>: the target artifact/result was produced from the source.</li>
+</ul>
+<p>Edges are provenance and context. They do not schedule, trigger, or stream live data.</p>
+<h2 id="5-entity-architecture">5. Entity architecture</h2>
+<h3 id="5-1-avoid-a-universal-crud-contract">5.1 Avoid a universal CRUD contract</h3>
+<p>The tentative <code>spawn / read / write / partial_read / render</code> contract is too generic:</p>
+<ul>
+<li>Writing to a terminal, file, conversation, browser, diff, and whiteboard has unrelated semantics and risk.</li>
+<li><code>partial_read</code> is better represented as a projection, selection, range, or page on an inspect query.</li>
+<li>Rendering is a SPADE UI responsibility, not a resource operation.</li>
+<li>Resource creation may be synchronous, asynchronous, or may attach to an existing resource.</li>
+</ul>
+<p>Use a small generic lifecycle plus typed entity capabilities.</p>
+<h3 id="5-2-entity-definition">5.2 Entity definition</h3>
+<pre><code class="language-ts">type EntityDefinition&lt;Config, Resource, Snapshot, Context&gt; = {
+  type: string;
+  version: number;
+  displayName: string;
+  icon: string;
+
+  configSchema: Schema&lt;Config&gt;;
+
+  create(input: {
+    config: Config;
+    workspace: Workspace | null;
+    sourceNode?: CanvasNode;
+  }): Promise&lt;{ resourceRef: ResourceRef | null }&gt;;
+
+  inspect(input: {
+    node: CanvasNode;
+    resource: Resource | null;
+    projection: &quot;summary&quot; | &quot;context&quot; | &quot;detail&quot;;
+    cursor?: string;
+    selection?: unknown;
+  }): Promise&lt;Snapshot&gt;;
+
+  actions: Record&lt;string, EntityAction&gt;;
+
+  toAgentContext(input: {
+    node: CanvasNode;
+    snapshot: Snapshot;
+    budget: ContextBudget;
+  }): Promise&lt;Context&gt;;
+
+  Renderer: React.ComponentType&lt;EntityRendererProps&gt;;
+
+  dispose?(resource: Resource): Promise&lt;void&gt;;
+};
+</code></pre>
+<h3 id="5-3-generic-canvas-commands">5.3 Generic canvas commands</h3>
+<p>These operations apply to every entity:</p>
+<ol>
+<li><code>createNode(type, config, placement)</code></li>
+<li><code>spawnConnectedNode(sourceNodeId, type, config, relation)</code></li>
+<li><code>connectNodes(fromNodeId, toNodeId, relation)</code></li>
+<li><code>moveNode(nodeId, position)</code></li>
+<li><code>resizeNode(nodeId, size)</code></li>
+<li><code>setNodeWorkspace(nodeId, workspaceId | null)</code></li>
+<li><code>collapseNode(nodeId)</code> / <code>expandNode(nodeId)</code></li>
+<li><code>archiveNode(nodeId)</code> / <code>removeNode(nodeId)</code></li>
+<li><code>focusNode(nodeId)</code> / <code>fitNodes(nodeIds)</code></li>
+</ol>
+<p>Resource-specific operations remain typed actions exposed by the entity definition.</p>
+<h3 id="5-4-examples-of-entity-specific-actions">5.4 Examples of entity-specific actions</h3>
+<table>
+<thead>
+<tr>
+<th>Entity</th>
+<th>Owner</th>
+<th>Example actions</th>
+<th>Context projection</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Terminal</td>
+<td>Paseo PTY</td>
+<td>create, send input, resize, capture, stop</td>
+<td>cwd, command, state, bounded output tail</td>
+</tr>
+<tr>
+<td>Agent</td>
+<td>Paseo session</td>
+<td>prompt, interrupt, resume, archive</td>
+<td>status, objective, selected messages, latest result</td>
+</tr>
+<tr>
+<td>Diff</td>
+<td>Workspace Git resource</td>
+<td>refresh, stage/unstage if added, commit, push, open PR, open file</td>
+<td>base/head, totals, selected changed files</td>
+</tr>
+<tr>
+<td>Browser</td>
+<td>Electron guest</td>
+<td>navigate, back/forward, reload, open external, extract selected page data</td>
+<td>URL, title, explicit page extract</td>
+</tr>
+<tr>
+<td>File editor</td>
+<td>Filesystem + LSP</td>
+<td>read range, save, format, definition, references, open in IDE</td>
+<td>path, revision, selected range/summary</td>
+</tr>
+<tr>
+<td>Whiteboard</td>
+<td>SPADE/tldraw document</td>
+<td>create shapes, update, export image/SVG, clear selection</td>
+<td>document summary, selected text/shapes/export</td>
+</tr>
+<tr>
+<td>Board, later</td>
+<td>SPADE board document</td>
+<td>create/update/move cards, assign links</td>
+<td>visible cards, selected card detail</td>
+</tr>
+</tbody>
+</table>
+<h3 id="5-5-extensibility-boundary">5.5 Extensibility boundary</h3>
+<p>Entity types are registered through an entity registry. The first implementation may be compile-time registration; do not design a third-party plugin loader before the built-in entity contracts stabilize.</p>
+<p>Each entity owns:</p>
+<ul>
+<li>Config schema and schema migrations</li>
+<li>Resource adapter</li>
+<li>Supported actions</li>
+<li>Inspect projections</li>
+<li>Agent context projection</li>
+<li>Body renderer</li>
+<li>Resource lifecycle hooks</li>
+</ul>
+<p>SPADE owns:</p>
+<ul>
+<li>Node identity and persistence</li>
+<li>Generic node chrome</li>
+<li>Canvas position/size/collapse</li>
+<li>Workspace membership</li>
+<li>Connections</li>
+<li>Minimap representation</li>
+<li>Common menus and navigation</li>
+<li>Capability invocation and audit UI</li>
+</ul>
+<h2 id="6-generic-node-container">6. Generic node container</h2>
+<p>Every node uses the same outer container.</p>
+<h3 id="container-owned-behavior">Container-owned behavior</h3>
+<ul>
+<li>Title, icon and short description</li>
+<li>Logical work-item color and workspace identity/role badge</li>
+<li>Runtime status and reconnect/error state</li>
+<li>Dedicated drag handle</li>
+<li>Resize, collapse, focus and archive controls</li>
+<li><code>Spawn connected…</code> menu</li>
+<li><code>Connect existing…</code> mode</li>
+<li>Incoming/outgoing provenance controls</li>
+<li>Open externally where supported</li>
+<li>Minimap color, icon and label</li>
+<li>Context-sharing indicator</li>
+</ul>
+<h3 id="renderer-owned-behavior">Renderer-owned behavior</h3>
+<p>The entity renderer owns only the node body and entity-specific toolbar/actions.</p>
+<h3 id="interaction-rule">Interaction rule</h3>
+<p>Dragging starts only from node chrome. Editor selection, terminal input, browser interaction, scrolling, whiteboard gestures and links must not drag the node or pan the outer canvas.</p>
+<p>Heavy interactive renderers should support:</p>
+<ul>
+<li>Inactive preview mode</li>
+<li>Explicit activation/focus</li>
+<li>Escape or chrome click to return control to the outer canvas</li>
+<li>Lazy mount near readable zoom or when focused</li>
+<li>Disposal/unmount without losing the durable resource</li>
+</ul>
+<h2 id="7-required-initial-entities">7. Required initial entities</h2>
+<h3 id="7-1-agent-conversation">7.1 Agent conversation</h3>
+<ul>
+<li>Uses Paseo normalized events rather than scraping terminal ANSI.</li>
+<li>Renders Markdown, code, Mermaid, tool calls, file reads, edits, shell commands, permission prompts and results.</li>
+<li>Tool calls and file reads use expandable panes similar to Paseo.</li>
+<li>Supports prompts, interrupt/resume, model/mode display and attention state.</li>
+<li>Can spawn connected nodes from conversation content or generic node chrome.</li>
+<li>Can attach selected connected nodes as context.</li>
+</ul>
+<h4 id="conversation-expansion-preferences">Conversation expansion preferences</h4>
+<p>Conversation panels use configurable default expansion by event/content type, with global defaults and an optional per-conversation override.</p>
+<pre><code class="language-ts">type ConversationExpansionPreferences = {
+  toolCall: boolean;
+  diff: boolean;
+  html: boolean;
+  thinking: boolean;
+  read: boolean;
+};
+
+const defaultConversationExpansion = {
+  toolCall: true,
+  diff: true,
+  html: true,
+  thinking: true,
+  read: false,
+};
+</code></pre>
+<p>The same preference controls initial expansion only; users can always toggle individual panels without changing the default.</p>
+<h4 id="subagents">Subagents</h4>
+<ul>
+<li>Managed subagents appear as collapsed connected conversation nodes with <code>delegated</code> edges.</li>
+<li>Expanding follows or centers the linked node.</li>
+<li>The parent/subagent structure is a view over normal canvas nodes and edges, not a second graph model.</li>
+<li>Provider-native subagents that are not independently resumable may need a lighter virtual node. Prototype Paseo identity/event behavior before fixing this model.</li>
+</ul>
+<h3 id="7-2-terminal">7.2 Terminal</h3>
+<ul>
+<li>Real xterm.js terminal attached to Paseo terminal streaming.</li>
+<li>Workspace-scoped by default.</li>
+<li>Supports create, attach/reconnect, input, resize, capture and stop.</li>
+<li>Exposes only a bounded terminal tail to agent context unless explicitly expanded.</li>
+</ul>
+<h3 id="7-3-diff-changes-explorer">7.3 Diff / Changes explorer</h3>
+<ul>
+<li>Workspace-bound view over Git state; the node does not own the Git state.</li>
+<li>Folder/file tree with aggregated <code>+</code> and <code>-</code> counts.</li>
+<li>File diff preview and navigation into file editor nodes.</li>
+<li>Shows base reference, branch/head, dirty state, current PR and checks.</li>
+<li>Primary workspace actions: commit, push, open PR, open existing PR, merge when appropriate.</li>
+<li>Can spawn browser nodes for related issue/PR/check URLs.</li>
+<li>Multiple diff views may later point to the same workspace; start with one canonical diff node per workspace.</li>
+</ul>
+<h3 id="7-4-browser">7.4 Browser</h3>
+<p>Browser sources:</p>
+<ol>
+<li>Normal remote pages such as GitHub issues and PRs.</li>
+<li>Local application/dev-server pages.</li>
+<li>SPADE/agent-generated artifacts.</li>
+</ol>
+<p>Default behavior when created for a GitHub project:</p>
+<ul>
+<li>Open the repository Issues page.</li>
+<li>Diff/PR surfaces can open a connected browser at the relevant issue or PR.</li>
+</ul>
+<p>Remote pages and generated artifacts are different trust/rendering modes and should not share the same privilege model.</p>
+<h4 id="browser-rendering-architecture-to-prototype">Browser rendering architecture to prototype</h4>
+<ul>
+<li>A normal iframe cannot render many GitHub/remote pages because of <code>X-Frame-Options</code> and CSP.</li>
+<li>Electron <code>WebContentsView</code> is a native window child with window-relative bounds and cannot naturally participate in arbitrary React Flow transforms, clipping and stacking.</li>
+<li>Paseo currently uses Electron guest <code>&lt;webview&gt;</code> elements. SPADE should prototype a guest webview inside a transformed React Flow node before choosing it.</li>
+<li>Electron officially warns that <code>&lt;webview&gt;</code> has stability risks around rendering, navigation, and event routing and recommends alternatives where possible. Its use here is therefore a product-specific experiment, not a settled default.</li>
+<li>If guest webviews prove unreliable, fallback is a selected/expanded browser overlay or separate window synchronized to the chosen node—not one native view per arbitrary transformed node.</li>
+</ul>
+<p>The browser prototype must test zoom, pan, clipping, stacking, keyboard focus, scrolling, navigation, popups, downloads, session/profile handling, node reparenting and resource disposal.</p>
+<h3 id="7-5-file-editor">7.5 File editor</h3>
+<ul>
+<li>Monaco editor with syntax highlighting.</li>
+<li>Workspace-relative filesystem identity.</li>
+<li>Save and revision/conflict handling.</li>
+<li>LSP go-to-definition and find-references through a workspace LSP service.</li>
+<li>Markdown preview mode with Mermaid.</li>
+<li><code>Open in IDE</code> action including path, line and column.</li>
+<li>VS Code via <code>code -g path:line:column</code> is the first supported external IDE path; keep command templates configurable later.</li>
+</ul>
+<h3 id="7-6-whiteboard-deferred">7.6 Whiteboard, deferred</h3>
+<p>Do not include a whiteboard in the first issue-workflow prototype. If observed workflows demonstrate a need:</p>
+<ul>
+<li>Embed tldraw as an entity inside a React Flow node.</li>
+<li>Keep its camera and gestures local while active.</li>
+<li>Persist the tldraw document, not the live editor instance.</li>
+<li>Allow project or work-item scope; bind it to a workspace only when useful.</li>
+<li>Give agents a textual/shape summary or explicit export instead of automatically attaching the complete scene.</li>
+<li>Production deployment would require a tldraw production license key under its current source-available license.</li>
+</ul>
+<h3 id="7-7-task-board-later">7.7 Task board, later</h3>
+<p>A Trello-style board is a SPADE-owned structured entity:</p>
+<ul>
+<li>Columns and cards</li>
+<li>Card descriptions/status</li>
+<li>Links to issue, agent, workspace, diff and PR nodes</li>
+<li>Agent-readable summary and selected card detail</li>
+<li>Typed actions for card creation/update/move</li>
+</ul>
+<p>Do not implement it as arbitrary whiteboard shapes if agents need reliable structured reads/writes.</p>
+<h2 id="8-workspace-and-git-workflow">8. Workspace and Git workflow</h2>
+<h3 id="8-1-recommended-creation-flow">8.1 Recommended creation flow</h3>
+<p>The reliable ordering is likely:</p>
+<ol>
+<li>User selects a project from the global sidebar and opens its canvas.</li>
+<li>User opens an issue in a project-scoped browser node, or creates an ad-hoc objective.</li>
+<li><code>Implement</code> creates a logical work item and assigns the source node as its root.</li>
+<li>SPADE asks for or infers base branch/ref and workspace mode.</li>
+<li>SPADE asks Paseo to create the first worktree/workspace deterministically.</li>
+<li>SPADE launches the integrator agent inside that workspace/cwd with issue context.</li>
+<li>Agent and default diff nodes inherit the work item automatically.</li>
+<li>Reviewers, fixers, and subagents created later inherit the same work item even when they use separate Paseo workspaces.</li>
+<li>The canvas auto-sizes the logical work background and collapses retired stages; the user does not move nodes back into manual groups.</li>
+</ol>
+<p>This is safer and easier to reconcile than asking an unconstrained agent shell to create a worktree and then trying to discover it afterward. The UI may still describe the operation naturally as “agent handles this issue in a new worktree.”</p>
+<p>This remains a prototype hypothesis until Paseo's exact workspace/agent API behavior is exercised.</p>
+<h3 id="8-2-paseo-workflow-skill-behavior">8.2 Paseo workflow skill behavior</h3>
+<p>The current <code>paseo-issue-to-pr</code> skill intentionally creates operationally isolated workspaces:</p>
+<ul>
+<li>One issue/integrator worktree</li>
+<li>A separate read-only review worktree for each review round</li>
+<li>One temporary fixer worktree per worthwhile independent resolution chunk</li>
+</ul>
+<p>This behavior comes from the skill's safety/review workflow, not a requirement of Paseo itself. Eliminating those workspaces blindly would weaken isolation between the sole writer, reviewers, and fixers.</p>
+<p>The ADE-oriented update should organize rather than merely suppress them:</p>
+<ul>
+<li>Propagate one SPADE <code>workItemId</code> through the whole workflow.</li>
+<li>Record role metadata such as integrator, review round, and fix chunk.</li>
+<li>Link stage agents/workspaces through provenance edges.</li>
+<li>Collapse or hide retired review/fix stages by default.</li>
+<li>Archive temporary Paseo workspaces when the skill's lifecycle permits it.</li>
+<li>Expose branch, cwd, base, status, and diff facts on demand.</li>
+</ul>
+<p>A later skill redesign may reduce workspace count where isolation has no value, but the first integration should preserve semantics and remove visual/manual organization cost.</p>
+<h3 id="8-3-diff-semantics">8.3 Diff semantics</h3>
+<p>At creation, retain:</p>
+<ul>
+<li>Selected base ref</li>
+<li>Resolved base revision, if available</li>
+<li>Workspace checkout identity</li>
+<li>Current head branch/ref</li>
+</ul>
+<p>The Changes node should clearly state what comparison it is showing. A prototype must decide whether the default comparison tracks the moving base branch, the creation-time base revision, or Git merge-base semantics. Do not hide this in the branch name.</p>
+<h3 id="8-4-logical-grouping-and-workspace-presentation">8.4 Logical grouping and workspace presentation</h3>
+<p>The colored background should represent the <strong>logical work item</strong>, not each operational workspace. Work item presentation is derived from membership and should not require manual containment maintenance.</p>
+<p>Prototype both:</p>
+<ul>
+<li>An auto-sized React Flow parent/group that grows around member nodes.</li>
+<li>A non-parent visual hull computed from member-node bounds.</li>
+</ul>
+<p>Workspace identity remains visible through node badges, a workspace inspector, and optional nested accents. Selecting a workspace badge can highlight every node using that checkout and expose branch, cwd, base ref, dirty state, role, and lifecycle.</p>
+<p>The prototype should prefer the visual hull if React Flow parenting makes membership changes or free placement feel like manual group maintenance.</p>
+<h2 id="9-context-passed-to-agents">9. Context passed to agents</h2>
+<p>Connections do not automatically inject unlimited content. SPADE builds an explicit, bounded context projection.</p>
+<pre><code class="language-ts">type AgentContextReference = {
+  node_type: string;
+  node_id: string;
+  node_name: string;
+  short_description?: string;
+  relation: &quot;spawned&quot; | &quot;delegated&quot; | &quot;references&quot; | &quot;derived&quot;;
+  workspace?: {
+    id: string;
+    cwd: string;
+  };
+  locator?: {
+    kind: string;
+    value: string;
+  };
+  revision?: string;
+  excerpt?: string;
+};
+</code></pre>
+<p>Initial behavior:</p>
+<ul>
+<li>On agent creation or prompt, SPADE includes selected connected node references and bounded excerpts in the prompt/attachment payload.</li>
+<li>Full transcripts, complete web pages, entire whiteboards and large diffs are never silently included.</li>
+<li>The UI shows which nodes are being shared.</li>
+</ul>
+<p>There is no ACP or SPADE-owned MCP integration in v1. If on-demand node access later becomes necessary, it will be designed from observed context-projection limitations rather than prebuilt now.</p>
+<h2 id="10-acp-and-mcp-clarification">10. ACP and MCP clarification</h2>
+<h3 id="acp">ACP</h3>
+<p>ACP is the <strong>Agent Client Protocol</strong>, a JSON-RPC protocol between an agent client/editor and a coding agent. It standardizes sessions, streaming, modes, permissions and related coding-agent interactions.</p>
+<p>For SPADE v1, ACP is out of scope. Paseo may use it internally for compatible providers, while SPADE consumes Paseo's normalized agent model.</p>
+<h3 id="mcp">MCP</h3>
+<p>MCP is a tool/resource protocol between an agent host and external capability servers.</p>
+<p>The harness/provider may support transporting MCP tools, and Paseo can inject MCP server configuration into supported providers. That does <strong>not</strong> automatically define how an agent reads SPADE nodes.</p>
+<p>MCP is out of scope for v1. Prompt/attachment context projection is sufficient. Revisit a SPADE node tool service only after a prototype demonstrates that bounded prompt projections are inadequate.</p>
+<h2 id="11-rich-agent-responses-and-generated-html">11. Rich agent responses and generated HTML</h2>
+<p>V1 supports both standard rich blocks and full agent-authored HTML/JavaScript. Security hardening is explicitly deferred for the prototype.</p>
+<h3 id="standard-rich-blocks">Standard rich blocks</h3>
+<ul>
+<li>Markdown</li>
+<li>Syntax-highlighted code</li>
+<li>Mermaid</li>
+<li>Tables, callouts and structured lists</li>
+<li>File references</li>
+<li>Tool-call/read/edit/shell panes</li>
+<li>Diff blocks</li>
+<li>Links that can open or spawn browser/file nodes</li>
+</ul>
+<h3 id="custom-html-javascript-blocks">Custom HTML/JavaScript blocks</h3>
+<p>Agents may return complete custom HTML/JavaScript answer blocks. Render them in an <strong>unsandboxed iframe or separate document runtime</strong> so scripts execute and CSS/runtime lifecycle does not collide accidentally with the React application. The iframe boundary is for composition and resetability, not a v1 security boundary.</p>
+<p>Direct <code>innerHTML</code> is insufficient because inserted script elements generally do not execute and unscoped CSS can damage the host UI. A document/iframe runtime also gives each answer a deterministic mount, reload, and disposal lifecycle.</p>
+<p>Each artifact revision records:</p>
+<ul>
+<li>Originating agent/turn</li>
+<li>HTML, CSS, JavaScript and optional assets</li>
+<li>Current user interaction/annotation state</li>
+<li>Revision and creation timestamp</li>
+</ul>
+<h3 id="interactive-answer-bridge">Interactive answer bridge</h3>
+<p>Inject a small SPADE API into each custom answer runtime:</p>
+<pre><code class="language-ts">window.spade = {
+  submit(input: { message?: string; data?: unknown }): Promise&lt;void&gt;;
+  annotate(input: {
+    target?: string;
+    text: string;
+    data?: unknown;
+  }): Promise&lt;void&gt;;
+};
+</code></pre>
+<p>Initial use cases:</p>
+<ul>
+<li>Rich plans with inline comments and annotations</li>
+<li>Forms or choices whose values become the next user message</li>
+<li>Editable structured recommendations</li>
+<li>A <code>Submit feedback</code> action that sends the artifact revision, annotations, and entered data back to the originating agent</li>
+</ul>
+<p>User submissions become explicit conversation events/follow-up prompts; custom scripts do not mutate the canonical conversation directly.</p>
+<h3 id="accepted-prototype-risk">Accepted prototype risk</h3>
+<p>An unsandboxed, same-origin Electron document is more privileged than opening a generated HTML file in a normal external browser because it may share application origin, state, or exposed preload APIs. Security is not a v1 constraint, but the implementation should record this accepted risk and keep the custom runtime replaceable so isolation can be added later without changing the artifact contract.</p>
+<h2 id="12-canvas-navigation-and-scale">12. Canvas navigation and scale</h2>
+<p>Large-canvas navigation is a core feature, not polish.</p>
+<h3 id="required-behavior">Required behavior</h3>
+<ul>
+<li>Fit entire canvas</li>
+<li>Fit current workspace/group</li>
+<li>Center/focus a node</li>
+<li>Follow an edge to its source/target</li>
+<li>Back/forward focus history</li>
+<li>Search nodes by title/type/workspace/status</li>
+<li>Keyboard navigation between related nodes</li>
+<li>Breadcrumb or current-focus indicator</li>
+<li>Minimap overview with work-item colors, project context, and node-type icons</li>
+</ul>
+<h3 id="minimap-and-level-of-detail">Minimap and level of detail</h3>
+<p>React Flow's minimap is SVG-only and should show simplified node representations.</p>
+<p>At overview zoom:</p>
+<ul>
+<li>Hide heavy node bodies.</li>
+<li>Show title, type, status, work-item color, and compact workspace role when relevant.</li>
+<li>Keep group boundaries and meaningful edges visible.</li>
+<li>Allow minimap click/drag to center quickly.</li>
+</ul>
+<p>The exact zoom thresholds must be tuned in a prototype; do not hard-code product semantics around an arbitrary initial value.</p>
+<h3 id="performance-strategy">Performance strategy</h3>
+<ul>
+<li>Lazy-mount Monaco, tldraw, xterm and browser renderers.</li>
+<li>Preserve external resources when a renderer unmounts.</li>
+<li>Use cheap preview shells when zoomed out.</li>
+<li>Avoid keeping every browser/editor/terminal active on a large canvas.</li>
+<li>Test 100 mixed nodes and a smaller number of simultaneously active heavy nodes.</li>
+</ul>
+<h2 id="13-paseo-integration-boundary">13. Paseo integration boundary</h2>
+<p>Paseo's current architecture is a good technical fit:</p>
+<ul>
+<li>Node daemon with WebSocket protocol</li>
+<li>Published <code>@getpaseo/client</code></li>
+<li>Agents, workspaces, providers and configuration in the public facade</li>
+<li>Normalized timelines, permissions and tool events</li>
+<li>Worktree, terminal, Git/forge, browser and filesystem operations in lower-level APIs</li>
+<li>Multiple existing clients prove the daemon is not tied to one UI</li>
+</ul>
+<h3 id="adapter-rule">Adapter rule</h3>
+<p>All Paseo access goes through one <code>SpadePaseoAdapter</code>.</p>
+<pre><code class="language-text">SPADE entity adapters
+  -&gt; SpadePaseoAdapter
+       -&gt; public @getpaseo/client where available
+       -&gt; isolated low-level protocol/internal client usage where unavoidable
+  -&gt; unmodified Paseo daemon
+</code></pre>
+<p>Do not spread direct protocol calls through entity renderers.</p>
+<h3 id="known-technical-risk">Known technical risk</h3>
+<p>The public Paseo SDK v0.4 facade currently covers agents, workspaces, providers and config. Terminal, Git/forge, browser and filesystem features require lower-level/internal APIs. SPADE should isolate these and preferably upstream the missing stable SDK methods.</p>
+<h3 id="plugin-boundary">Plugin boundary</h3>
+<p>Paseo's plugin system may be useful for daemon-side SPADE RPCs later, but a complete React Flow shell does not fit naturally as a Paseo sidebar plugin. SPADE remains a separate frontend.</p>
+<h2 id="14-github-scope">14. GitHub scope</h2>
+<h3 id="initial-github-functionality">Initial GitHub functionality</h3>
+<p>Use Paseo's existing local Git/forge behavior and the user's <code>gh</code> authentication for:</p>
+<ul>
+<li>Repository/workspace setup</li>
+<li>Branch/worktree operations</li>
+<li>Changes and diff status</li>
+<li>Commit and push</li>
+<li>PR creation/status/checks/merge operations</li>
+<li>Related issue/PR URLs</li>
+</ul>
+<p>This does not initially require a dedicated SPADE GitHub App.</p>
+<h3 id="later-github-app-functionality">Later GitHub App functionality</h3>
+<p>Add a GitHub App when SPADE needs:</p>
+<ul>
+<li>Organization/repository installation</li>
+<li>Webhooks and background reactions</li>
+<li>Checks API annotations</li>
+<li>Server-side issue/PR automation</li>
+<li>Multi-user hosted authorization</li>
+</ul>
+<p>Use Octokit rather than hand-written REST/GraphQL clients.</p>
+<h2 id="15-full-ide">15. Full IDE</h2>
+<p>Do not embed a full IDE initially.</p>
+<p>Provide a generic <code>Open in IDE</code> action for:</p>
+<ul>
+<li>Workspace root</li>
+<li>File</li>
+<li>File at line/column</li>
+</ul>
+<p>Initial implementation target:</p>
+<ul>
+<li>VS Code desktop with Remote-WSL-compatible paths.</li>
+</ul>
+<p>Later configuration can register command templates for Cursor, Zed, WebStorm, OpenVSCode Server, or other editors.</p>
+<h2 id="16-desktop-shell-and-browser-rendering">16. Desktop shell and browser rendering</h2>
+<h3 id="why-webcontentsview-does-not-behave-like-a-react-flow-node">Why <code>WebContentsView</code> does not behave like a React Flow node</h3>
+<p>React Flow pans and zooms its renderer DOM with a CSS transform matrix. Electron <code>WebContentsView</code> is not a DOM child: it is a native/main-process child view attached to the application window and controlled through rectangular window-relative <code>{ x, y, width, height }</code> bounds.</p>
+<p>It can be synchronized approximately by recalculating screen bounds on every pan, zoom, resize, scroll, and node move, but it does not naturally inherit:</p>
+<ul>
+<li>CSS scale/transforms or arbitrary clipping</li>
+<li>Rounded node clipping and DOM masks</li>
+<li>DOM stacking between edges, node chrome, menus, and overlapping nodes</li>
+<li>React layout and unmount order</li>
+<li>Pointer routing from DOM elements drawn above it</li>
+</ul>
+<p>A collection of live native child views can therefore occlude canvas UI or drift during transforms unless SPADE builds a dedicated overlay compositor.</p>
+<h3 id="does-tauri-solve-this">Does Tauri solve this?</h3>
+<p>No. Tauri 2 supports multiple webviews, but they are also window-attached native views with explicit logical <code>x</code>, <code>y</code>, <code>width</code>, and <code>height</code>, manipulated using <code>setPosition</code> and <code>setSize</code>. They do not become arbitrary transformed DOM descendants of React Flow nodes.</p>
+<p>Tauri trade-offs:</p>
+<ul>
+<li>Smaller application and Rust capability model</li>
+<li>Uses platform webviews rather than one bundled engine</li>
+<li>Cross-platform differences between WebView2, WKWebView, and WebKitGTK</li>
+<li>Requires the same bounds-synchronization/compositor work for canvas browser nodes</li>
+<li>Adds Rust/native integration work without directly improving Paseo's Node/TypeScript ecosystem fit</li>
+</ul>
+<p>Electron trade-offs:</p>
+<ul>
+<li>Larger package/runtime footprint</li>
+<li>Bundled Chromium gives consistent rendering</li>
+<li>Direct Node/native-module fit for Paseo, node-pty, Monaco, and the existing TypeScript stack</li>
+<li>Provides the DOM-like <code>&lt;webview&gt;</code> guest element, implemented using an out-of-process iframe, which is much closer to React Flow composition</li>
+<li>Electron officially warns that <code>&lt;webview&gt;</code> has stability risks in rendering, navigation, and event routing</li>
+</ul>
+<h3 id="current-recommendation">Current recommendation</h3>
+<p>Keep Electron as the baseline and prototype <code>&lt;webview&gt;</code> inside one transformed React Flow node. Tauri does not solve the defining problem, so do not switch shells before this result. If <code>&lt;webview&gt;</code> fails, compare bounds-synchronized selected-node overlays in Electron and Tauri only if Tauri's footprint/system-webview trade-off is otherwise valuable.</p>
+<p>The exact browser-node implementation remains blocked on this prototype.</p>
+<h2 id="17-licensing">17. Licensing</h2>
+<h3 id="paseo-agpl-3-0">Paseo AGPL-3.0</h3>
+<p>Paseo is licensed AGPL-3.0. AGPL does not prohibit charging for software or hosting, but it affects source obligations.</p>
+<p>Practical models:</p>
+<ol>
+<li>
+<p><strong>Open-source/AGPL-compatible SPADE</strong></p>
+<ul>
+<li>The simplest licensing alignment when importing Paseo client/protocol code.</li>
+<li>Paid hosting, support and distribution remain possible.</li>
+</ul>
+</li>
+<li>
+<p><strong>Paid desktop bundle with Paseo component</strong></p>
+<ul>
+<li>Shipping an AGPL-covered daemon requires preserving notices/license and providing corresponding source as required.</li>
+<li>Whether a proprietary frontend remains legally separate is implementation- and jurisdiction-dependent.</li>
+</ul>
+</li>
+<li>
+<p><strong>Hosted service using an unmodified separate Paseo daemon</strong></p>
+<ul>
+<li>Cleaner than modifying or embedding Paseo.</li>
+<li>If the daemon is modified and remote users interact with it, AGPL section 13 requires a prominent source offer for the deployed corresponding source.</li>
+</ul>
+</li>
+<li>
+<p><strong>Proprietary SPADE importing <code>@getpaseo/client</code> or protocol code</strong></p>
+<ul>
+<li>High legal uncertainty and conservative copyleft risk because the frontend bundles/links AGPL-covered code.</li>
+<li>A process or WebSocket boundary is not automatically a guaranteed legal separation.</li>
+</ul>
+</li>
+</ol>
+<h3 id="licensing-gate">Licensing gate</h3>
+<p>Before importing Paseo packages into a product intended to remain proprietary, bundling Paseo, or operating a modified hosted daemon:</p>
+<ul>
+<li>Ask Paseo whether a commercial license/exception is available.</li>
+<li>Verify the exact package/version licenses.</li>
+<li>Obtain qualified legal advice on combined-work and source scope.</li>
+</ul>
+<p>This document records license facts and risks, not legal advice.</p>
+<h3 id="tldraw">tldraw</h3>
+<p>The current tldraw SDK is source-available rather than permissively open source:</p>
+<ul>
+<li>Internal development/testing is allowed.</li>
+<li>Production use is prohibited without a trial, hobby, or commercial license key.</li>
+<li>The license includes technical enforcement and license-compliance usage reporting provisions.</li>
+<li>Current commercial pricing is value-based and requires contacting tldraw; startup discounts and a hobby path are advertised.</li>
+</ul>
+<p>Using tldraw in prototypes is permitted, but shipping it is a product-cost and licensing decision. Pin and re-check the exact package license before release.</p>
+<h2 id="18-paseo-versus-emdash">18. Paseo versus Emdash</h2>
+<p>Current public evidence does <strong>not</strong> establish that Paseo is based on or forked from Emdash.</p>
+<ul>
+<li>GitHub records both canonical repositories as <code>fork: false</code> under different organizations.</li>
+<li>Emdash predates Paseo's public repository, but that alone is not provenance evidence.</li>
+<li>No explicit fork/credit acknowledgement was found in the reviewed primary materials.</li>
+<li>Their architectures differ materially.</li>
+</ul>
+<table>
+<thead>
+<tr>
+<th>Area</th>
+<th>Paseo</th>
+<th>Emdash</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Core topology</td>
+<td>Node daemon + WebSocket protocol + multiple clients</td>
+<td>Electron main/preload/React renderer with typed local IPC</td>
+</tr>
+<tr>
+<td>Clients</td>
+<td>Expo mobile/web, Electron desktop, CLI</td>
+<td>Desktop-focused Electron app</td>
+</tr>
+<tr>
+<td>Agent model</td>
+<td>Provider adapters, normalized timeline, ACP/native integrations</td>
+<td>CLI detection plus provider hooks/runtime integrations</td>
+</tr>
+<tr>
+<td>Remote</td>
+<td>Direct/relay cross-device daemon access</td>
+<td>SSH/SFTP remote projects</td>
+</tr>
+<tr>
+<td>Persistence</td>
+<td>Daemon JSON records plus client caches</td>
+<td>Local SQLite</td>
+</tr>
+<tr>
+<td>Extensibility</td>
+<td>Published client SDK, protocol, MCP and local plugins</td>
+<td>Product architecture and integrations; no equivalent public multi-client SDK established</td>
+</tr>
+<tr>
+<td>License</td>
+<td>AGPL-3.0</td>
+<td>Apache-2.0</td>
+</tr>
+</tbody>
+</table>
+<p>They are adjacent products solving parallel-agent/worktree UX. Calling Paseo a derivative would require root-history and source-similarity analysis; feature similarity is insufficient.</p>
+<h2 id="19-prototypes">19. Prototypes</h2>
+<h3 id="p1-project-navigation-and-minimal-complete-issue-workflow">P1 — Project navigation and minimal complete issue workflow</h3>
+<p>Build the smallest React Flow desktop prototype that exercises organization rather than real agent execution. Use deterministic mock adapters and one shared data model.</p>
+<p>Provide two switchable project presentations over the same records:</p>
+<ol>
+<li>Expandable sidebar: selecting a project opens its dedicated canvas.</li>
+<li>Global canvas: projects appear as top-level colored groups.</li>
+</ol>
+<p>Inside either view, run this complete mocked issue workflow:</p>
+<ol>
+<li>Open a GitHub issue browser node.</li>
+<li>Select <code>Implement</code> to create a logical work item.</li>
+<li>Spawn an integrator agent and workspace.</li>
+<li>Simulate two review-round workspaces and two fixer workspaces, matching the current <code>paseo-issue-to-pr</code> shape.</li>
+<li>Spawn collapsed delegated subagent nodes.</li>
+<li>Update one diff node with folder/file <code>+</code>/<code>-</code> statistics.</li>
+<li>Transition the work item through active → review → done.</li>
+<li>Create a PR browser node and collapse retired operational stages.</li>
+</ol>
+<p>Validate:</p>
+<ul>
+<li>Generic node container and dedicated drag handles</li>
+<li>Automatic <code>projectId</code>/<code>workItemId</code> inheritance</li>
+<li>Work-item hull/group maintenance with zero routine manual regrouping</li>
+<li>Workspace role/branch/cwd badges without workspace-colored clutter</li>
+<li>Save/reload of layout, edges, focus, and membership</li>
+<li>Minimap, project jump, work-item jump, and focus history</li>
+<li>Configurable conversation expansion defaults</li>
+</ul>
+<p>Pass criteria:</p>
+<ul>
+<li>Completing the workflow requires no manual movement into groups.</li>
+<li>All five simulated operational workspaces remain discoverable under one logical issue.</li>
+<li>Switching projects takes one sidebar action and restores project viewport/focus.</li>
+<li>The same records can render in both project-navigation variants.</li>
+<li>A short usability comparison selects sidebar-per-project or global-project-groups before persistence architecture is fixed.</li>
+<li>Any node can spawn a connected node and inherited membership is predictable.</li>
+</ul>
+<h3 id="p2-electron-browser-and-custom-answer-composition">P2 — Electron browser and custom-answer composition</h3>
+<p>Embed in React Flow:</p>
+<ul>
+<li>One Electron <code>&lt;webview&gt;</code> showing GitHub</li>
+<li>One bounds-synchronized <code>WebContentsView</code> overlay as a comparison, only if inexpensive</li>
+<li>Markdown + Mermaid</li>
+<li>One unsandboxed HTML/JavaScript answer with form input and plan annotations</li>
+</ul>
+<p>Validate:</p>
+<ul>
+<li>CSS pan/zoom/resize/clipping/stacking for <code>&lt;webview&gt;</code></li>
+<li>Native overlay synchronization and known visual limitations</li>
+<li>Focus, keyboard, wheel, popup, navigation, session, and node-reparent behavior</li>
+<li>Custom answer mount/reload/dispose lifecycle</li>
+<li><code>window.spade.submit</code> and <code>window.spade.annotate</code> round-trip into a mock conversation</li>
+<li>Drag only from node chrome</li>
+</ul>
+<p>Pass criteria:</p>
+<ul>
+<li>Select the browser composition model or prove that browsers must expand into an overlay/window.</li>
+<li>Determine whether Electron <code>&lt;webview&gt;</code> is stable enough despite its official warning.</li>
+<li>Do not build a Tauri version unless Electron fails or application footprint becomes a controlling product requirement; Tauri's native webview has the same bounds model.</li>
+<li>Rich HTML can collect user feedback and create a deterministic follow-up message.</li>
+</ul>
+<h3 id="p3-real-paseo-issue-to-pr-bridge">P3 — Real Paseo issue-to-PR bridge</h3>
+<p>On one local Git repository:</p>
+<ol>
+<li>Select the project from the sidebar and open Issues in a browser node.</li>
+<li>Create one work item from an issue.</li>
+<li>Create/attach the integrator Paseo worktree and agent.</li>
+<li>Show normalized conversation events and configured panel expansion.</li>
+<li>Reconcile additional review/fix workspaces into the same work item, using either a reduced test workflow or one bounded real workflow run.</li>
+<li>Create one subagent and reconcile it into a collapsed delegated node.</li>
+<li>Update diff stats and open a file editor from a changed file.</li>
+<li>Commit/open PR from the diff node.</li>
+<li>Open the resulting PR in a connected browser node.</li>
+<li>Restart SPADE/Paseo and verify identity reconciliation.</li>
+</ol>
+<p>Pass criteria:</p>
+<ul>
+<li>Every SPADE workspace maps to the correct Paseo workspace/cwd and role.</li>
+<li>Many workspaces remain one understandable logical work item.</li>
+<li>Diff state comes from each checkout, not inferred branch naming.</li>
+<li>Reconnect preserves opaque workspace/agent identities.</li>
+<li>Subagents appear once with the correct parent relation.</li>
+<li>All direct Paseo protocol usage remains inside the adapter.</li>
+<li>Findings are recorded for an ADE-aware update to <code>paseo-issue-to-pr</code>; do not modify the skill before the observed mapping is understood.</li>
+</ul>
+<h3 id="p4-editor-lsp-and-external-ide-handoff">P4 — Editor/LSP and external IDE handoff</h3>
+<p>Validate two initial languages in a real worktree:</p>
+<ul>
+<li>Monaco open/save</li>
+<li>Go to definition</li>
+<li>Find references</li>
+<li>Opening result in another file node</li>
+<li>Markdown preview with Mermaid</li>
+<li>External VS Code open at file/line/column</li>
+<li>WSL path handling</li>
+</ul>
+<h2 id="20-proposed-implementation-sequence">20. Proposed implementation sequence</h2>
+<ol>
+<li>P1 project-navigation and minimal complete issue-workflow prototype.</li>
+<li>Select sidebar-per-project versus global project groups, and work-item hull versus parent group.</li>
+<li>P2 Electron browser/custom-answer composition prototype.</li>
+<li>Decide browser implementation; consider Tauri only if Electron fails or footprint becomes decisive.</li>
+<li>P3 real Paseo integration prototype with multiple operational workspaces under one work item.</li>
+<li>Finalize entity registry and ADE-aware workflow metadata contracts from observed requirements.</li>
+<li>P4 editor/LSP prototype.</li>
+<li>Build the first cohesive real issue-to-PR vertical slice.</li>
+<li>Add task board after node context/action semantics stabilize.</li>
+<li>Reconsider tldraw only when real workflows demonstrate a whiteboard need.</li>
+<li>Revisit hosted deployment, GitHub App and execution isolation later.</li>
+</ol>
+<h2 id="21-open-decisions">21. Open decisions</h2>
+<ol>
+<li>Must SPADE remain proprietary-compatible, or is AGPL-compatible open source acceptable?</li>
+<li>Can Paseo provide a commercial license for its client/protocol packages?</li>
+<li>Does P1 confirm sidebar-per-project with one canvas each, or a global canvas with project groups?</li>
+<li>Does a work-item hull or React Flow parent group avoid manual membership maintenance better?</li>
+<li>Does Electron <code>&lt;webview&gt;</code> survive transformed-node interaction tests, or must browser content use a selected overlay/window?</li>
+<li>Is a base diff pinned to creation revision or tracked through merge-base with a moving base branch?</li>
+<li>Does spawning an issue agent always create a new worktree, or offer existing checkout/new worktree choices?</li>
+<li>Which connected nodes are included automatically as agent context versus requiring explicit selection?</li>
+<li>How should non-resumable provider-native subagents be represented?</li>
+<li>What is the acceptable active-node budget for terminal/editor/browser renderers?</li>
+<li>After P3, which <code>paseo-issue-to-pr</code> workspaces remain semantically necessary and what metadata must the skill emit?</li>
+<li>If whiteboards become useful, is a tldraw production license and its value-based commercial pricing acceptable?</li>
+</ol>
+<h2 id="22-principal-risks">22. Principal risks</h2>
+<table>
+<thead>
+<tr>
+<th>Risk</th>
+<th>Level</th>
+<th>Mitigation</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>Paseo AGPL conflicts with proprietary product model</td>
+<td>Blocker before product distribution</td>
+<td>Commercial license or legal review; keep daemon unmodified and boundary isolated meanwhile</td>
+</tr>
+<tr>
+<td>Browser cannot behave like a normal transformed React Flow node</td>
+<td>High</td>
+<td>P2 before architecture commitment; guest webview vs selected overlay</td>
+</tr>
+<tr>
+<td>Project/workspace/work-item concepts produce manual grouping work</td>
+<td>High</td>
+<td>P1 compares navigation models and requires automatic inheritance/hulls</td>
+</tr>
+<tr>
+<td>Branch treated as workspace identity</td>
+<td>High</td>
+<td>Persist opaque workspace identity, checkout path and base/head metadata separately</td>
+</tr>
+<tr>
+<td>Paseo internal protocol churn</td>
+<td>High</td>
+<td>Single adapter; upstream public SDK additions</td>
+</tr>
+<tr>
+<td>Heavy renderers overwhelm large canvas</td>
+<td>High</td>
+<td>Activation, LOD, lazy mount, bounded active resources</td>
+</tr>
+<tr>
+<td>Unsandboxed HTML/JavaScript can mutate app state, interfere with UI, or access exposed desktop capabilities</td>
+<td>Accepted for prototype</td>
+<td>Keep artifact runtime replaceable and resettable; add isolation only when product hardening begins</td>
+</tr>
+<tr>
+<td>Resource leaks after node removal/restart</td>
+<td>High</td>
+<td>Explicit attach/dispose/reconcile lifecycle per entity</td>
+</tr>
+<tr>
+<td>Context connections silently overload prompts</td>
+<td>Medium</td>
+<td>Explicit bounded projections and visible context selection</td>
+</tr>
+<tr>
+<td>Generic entity abstraction hides real semantics</td>
+<td>Medium</td>
+<td>Typed actions and projections; stabilize through prototypes</td>
+</tr>
+<tr>
+<td>tldraw production license cost/terms or nested interaction limitations</td>
+<td>Deferred</td>
+<td>Do not integrate until workflow evidence justifies it</td>
+</tr>
+</tbody>
+</table>
+<h2 id="23-primary-references">23. Primary references</h2>
+<ul>
+<li>Paseo repository: <a href="https://github.com/getpaseo/paseo">https://github.com/getpaseo/paseo</a></li>
+<li>Paseo architecture: <a href="https://github.com/getpaseo/paseo/blob/main/docs/architecture.md">https://github.com/getpaseo/paseo/blob/main/docs/architecture.md</a></li>
+<li>Paseo data model: <a href="https://github.com/getpaseo/paseo/blob/main/docs/data-model.md">https://github.com/getpaseo/paseo/blob/main/docs/data-model.md</a></li>
+<li>Paseo plugins: <a href="https://github.com/getpaseo/paseo/blob/main/docs/plugins.md">https://github.com/getpaseo/paseo/blob/main/docs/plugins.md</a></li>
+<li>Paseo license: <a href="https://github.com/getpaseo/paseo/blob/main/LICENSE">https://github.com/getpaseo/paseo/blob/main/LICENSE</a></li>
+<li>Emdash repository: <a href="https://github.com/generalaction/emdash">https://github.com/generalaction/emdash</a></li>
+<li>React Flow sub-flows/groups: <a href="https://reactflow.dev/learn/layouting/sub-flows">https://reactflow.dev/learn/layouting/sub-flows</a></li>
+<li>React Flow instance/navigation: <a href="https://reactflow.dev/api-reference/types/react-flow-instance">https://reactflow.dev/api-reference/types/react-flow-instance</a></li>
+<li>React Flow minimap: <a href="https://reactflow.dev/api-reference/components/minimap">https://reactflow.dev/api-reference/components/minimap</a></li>
+<li>tldraw editor: <a href="https://tldraw.dev/docs/editor">https://tldraw.dev/docs/editor</a></li>
+<li>Monaco: <a href="https://github.com/microsoft/monaco-editor">https://github.com/microsoft/monaco-editor</a></li>
+<li>Mermaid configuration: <a href="https://mermaid.js.org/config/setup/mermaid/interfaces/MermaidConfig.html">https://mermaid.js.org/config/setup/mermaid/interfaces/MermaidConfig.html</a></li>
+<li>Electron WebContentsView: <a href="https://www.electronjs.org/docs/latest/api/web-contents-view">https://www.electronjs.org/docs/latest/api/web-contents-view</a></li>
+<li>Tauri Webview API: <a href="https://v2.tauri.app/reference/javascript/api/namespacewebview/">https://v2.tauri.app/reference/javascript/api/namespacewebview/</a></li>
+<li>Electron webview tag warning: <a href="https://www.electronjs.org/docs/latest/api/webview-tag">https://www.electronjs.org/docs/latest/api/webview-tag</a></li>
+<li>tldraw license: <a href="https://github.com/tldraw/tldraw/blob/main/LICENSE.md">https://github.com/tldraw/tldraw/blob/main/LICENSE.md</a></li>
+<li>tldraw pricing: <a href="https://tldraw.dev/pricing">https://tldraw.dev/pricing</a></li>
+<li>GNU AGPLv3: <a href="https://www.gnu.org/licenses/agpl-3.0.en.html">https://www.gnu.org/licenses/agpl-3.0.en.html</a></li>
+<li>GNU GPL FAQ: <a href="https://www.gnu.org/licenses/gpl-faq.html">https://www.gnu.org/licenses/gpl-faq.html</a></li>
+</ul>
+        <footer class="docs-footer">SPADE documentation</footer>
+      </article>
+    </main>
+  </div>
+</body>
+</html>

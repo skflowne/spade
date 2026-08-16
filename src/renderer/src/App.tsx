@@ -79,10 +79,10 @@ export function App(): React.JSX.Element {
   return (
     <main className="app-shell">
       <header className="app-header">
-        <h1>GADE</h1>
+        <h1>SPADE</h1>
         <span>Core canvas · domain v{DOMAIN_RECORD_VERSION}</span>
       </header>
-      <section className="canvas" aria-label="GADE canvas">
+      <section className="canvas" aria-label="SPADE canvas">
         <ReactFlow
           nodes={nodes}
           edges={flowEdges}

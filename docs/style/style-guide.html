@@ -3,14 +3,15 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <title>Control Room style guide — GADE</title>
+  <title>Control Room style guide — SPADE</title>
   <link rel="stylesheet" href="./style-guide.css">
+  <script defer src="./docs-tools.js"></script>
 </head>
 <body>
-  <div class="guide-shell">
-    <aside class="guide-nav">
-      <a class="guide-brand" href="./index.html"><span class="brand-mark">G</span><span><b>GADE</b><small>Control Room system</small></span></a>
-      <div class="nav-label">FOUNDATIONS</div>
+  <div class="guide-shell site-shell">
+    <aside class="guide-nav site-sidebar">
+      <a class="guide-brand site-brand" href="../index.html"><span class="brand-mark site-brand__mark">S</span><span><b>SPADE</b><small>Project documentation</small></span></a>
+      <div class="nav-label site-nav-label">FOUNDATIONS</div>
       <nav aria-label="Style guide sections">
         <a href="#overview"><span>01</span>Overview</a>
         <a href="#color"><span>02</span>Color</a>
@@ -21,7 +22,7 @@
         <a href="#interaction"><span>07</span>Interaction</a>
         <a href="#implementation"><span>08</span>Implementation</a>
       </nav>
-      <div class="guide-version"><b>Foundation guide</b><span>Selected direction · v0.1</span></div>
+      <div class="guide-version site-sidebar__footer"><b>Foundation guide</b><span>Selected direction · v0.1</span><a href="../../mockups/index.html">View design mockups</a></div>
     </aside>
 
     <main class="guide-main">
@@ -113,7 +114,7 @@
               <div class="control-row"><button class="cr-button primary">Primary action</button><button class="cr-button">Secondary</button><button class="cr-button ghost">Ghost</button><button class="cr-button danger">Destructive</button><button class="cr-button icon" aria-label="Example icon button">＋</button><button class="cr-button" disabled>Unavailable</button></div>
               <div class="field-grid">
                 <div class="field"><label for="sample-field">Visible label</label><input id="sample-field" class="cr-input" placeholder="Optional placeholder"></div>
-                <div class="field error"><label for="error-field">Field with error</label><input id="error-field" class="cr-input" value="Invalid value" aria-invalid="true"><small>Describe the specific problem.</small></div>
+                <div class="field error"><label for="error-field">Field with error</label><input id="error-field" class="cr-input" value="Invalid value" aria-invalid="true" aria-describedby="error-field-message"><small id="error-field-message">Describe the specific problem.</small></div>
               </div>
               <div class="badge-row"><span class="badge">METADATA</span><span class="badge info">FOCUSED</span><span class="badge good">SUCCESS</span><span class="badge warn">ATTENTION</span><span class="badge bad">FAILED</span></div>
             </div>
@@ -168,7 +169,7 @@
           </div>
         </section>
 
-        <footer class="footer"><span>Tokens: <code>src/styles/control-room-tokens.css</code></span><a href="./graphite.html">Open Control Room mockup →</a></footer>
+        <footer class="footer"><span>Tokens: <code>src/styles/control-room-tokens.css</code></span><a href="../../mockups/graphite.html">Open Control Room mockup →</a></footer>
       </div>
     </main>
   </div>

@@ -35,7 +35,7 @@ const themes = {
 
 const theme = document.body.dataset.theme || "graphite";
 const current = themes[theme];
-document.title = `${current.name} — GADE`;
+document.title = `${current.name} — SPADE`;
 
 const themeLinks = Object.entries(themes)
   .map(([key, item]) => `
@@ -49,13 +49,13 @@ app.innerHTML = `
   <div class="shell">
     <aside class="sidebar">
       <div class="brand-row">
-        <div class="brand-mark">G</div>
-        <div><strong>GADE</strong><small>spatial agent environment</small></div>
+        <div class="brand-mark">S</div>
+        <div><strong>SPADE</strong><small>spatial agent dev env</small></div>
       </div>
 
       <div class="side-label">PROJECTS</div>
       <nav class="projects">
-        <button class="project active"><i class="project-dot"></i><span><b>GADE</b><small>12 active resources</small></span><em>⌄</em></button>
+        <button class="project active"><i class="project-dot"></i><span><b>SPADE</b><small>12 active resources</small></span><em>⌄</em></button>
         <button class="project"><i></i><span><b>Paseo</b><small>4 active resources</small></span><em>›</em></button>
         <button class="project"><i></i><span><b>Relay</b><small>No active work</small></span><em>›</em></button>
       </nav>
@@ -79,7 +79,7 @@ app.innerHTML = `
 
     <section class="workspace">
       <header class="topbar">
-        <div class="crumbs"><span>GADE</span><i>/</i><b>Core agent workflow</b><em>ACTIVE</em></div>
+        <div class="crumbs"><span>SPADE</span><i>/</i><b>Core agent workflow</b><em>ACTIVE</em></div>
         <div class="top-actions">
           <button class="icon-button" aria-label="Search">⌕</button>
           <button class="quiet-button"><span>◎</span> Focus history</button>
@@ -140,7 +140,7 @@ app.innerHTML = `
               <button class="node-menu">•••</button>
             </div>
             <div class="node-body issue-body">
-              <div class="issue-meta"><span class="status-pill open">OPEN</span><span>skflowne/gade</span><span>4 comments</span></div>
+              <div class="issue-meta"><span class="status-pill open">OPEN</span><span>skflowne/spade</span><span>4 comments</span></div>
               <p>Introduce the versioned entity registry and generic canvas command layer that all resources share.</p>
               <div class="labels"><span>foundation</span><span>architecture</span></div>
             </div>
