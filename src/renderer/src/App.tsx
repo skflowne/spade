@@ -51,7 +51,7 @@ const initialNodes: EntityFlowNode[] = [sourceNode, spawned.node].map((entity) =
     id: entity.id,
     type: 'entity',
     position: entity.position,
-    dragHandle: '.entity-node__drag-handle',
+    dragHandle: '.entity-node__chrome',
     data: { entity }
   }
 })

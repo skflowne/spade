@@ -1,7 +1,7 @@
 import { resolve } from 'node:path'
 import { _electron as electron, expect, test } from '@playwright/test'
 
-test('renders generic nodes and drags them only from the dedicated handle', async () => {
+test('renders generic nodes and drags them only from the full header', async () => {
   const application = await electron.launch({ args: [resolve('.')] })
 
   try {
@@ -19,29 +19,31 @@ test('renders generic nodes and drags them only from the dedicated handle', asyn
     await expect(nodes.locator('.entity-node')).toHaveCount(2)
 
     const firstNode = nodes.filter({ hasText: 'Issue #4' })
-    const nonHandleTarget = firstNode.getByText('Issue #4', { exact: true })
-    const dragHandle = firstNode.getByRole('button', { name: 'Drag Issue #4' })
+    const bodyTarget = firstNode.getByText('Canvas-node foundation', { exact: true })
+    const header = firstNode.locator('.entity-node__chrome')
     const initialPosition = await firstNode.boundingBox()
     expect(initialPosition).not.toBeNull()
 
-    await expect(nonHandleTarget).not.toHaveClass(/\bnodrag\b/)
-    const nonHandlePosition = await nonHandleTarget.boundingBox()
-    expect(nonHandlePosition).not.toBeNull()
-    await nonHandleTarget.hover()
+    await expect(firstNode.locator('.entity-node__drag-handle')).toHaveCount(0)
+    const bodyPosition = await bodyTarget.boundingBox()
+    expect(bodyPosition).not.toBeNull()
+    await bodyTarget.hover()
     await window.mouse.down()
-    await window.mouse.move(nonHandlePosition!.x + 100, nonHandlePosition!.y + 60, { steps: 5 })
+    await window.mouse.move(bodyPosition!.x + 100, bodyPosition!.y + 60, { steps: 5 })
     await window.mouse.up()
 
-    const positionAfterNonHandleDrag = await firstNode.boundingBox()
-    expect(positionAfterNonHandleDrag).not.toBeNull()
-    expect(positionAfterNonHandleDrag!.x).toBeCloseTo(initialPosition!.x, 0)
-    expect(positionAfterNonHandleDrag!.y).toBeCloseTo(initialPosition!.y, 0)
+    const positionAfterBodyDrag = await firstNode.boundingBox()
+    expect(positionAfterBodyDrag).not.toBeNull()
+    expect(positionAfterBodyDrag!.x).toBeCloseTo(initialPosition!.x, 0)
+    expect(positionAfterBodyDrag!.y).toBeCloseTo(initialPosition!.y, 0)
 
-    const handlePosition = await dragHandle.boundingBox()
-    expect(handlePosition).not.toBeNull()
-    await dragHandle.hover()
+    const headerPosition = await header.boundingBox()
+    expect(headerPosition).not.toBeNull()
+    const headerDragX = headerPosition!.x + headerPosition!.width - 15
+    const headerDragY = headerPosition!.y + headerPosition!.height / 2
+    await window.mouse.move(headerDragX, headerDragY)
     await window.mouse.down()
-    await window.mouse.move(handlePosition!.x + 100, handlePosition!.y + 60, { steps: 5 })
+    await window.mouse.move(headerDragX + 100, headerDragY + 60, { steps: 5 })
     await window.mouse.up()
 
     await expect

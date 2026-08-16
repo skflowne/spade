@@ -10,13 +10,6 @@ export function GenericEntityNode({ data }: NodeProps<EntityFlowNode>): React.JS
     <article className="entity-node">
       <Handle type="target" position={Position.Left} />
       <header className="entity-node__chrome">
-        <button
-          type="button"
-          className="entity-node__drag-handle"
-          aria-label={`Drag ${entity.title}`}
-        >
-          ⠿
-        </button>
         <div>
           <strong>{entity.title}</strong>
           <small>{entity.entityType}</small>
