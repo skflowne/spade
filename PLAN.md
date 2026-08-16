@@ -92,6 +92,7 @@ A canvas node is a durable GADE record pointing at content or a live resource ow
 
 ```ts
 type CanvasNode = {
+  version: DomainRecordVersion;
   id: string;
   entityType: string;
   entityVersion: number;
@@ -147,6 +148,7 @@ A workspace is a durable GADE identity mapped to a concrete checkout.
 
 ```ts
 type Workspace = {
+  version: DomainRecordVersion;
   id: string;
   paseoWorkspaceId?: string;
   projectId: string;
@@ -196,6 +198,7 @@ A project represents the repository/product context independently of an individu
 
 ```ts
 type Project = {
+  version: DomainRecordVersion;
   id: string;
   paseoProjectId?: string;
   projectKey?: string;
@@ -220,6 +223,7 @@ A work item is the automatic organizational unit for an issue, request, investig
 
 ```ts
 type WorkItem = {
+  version: DomainRecordVersion;
   id: string;
   projectId: string;
   title: string;
@@ -245,6 +249,7 @@ The canvas draws a background hull or auto-sized group around all visible nodes 
 
 ```ts
 type CanvasEdge = {
+  version: DomainRecordVersion;
   id: string;
   fromNodeId: string;
   toNodeId: string;
