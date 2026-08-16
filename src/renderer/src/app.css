@@ -59,6 +59,11 @@ body {
   background: #111820;
 }
 
+.react-flow__pane.draggable:not(.dragging),
+.react-flow__node.draggable:not(.dragging) {
+  cursor: default;
+}
+
 .react-flow__background pattern circle {
   fill: #3a4857;
 }
