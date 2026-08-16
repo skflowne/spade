@@ -1,5 +1,8 @@
 .pi-subagents/
 node_modules/
 dist/
+out/
+playwright-report/
+test-results/
 .DS_Store
 *.log
