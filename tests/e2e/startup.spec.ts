@@ -57,6 +57,59 @@ test('keeps long entity nodes inside both work-item grouping treatments while dr
   }
 })
 
+test('keeps categorical project colors distinct from semantic states in every projection', async () => {
+  const application = await electron.launch({ args: [resolve('.')] })
+
+  try {
+    const window = await application.firstWindow()
+    const projectLinks = window.getByRole('navigation', { name: 'Project canvases' }).getByRole('button')
+    const projectColors = await projectLinks.locator('i').evaluateAll((indicators) =>
+      indicators.map((indicator) => getComputedStyle(indicator).backgroundColor)
+    )
+    const semanticColors = await window.locator(':root').evaluate((root) => {
+      const styles = getComputedStyle(root)
+      return [styles.getPropertyValue('--success').trim(), styles.getPropertyValue('--warning').trim()]
+        .map((color) => {
+          const probe = document.createElement('span')
+          probe.style.color = color
+          root.appendChild(probe)
+          const resolved = getComputedStyle(probe).color
+          probe.remove()
+          return resolved
+        })
+    })
+
+    expect(new Set(projectColors).size).toBe(4)
+    expect(projectColors).not.toEqual(expect.arrayContaining(semanticColors))
+
+    await window.getByRole('button', { name: 'Global canvas' }).click()
+    const projectGroups = window.locator('.canvas-group--project')
+    await expect(projectGroups).toHaveCount(4)
+    expect(new Set(await projectGroups.evaluateAll((groups) =>
+      groups.map((group) => getComputedStyle(group).borderTopColor)
+    )).size).toBe(4)
+
+    await window.getByRole('button', { name: 'Parent groups' }).click()
+    await expect(window.locator('.canvas-group--work-item')).toHaveCount(10)
+    expect(new Set(await window.locator('.canvas-group--work-item').evaluateAll((groups) =>
+      groups.map((group) => getComputedStyle(group).borderTopColor)
+    )).size).toBe(4)
+
+    await window.getByRole('button', { name: 'Project canvases' }).click()
+    await window.getByRole('button', { name: 'Visual hull' }).click()
+    const hullColors: string[] = []
+    for (let index = 0; index < await projectLinks.count(); index += 1) {
+      await projectLinks.nth(index).click()
+      const hulls = window.locator('.canvas-group--hull')
+      await expect(hulls.first()).toBeVisible()
+      hullColors.push(await hulls.first().evaluate((hull) => getComputedStyle(hull).borderTopColor))
+    }
+    expect(new Set(hullColors).size).toBe(4)
+  } finally {
+    await application.close()
+  }
+})
+
 test('renders generic nodes and drags them only from the full header', async () => {
   const application = await electron.launch({ args: [resolve('.')] })
 

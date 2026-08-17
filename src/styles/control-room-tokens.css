@@ -17,6 +17,16 @@
   --cr-amber-400: #efb95d;
   --cr-red-400: #f07878;
 
+  /* Categorical project identity */
+  --cr-project-1-color: #7aa2f7;
+  --cr-project-1-tint: color-mix(in srgb, var(--cr-project-1-color) 10%, transparent);
+  --cr-project-2-color: #2ac3de;
+  --cr-project-2-tint: color-mix(in srgb, var(--cr-project-2-color) 10%, transparent);
+  --cr-project-3-color: #bb9af7;
+  --cr-project-3-tint: color-mix(in srgb, var(--cr-project-3-color) 10%, transparent);
+  --cr-project-4-color: #f7768e;
+  --cr-project-4-tint: color-mix(in srgb, var(--cr-project-4-color) 10%, transparent);
+
   /* Typography */
   --cr-font-sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
   --cr-font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;

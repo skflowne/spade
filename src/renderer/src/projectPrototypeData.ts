@@ -133,10 +133,10 @@ export const projectPrototypeRecords: ProjectPrototypeRecords = {
   nodes,
   edges,
   projectAccents: {
-    spade: { color: '#6ea8fe', tint: 'rgb(110 168 254 / 10%)' },
-    paseo: { color: '#47c78a', tint: 'rgb(71 199 138 / 10%)' },
-    atlas: { color: '#efb95d', tint: 'rgb(239 185 93 / 10%)' },
-    relay: { color: '#c28cff', tint: 'rgb(194 140 255 / 10%)' }
+    spade: { color: 'var(--cr-project-1-color)', tint: 'var(--cr-project-1-tint)' },
+    paseo: { color: 'var(--cr-project-2-color)', tint: 'var(--cr-project-2-tint)' },
+    atlas: { color: 'var(--cr-project-3-color)', tint: 'var(--cr-project-3-tint)' },
+    relay: { color: 'var(--cr-project-4-color)', tint: 'var(--cr-project-4-tint)' }
   }
 }
 
