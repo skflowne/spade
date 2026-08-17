@@ -1,16 +1,16 @@
 import { useCallback, useContext, useEffect, useState } from 'react'
+import { GITHUB_ISSUE_URL } from '../../shared/constants'
 import { BrowserCanvasContext } from './PrototypeContext'
 import { PrototypeNodeFrame } from './PrototypeNodeFrame'
 import type { PrototypeWebviewElement, WebviewNavigationEvent } from './prototype-api'
 
-const issueUrl = 'https://github.com/skflowne/spade/issues/14'
 const sessionMarker = 'spade-p2-session-marker-v1'
 
 export function BrowserNode(): React.JSX.Element {
   const { parented, toggleParent } = useContext(BrowserCanvasContext)
   const [guest, setGuest] = useState<PrototypeWebviewElement | null>(null)
   const [guestRevision, setGuestRevision] = useState(1)
-  const [url, setUrl] = useState(issueUrl)
+  const [url, setUrl] = useState(GITHUB_ISSUE_URL)
   const [ready, setReady] = useState(false)
   const [history, setHistory] = useState({ back: false, forward: false })
   const [events, setEvents] = useState<string[]>([])
@@ -140,7 +140,7 @@ export function BrowserNode(): React.JSX.Element {
         <webview
           key={guestRevision}
           ref={(element) => setGuest(element as PrototypeWebviewElement | null)}
-          src={issueUrl}
+          src={GITHUB_ISSUE_URL}
           partition="persist:spade-p2-github"
           allowpopups={'' as unknown as boolean}
         />

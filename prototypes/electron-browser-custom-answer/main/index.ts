@@ -9,13 +9,12 @@ import {
   type WebContents,
   WebContentsView
 } from 'electron'
+import { GITHUB_ISSUE_URL } from '../shared/constants'
 import {
   NATIVE_OVERLAY_CHANNEL,
   type NativeOverlayBounds,
   type NativeOverlayCommand
 } from '../shared/nativeOverlay'
-
-const githubIssueUrl = 'https://github.com/skflowne/spade/issues/14'
 
 function configurePopupPolicy(contents: WebContents): void {
   contents.setWindowOpenHandler(({ url }) => {
@@ -49,15 +48,21 @@ function isCommand(value: unknown): value is NativeOverlayCommand {
   )
 }
 
-function clipBounds(window: BrowserWindow, bounds: NativeOverlayBounds): Rectangle | null {
+function synchronizedBounds(window: BrowserWindow, bounds: NativeOverlayBounds): Rectangle | null {
   const content = window.getContentBounds()
-  const left = Math.max(0, Math.round(bounds.x))
-  const top = Math.max(0, Math.round(bounds.y))
-  const right = Math.min(content.width, Math.round(bounds.x + bounds.width))
-  const bottom = Math.min(content.height, Math.round(bounds.y + bounds.height))
+  const rounded = {
+    x: Math.round(bounds.x),
+    y: Math.round(bounds.y),
+    width: Math.round(bounds.width),
+    height: Math.round(bounds.height)
+  }
+  const intersectsWindow =
+    rounded.x + rounded.width > 0 &&
+    rounded.y + rounded.height > 0 &&
+    rounded.x < content.width &&
+    rounded.y < content.height
 
-  if (right <= left || bottom <= top) return null
-  return { x: left, y: top, width: right - left, height: bottom - top }
+  return intersectsWindow ? rounded : null
 }
 
 function attachNativeOverlayController(window: BrowserWindow): () => void {
@@ -87,7 +92,7 @@ function attachNativeOverlayController(window: BrowserWindow): () => void {
     })
     configurePopupPolicy(view.webContents)
     window.contentView.addChildView(view)
-    void view.webContents.loadURL(githubIssueUrl)
+    void view.webContents.loadURL(GITHUB_ISSUE_URL)
     return view
   }
 
@@ -102,7 +107,7 @@ function attachNativeOverlayController(window: BrowserWindow): () => void {
       return
     }
 
-    const bounds = clipBounds(window, value.bounds!)
+    const bounds = synchronizedBounds(window, value.bounds!)
     if (!bounds) {
       disposeView()
       return

@@ -53,7 +53,8 @@ Environment: Electron 43 under Xvfb, with host, guest-webview, and native-view t
 | Native zoom synchronization | One zoom changed synchronized bounds to `531, 623 · 409×355`. | Pass |
 | Native pan synchronization | A deterministic pan changed x from `549` to `389`; rapid alternating pans settled at `709` without drift. | Pass |
 | Native resize synchronization | Resizing the node to `320×260` changed the native content rectangle from `340×296` to `181×91`. | Pass |
-| Native window clipping | Panning to raw x `1509` fully clipped and disposed the native target; panning it back created one replacement target. | Pass |
+| Native partial window clipping | At raw bounds `-91, 603 · 340×296`, the native target remained alive, but Electron reported `innerWidth: 249` (`340 - 91`). Even with raw synchronized bounds, the parent window reflows the native page to the visible intersection instead of DOM-style clipping. | Limitation confirmed |
+| Native full window clipping | Panning to raw x `1509` fully clipped and disposed the native target; panning it back created one replacement target. | Pass |
 | Native IPC guards | A stale sequence-1 hide left the active native target intact; a sequence-999 command with `NaN` bounds was rejected without advancing sequence, after which the normal dispose command still removed the target. | Pass |
 | Native disposal | `Dispose native view` removed the native target while leaving the guest target alive. | Pass |
 | Native visual limitations | The native rectangle moved above DOM controls and intercepted later clicks. Host CDP capture omitted native pixels and showed the underlying placeholder, proving it does not participate in DOM capture/stacking. | Limitation confirmed |
