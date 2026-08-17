@@ -11,6 +11,7 @@ import {
 } from '@shared/domain'
 
 const createdAt = '2026-08-14T09:00:00.000Z'
+const projectContentTop = 80
 
 export type PrototypeNodeConfig = {
   kind: 'issue' | 'agent' | 'workspace' | 'review' | 'fix' | 'diff' | 'pull-request' | 'task'
@@ -75,23 +76,23 @@ const nodes = [
   node('spade-10-agent', 'spade', 'spade-10', 'ws-spade-10-main', 'Integrator agent', 320, 70, 'agent', 'implementation', 'Owns the complete prototype change'),
   node('spade-10-review-1', 'spade', 'spade-10', 'ws-spade-10-r1', 'Review round 1', 600, 30, 'review', 'review', 'Independent correctness pass'),
   node('spade-10-fix-1', 'spade', 'spade-10', 'ws-spade-10-f1', 'Fix workspace 1', 880, 30, 'fix', 'fix', 'Resolves navigation findings'),
-  node('spade-10-review-2', 'spade', 'spade-10', 'ws-spade-10-r2', 'Review round 2', 600, 210, 'review', 'review', 'Follow-up verification'),
-  node('spade-10-fix-2', 'spade', 'spade-10', 'ws-spade-10-f2', 'Fix workspace 2', 880, 210, 'fix', 'fix', 'Resolves grouping findings'),
-  node('spade-10-subagents', 'spade', 'spade-10', 'ws-spade-10-main', 'Delegated scouts · 3', 320, 250, 'agent', 'collapsed', 'Retired delegated stages remain discoverable'),
-  node('spade-10-diff', 'spade', 'spade-10', 'ws-spade-10-main', 'Working diff', 600, 390, 'diff', 'changed', 'src/ +842 −64 · docs/ +22 −4'),
-  node('spade-10-pr', 'spade', 'spade-10', 'ws-spade-10-main', 'Pull request #14', 880, 390, 'pull-request', 'done', 'active → review → done · open for human review'),
+  node('spade-10-review-2', 'spade', 'spade-10', 'ws-spade-10-r2', 'Review round 2', 600, 178, 'review', 'review', 'Follow-up verification'),
+  node('spade-10-fix-2', 'spade', 'spade-10', 'ws-spade-10-f2', 'Fix workspace 2', 880, 178, 'fix', 'fix', 'Resolves grouping findings'),
+  node('spade-10-subagents', 'spade', 'spade-10', 'ws-spade-10-main', 'Delegated scouts · 3', 320, 218, 'agent', 'collapsed', 'Retired delegated stages remain discoverable'),
+  node('spade-10-diff', 'spade', 'spade-10', 'ws-spade-10-main', 'Working diff', 600, 326, 'diff', 'changed', 'src/ +842 −64 · docs/ +22 −4'),
+  node('spade-10-pr', 'spade', 'spade-10', 'ws-spade-10-main', 'Pull request #14', 880, 326, 'pull-request', 'done', 'active → review → done · open for human review'),
 
-  node('spade-12-issue', 'spade', 'spade-12', null, 'Browser composition', 40, 590, 'issue', 'active', 'Compare webview and native overlay'),
-  node('spade-12-agent', 'spade', 'spade-12', 'ws-spade-12', 'Exploration agent', 320, 590, 'agent', 'exploration', 'Running interaction checks'),
-  node('spade-8-issue', 'spade', 'spade-8', null, 'Focus history', 600, 590, 'task', 'blocked', 'Waiting for navigation direction'),
+  node('spade-12-issue', 'spade', 'spade-12', null, 'Browser composition', 40, 560, 'issue', 'active', 'Compare webview and native overlay'),
+  node('spade-12-agent', 'spade', 'spade-12', 'ws-spade-12', 'Exploration agent', 320, 560, 'agent', 'exploration', 'Running interaction checks'),
+  node('spade-8-issue', 'spade', 'spade-8', null, 'Focus history', 640, 560, 'task', 'blocked', 'Waiting for navigation direction'),
 
   node('paseo-41-issue', 'paseo', 'paseo-41', null, 'Durable recovery', 40, 70, 'issue', 'active', 'Restore interrupted sessions'),
   node('paseo-41-agent', 'paseo', 'paseo-41', 'ws-paseo-41-main', 'Recovery author', 320, 70, 'agent', 'implementation', 'Checkpoint protocol in progress'),
   node('paseo-41-review', 'paseo', 'paseo-41', 'ws-paseo-41-test', 'Recovery review', 600, 70, 'review', 'queued', 'Failure scenarios queued'),
   node('paseo-38-issue', 'paseo', 'paseo-38', null, 'Workspace cleanup', 40, 310, 'issue', 'done', 'Archive lifecycle shipped'),
   node('paseo-38-pr', 'paseo', 'paseo-38', 'ws-paseo-38', 'Merged pull request', 320, 310, 'pull-request', 'done', 'Cleanup verified'),
-  node('paseo-44-issue', 'paseo', 'paseo-44', null, 'Review telemetry', 600, 310, 'issue', 'review', 'Expose queue latency'),
-  node('paseo-44-diff', 'paseo', 'paseo-44', 'ws-paseo-44', 'Telemetry diff', 880, 310, 'diff', 'review', 'events/ +184 −21'),
+  node('paseo-44-issue', 'paseo', 'paseo-44', null, 'Review telemetry', 640, 310, 'issue', 'review', 'Expose queue latency'),
+  node('paseo-44-diff', 'paseo', 'paseo-44', 'ws-paseo-44', 'Telemetry diff', 900, 310, 'diff', 'review', 'events/ +184 −21'),
 
   node('atlas-7-issue', 'atlas', 'atlas-7', null, 'Repository map refresh', 40, 70, 'issue', 'active', 'Incremental graph indexing'),
   node('atlas-7-agent', 'atlas', 'atlas-7', 'ws-atlas-7', 'Map refresh agent', 320, 70, 'agent', 'implementation', 'Scanning changed packages'),
@@ -209,7 +210,7 @@ function node(
     entityVersion: 1,
     title,
     shortDescription: detail,
-    position: { x, y },
+    position: { x, y: y + projectContentTop },
     collapsed: stage === 'collapsed',
     projectId,
     workItemId,

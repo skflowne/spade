@@ -8,7 +8,6 @@ import {
   type Viewport
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { DOMAIN_RECORD_VERSION } from '@shared/domain'
 import { applyCanvasNodePositionChanges } from './canvasNodeState'
 import { CanvasGroupNode } from './CanvasGroupNode'
 import {
@@ -42,6 +41,7 @@ export function App(): React.JSX.Element {
   const [grouping, setGrouping] = useState<WorkItemGrouping>('hull')
   const [selectedProjectId, setSelectedProjectId] = useState(projectPrototypeRecords.projects[0].id)
   const [projectsExpanded, setProjectsExpanded] = useState(true)
+  const [controlsOpen, setControlsOpen] = useState(false)
   const [projectViewports, setProjectViewports] = useState<ProjectViewports>({})
   const [entities, setEntities] = useState(projectPrototypeRecords.nodes)
   const records = useMemo(
@@ -52,7 +52,6 @@ export function App(): React.JSX.Element {
     () => projectCanvas(records, navigation, grouping, selectedProjectId),
     [records, navigation, grouping, selectedProjectId]
   )
-  const selectedProject = records.projects.find(({ id }) => id === selectedProjectId) ?? records.projects[0]
   const defaultViewport = navigation === 'dedicated'
     ? projectViewport(projectViewports, selectedProjectId, defaultDedicatedViewport)
     : defaultGlobalViewport
@@ -78,87 +77,47 @@ export function App(): React.JSX.Element {
 
   return (
     <main className="app-shell">
-      <header className="app-header">
-        <div>
-          <h1>SPADE</h1>
-          <span>Project organization prototype · domain v{DOMAIN_RECORD_VERSION}</span>
-        </div>
-        <div className="comparison-controls" aria-label="Prototype comparison controls">
-          <ToggleGroup label="Navigation">
-            <ToggleButton active={navigation === 'dedicated'} onClick={() => setNavigation('dedicated')}>
-              Project canvases
-            </ToggleButton>
-            <ToggleButton active={navigation === 'global'} onClick={() => setNavigation('global')}>
-              Global canvas
-            </ToggleButton>
-          </ToggleGroup>
-          <ToggleGroup label="Work-item grouping">
-            <ToggleButton active={grouping === 'hull'} onClick={() => setGrouping('hull')}>
-              Visual hull
-            </ToggleButton>
-            <ToggleButton active={grouping === 'parent'} onClick={() => setGrouping('parent')}>
-              Parent groups
-            </ToggleButton>
-          </ToggleGroup>
-        </div>
-      </header>
-
-      <div className="workspace-shell">
-        <aside className="project-sidebar" aria-label="Projects">
-          <button
-            type="button"
-            className="project-sidebar__heading"
-            aria-expanded={projectsExpanded}
-            onClick={() => setProjectsExpanded((expanded) => !expanded)}
-          >
-            <span>Projects</span>
-            <span>{records.projects.length} {projectsExpanded ? '−' : '+'}</span>
-          </button>
-          {projectsExpanded && (
-            <nav aria-label="Project canvases">
-              {records.projects.map((project) => {
-                const accent = records.projectAccents[project.id]
-                const selected = navigation === 'dedicated' && project.id === selectedProjectId
-                return (
-                  <button
-                    type="button"
-                    key={project.id}
-                    className="project-link"
-                    aria-current={selected ? 'page' : undefined}
-                    onClick={() => {
-                      setSelectedProjectId(project.id)
-                      setNavigation('dedicated')
-                    }}
-                  >
-                    <i style={{ background: accent.color }} />
-                    <span><strong>{project.name}</strong><small>{projectSummary(records, project.id)}</small></span>
-                    {projectViewports[project.id] && (
-                      <code aria-label={`${project.name} saved zoom`}>
-                        {Math.round(projectViewports[project.id].zoom * 100)}%
-                      </code>
-                    )}
-                  </button>
-                )
-              })}
-            </nav>
-          )}
-          <div className="prototype-note">
-            <span>Shared mock records</span>
-            <strong>{records.workItems.length} issues · {records.workspaces.length} workspaces</strong>
-            <p>Switching views changes only the projection. No records are copied or persisted.</p>
-          </div>
-        </aside>
+      <div className={`workspace-shell workspace-shell--${navigation}`}>
+        {navigation === 'dedicated' && (
+          <aside className="project-sidebar" aria-label="Projects">
+            <button
+              type="button"
+              className="project-sidebar__heading"
+              aria-expanded={projectsExpanded}
+              onClick={() => setProjectsExpanded((expanded) => !expanded)}
+            >
+              <span>Projects</span>
+              <span>{records.projects.length} {projectsExpanded ? '−' : '+'}</span>
+            </button>
+            {projectsExpanded && (
+              <nav aria-label="Project canvases">
+                {records.projects.map((project) => {
+                  const accent = records.projectAccents[project.id]
+                  const selected = project.id === selectedProjectId
+                  return (
+                    <button
+                      type="button"
+                      key={project.id}
+                      className="project-link"
+                      aria-current={selected ? 'page' : undefined}
+                      onClick={() => setSelectedProjectId(project.id)}
+                    >
+                      <i style={{ background: accent.color }} />
+                      <span><strong>{project.name}</strong><small>{projectSummary(records, project.id)}</small></span>
+                      {projectViewports[project.id] && (
+                        <code aria-label={`${project.name} saved zoom`}>
+                          {Math.round(projectViewports[project.id].zoom * 100)}%
+                        </code>
+                      )}
+                    </button>
+                  )
+                })}
+              </nav>
+            )}
+          </aside>
+        )}
 
         <section className="canvas-panel">
-          <div className="canvas-panel__heading">
-            <div>
-              <span>{navigation === 'dedicated' ? 'Dedicated canvas' : 'All projects'}</span>
-              <strong>{navigation === 'dedicated' ? selectedProject.name : 'Global project canvas'}</strong>
-            </div>
-            <p>{navigation === 'dedicated'
-              ? 'Pan or zoom, switch projects, then return to restore this viewport.'
-              : 'Four project boundaries expose cross-project density and status.'}</p>
-          </div>
           <section className="canvas" aria-label="SPADE canvas">
             <ReactFlow
               key={flowKey}
@@ -179,6 +138,42 @@ export function App(): React.JSX.Element {
             </ReactFlow>
           </section>
         </section>
+      </div>
+
+      <div className="prototype-controls">
+        <button
+          type="button"
+          className="prototype-controls__trigger"
+          aria-expanded={controlsOpen}
+          aria-controls="prototype-controls-panel"
+          onClick={() => setControlsOpen((open) => !open)}
+        >
+          Prototype controls
+        </button>
+        {controlsOpen && (
+          <div
+            id="prototype-controls-panel"
+            className="comparison-controls"
+            aria-label="Prototype comparison controls"
+          >
+            <ToggleGroup label="Navigation">
+              <ToggleButton active={navigation === 'dedicated'} onClick={() => setNavigation('dedicated')}>
+                Project canvases
+              </ToggleButton>
+              <ToggleButton active={navigation === 'global'} onClick={() => setNavigation('global')}>
+                Global canvas
+              </ToggleButton>
+            </ToggleGroup>
+            <ToggleGroup label="Work-item grouping">
+              <ToggleButton active={grouping === 'hull'} onClick={() => setGrouping('hull')}>
+                Visual hull
+              </ToggleButton>
+              <ToggleButton active={grouping === 'parent'} onClick={() => setGrouping('parent')}>
+                Parent groups
+              </ToggleButton>
+            </ToggleGroup>
+          </div>
+        )}
       </div>
     </main>
   )

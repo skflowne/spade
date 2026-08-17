@@ -57,6 +57,11 @@ async function expectCanvasViewport(canvas: Locator, expected: CanvasViewport): 
   await expect.poll(async () => (await readCanvasViewport(canvas)).zoom).toBeCloseTo(expected.zoom, 2)
 }
 
+async function openPrototypeControls(window: Page): Promise<void> {
+  const trigger = window.getByRole('button', { name: 'Prototype controls' })
+  if (await trigger.getAttribute('aria-expanded') === 'false') await trigger.click()
+}
+
 test('restores each dedicated project viewport after switching projects', async () => {
   const application = await electron.launch({ args: [resolve('.')] })
 
@@ -99,6 +104,7 @@ test('keeps long entity nodes inside both work-item grouping treatments while dr
   try {
     const window = await application.firstWindow()
     const canvas = window.getByRole('region', { name: 'SPADE canvas' })
+    await openPrototypeControls(window)
     const entity = canvas.locator('.react-flow__node:has(.entity-node)').filter({ hasText: 'GitHub issue #10' })
     const longDetail = 'A representative long detail with wrapping words and an-uninterrupted-identifier-that-must-not-expand-the-authoritative-node-geometry'
 
@@ -160,6 +166,7 @@ test('keeps categorical project colors distinct from semantic states in every pr
       'categorical project colors must not collide with interaction or semantic colors'
     ).toEqual([])
 
+    await openPrototypeControls(window)
     await window.getByRole('button', { name: 'Global canvas' }).click()
     const projectGroups = window.locator('.canvas-group--project')
     await expect(projectGroups).toHaveCount(4)
@@ -195,7 +202,6 @@ test('renders generic nodes and drags them only from the full header', async () 
     const window = await application.firstWindow()
 
     await expect(window).toHaveTitle('SPADE')
-    await expect(window.getByRole('heading', { name: 'SPADE' })).toBeVisible()
 
     const canvas = window.getByRole('region', { name: 'SPADE canvas' })
     await expect(canvas).toBeVisible()
