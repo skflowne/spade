@@ -37,6 +37,11 @@ export type CanvasProjection = {
   edges: Edge[]
 }
 
+export type ProjectLayout = {
+  position: CanvasNode['position']
+  size: { width: number; height: number }
+}
+
 export function canonicalNodePosition(
   nodes: readonly PrototypeFlowNode[],
   nodeId: string,
@@ -64,7 +69,7 @@ export function projectCanvas(
   mode: NavigationMode,
   grouping: WorkItemGrouping,
   selectedProjectId: string,
-  projectPositions: Readonly<Record<string, CanvasNode['position']>> = {}
+  projectLayouts: Readonly<Record<string, ProjectLayout>> = {}
 ): CanvasProjection {
   const visibleProjects = mode === 'global'
     ? records.projects
@@ -74,13 +79,16 @@ export function projectCanvas(
   visibleProjects.forEach((project, index) => {
     const projectParentId = mode === 'global' ? `project-group-${project.id}` : undefined
 
+    const projectLayout = projectLayouts[project.id]
+    const currentProjectSize = projectLayout?.size ?? projectSize
+
     if (projectParentId) {
       const column = index % 2
       const row = Math.floor(index / 2)
       nodes.push({
         id: projectParentId,
         type: 'projectGroup',
-        position: projectPositions[project.id] ?? {
+        position: projectLayout?.position ?? {
           x: column * (projectSize.width + projectGap),
           y: row * (projectSize.height + projectGap)
         },
@@ -92,13 +100,20 @@ export function projectCanvas(
           projectId: project.id,
           workItemId: null
         },
-        style: groupStyle(records.projectAccents[project.id], projectSize),
+        style: groupStyle(records.projectAccents[project.id], currentProjectSize),
         draggable: true,
         selectable: false
       })
     }
 
-    appendProjectNodes(nodes, records, project, grouping, projectParentId)
+    appendProjectNodes(
+      nodes,
+      records,
+      project,
+      grouping,
+      projectParentId,
+      projectParentId ? currentProjectSize : undefined
+    )
   })
 
   const nodeIds = new Set(nodes.filter(({ type }) => type === 'entity').map(({ id }) => id))
@@ -128,7 +143,8 @@ function appendProjectNodes(
   records: ProjectPrototypeRecords,
   project: Project,
   grouping: WorkItemGrouping,
-  projectParentId?: string
+  projectParentId?: string,
+  projectParentSize?: { width: number; height: number }
 ): void {
   const projectWorkItems = records.workItems.filter((item) => item.projectId === project.id)
 
@@ -136,7 +152,7 @@ function appendProjectNodes(
     const members = records.nodes.filter((node) => node.workItemId === workItem.id)
     if (members.length === 0) continue
 
-    const bounds = workItemBounds(members, projectParentId ? projectSize : undefined)
+    const bounds = workItemBounds(members, projectParentSize)
     const workItemGroupId = `work-item-${workItem.id}`
     const accent = records.projectAccents[project.id]
 
@@ -145,7 +161,6 @@ function appendProjectNodes(
       type: grouping === 'parent' ? 'workItemGroup' : 'hull',
       position: { x: bounds.x, y: bounds.y },
       parentId: projectParentId,
-      extent: projectParentId ? 'parent' : undefined,
       data: {
         label: workItem.title,
         meta: `${workItem.status} · ${members.length} nodes`,
@@ -166,7 +181,16 @@ function appendProjectNodes(
         ? { x: entity.position.x - bounds.x, y: entity.position.y - bounds.y }
         : entity.position
 
-      target.push(toEntityNode(records, entity, workItem, project, accent, parentId, position))
+      target.push(toEntityNode(
+        records,
+        entity,
+        workItem,
+        project,
+        accent,
+        parentId,
+        position,
+        grouping === 'parent'
+      ))
     }
   }
 }
@@ -178,14 +202,15 @@ function toEntityNode(
   project: Project,
   accent: ProjectAccent,
   parentId: string | undefined,
-  position: CanvasNode['position']
+  position: CanvasNode['position'],
+  constrainToParent: boolean
 ): PrototypeEntityFlowNode {
   return {
     id: entity.id,
     type: 'entity',
     position,
     parentId,
-    extent: parentId ? 'parent' : undefined,
+    extent: constrainToParent ? 'parent' : undefined,
     dragHandle: '.entity-node__chrome',
     style: entityNodeGeometry,
     data: {
