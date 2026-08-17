@@ -140,6 +140,18 @@
   <figcaption>The project is the parent boundary. Work-item and workspace associations remain explicit on each node, while a canvas edge only describes the relationship between two nodes.</figcaption>
 </figure>
 
+<h2 id="selected-project-management-presentation">Selected project-management presentation</h2>
+<p>The current records project into one planned global-canvas presentation. This direction does not duplicate Project or WorkItem records for the sidebar:</p>
+<ul>
+<li>The global canvas is the authoritative spatial surface for Project containers, work-item groups, user-created groups, nodes, and edges.</li>
+<li>The activity sidebar is a derived overview and navigation projection. It summarizes running activity, lists projects and collapsible work items, and issues focus/jump commands into the global canvas.</li>
+<li>A shared Group container owns child bounds, nesting, movement, and common viewport actions.</li>
+<li>The Project container specializes Group behavior with project identity, host/root metadata, activity, and project actions; it does not maintain a separate geometry implementation.</li>
+<li>Project creation is one command path invoked from either the sidebar or empty-canvas overlay. It selects a host and root folder before creating the Project record and its container.</li>
+<li>Project, Group, and Node containers expose the same <code>Fit</code> and <code>Full height</code> viewport commands.</li>
+</ul>
+<p>User-created groups organize related projects spatially without becoming a second project-membership model. Project and work-item identifiers remain authoritative regardless of nesting or position.</p>
+
 <h2 id="entity-integration-boundary">Entity and integration boundary</h2>
 <p>Canvas behavior stays generic. A node type is registered through an entity definition, which currently provides its metadata and creation adapter. The plan extends this boundary with entity-specific renderers, actions, and production integrations.</p>
 <figure class="architecture-figure">
@@ -211,7 +223,9 @@
 
 <h2 id="architecture-rules">Architecture rules</h2>
 <ul>
-<li>The generic canvas owns node position, size, selection, connections, and lifecycle.</li>
+<li>The generic canvas owns container position, size, selection, nesting, connections, lifecycle, and viewport navigation.</li>
+<li>Group owns reusable containment geometry; Project specializes Group with project-specific metadata and actions.</li>
+<li>The activity sidebar reads shared records and activity state; it does not own a parallel navigation or persistence model.</li>
 <li>An entity renderer owns only the content and actions specific to its node type.</li>
 <li>Shared records are the common contract across application areas.</li>
 <li>Connections describe provenance and context; they are not an execution graph.</li>
