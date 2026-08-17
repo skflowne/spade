@@ -24,6 +24,8 @@ export type GroupNodeData = {
   meta: string
   accent: ProjectAccent
   kind: 'project' | 'work-item' | 'hull'
+  projectId: string
+  workItemId: string | null
 }
 
 export type PrototypeEntityFlowNode = Node<EntityNodeData, 'entity'>
@@ -61,7 +63,8 @@ export function projectCanvas(
   records: ProjectPrototypeRecords,
   mode: NavigationMode,
   grouping: WorkItemGrouping,
-  selectedProjectId: string
+  selectedProjectId: string,
+  projectPositions: Readonly<Record<string, CanvasNode['position']>> = {}
 ): CanvasProjection {
   const visibleProjects = mode === 'global'
     ? records.projects
@@ -77,7 +80,7 @@ export function projectCanvas(
       nodes.push({
         id: projectParentId,
         type: 'projectGroup',
-        position: {
+        position: projectPositions[project.id] ?? {
           x: column * (projectSize.width + projectGap),
           y: row * (projectSize.height + projectGap)
         },
@@ -85,10 +88,12 @@ export function projectCanvas(
           label: project.name,
           meta: projectSummary(records, project.id),
           accent: records.projectAccents[project.id],
-          kind: 'project'
+          kind: 'project',
+          projectId: project.id,
+          workItemId: null
         },
         style: groupStyle(records.projectAccents[project.id], projectSize),
-        draggable: false,
+        draggable: true,
         selectable: false
       })
     }
@@ -145,10 +150,12 @@ function appendProjectNodes(
         label: workItem.title,
         meta: `${workItem.status} · ${members.length} nodes`,
         accent,
-        kind: grouping === 'parent' ? 'work-item' : 'hull'
+        kind: grouping === 'parent' ? 'work-item' : 'hull',
+        projectId: project.id,
+        workItemId: workItem.id
       },
       style: groupStyle(accent, bounds),
-      draggable: false,
+      draggable: true,
       selectable: false,
       zIndex: -1
     })
