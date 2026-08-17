@@ -138,6 +138,29 @@ test('keeps long entity nodes inside both work-item grouping treatments while dr
   }
 })
 
+test('automatically refits project groups when a child moves', async () => {
+  const application = await electron.launch({ args: [resolve('.')] })
+
+  try {
+    const window = await application.firstWindow()
+    await openPrototypeControls(window)
+    await window.getByRole('button', { name: 'Global canvas' }).click()
+
+    const project = window.locator('.react-flow__node:has(.canvas-group--project)').filter({ hasText: 'SPADE' })
+    const browser = window.locator('.react-flow__node:has(.entity-node)').filter({ hasText: 'GitHub · Browser composition #12' })
+    const initialProjectBox = await project.boundingBox()
+    expect(initialProjectBox).not.toBeNull()
+
+    await dragBy(window, browser.locator('.entity-node__chrome'), 0, 80)
+    await expect.poll(async () => (await project.boundingBox())?.height).toBeGreaterThan(initialProjectBox!.height + 40)
+
+    await dragBy(window, browser.locator('.entity-node__chrome'), 0, -80)
+    await expect.poll(async () => (await project.boundingBox())?.height).toBeCloseTo(initialProjectBox!.height, 0)
+  } finally {
+    await application.close()
+  }
+})
+
 test('keeps categorical project colors distinct from semantic states in every projection', async () => {
   const application = await electron.launch({ args: [resolve('.')] })
 
@@ -208,8 +231,12 @@ test('renders generic nodes and drags them only from the full header', async () 
     await expect(canvas.locator('.react-flow__renderer')).toBeVisible()
 
     const nodes = canvas.locator('.react-flow__node:has(.entity-node)')
-    await expect(nodes).toHaveCount(12)
-    await expect(nodes.locator('.entity-node')).toHaveCount(12)
+    await expect(nodes).toHaveCount(13)
+    await expect(nodes.locator('.entity-node')).toHaveCount(13)
+    await expect(nodes.locator('.entity-node[data-kind="browser"]')).toHaveCount(1)
+    await expect(nodes.locator('.browser-page')).toContainText('github.com/skflowne/spade/issues/12')
+    await expect(nodes.filter({ hasText: 'Integrator agent' }).locator('.entity-node')).toHaveCSS('height', '860px')
+    await expect(nodes.filter({ hasText: 'GitHub · Browser composition #12' }).locator('.entity-node')).toHaveCSS('height', '940px')
 
     const firstNode = nodes.filter({ hasText: 'GitHub issue #10' })
     const bodyTarget = firstNode.getByRole('paragraph')

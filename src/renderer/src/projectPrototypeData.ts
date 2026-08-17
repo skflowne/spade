@@ -14,7 +14,7 @@ const createdAt = '2026-08-14T09:00:00.000Z'
 const projectContentTop = 80
 
 export type PrototypeNodeConfig = {
-  kind: 'issue' | 'agent' | 'workspace' | 'review' | 'fix' | 'diff' | 'pull-request' | 'task'
+  kind: 'issue' | 'agent' | 'workspace' | 'review' | 'fix' | 'diff' | 'pull-request' | 'task' | 'browser'
   stage: string
   detail: string
 }
@@ -73,26 +73,28 @@ const workspaces = [
 
 const nodes = [
   node('spade-10-issue', 'spade', 'spade-10', null, 'GitHub issue #10', 60, 100, 'issue', 'intake', 'Implement selected from a mocked issue browser'),
-  node('spade-10-agent', 'spade', 'spade-10', 'ws-spade-10-main', 'Integrator agent', 600, 100, 'agent', 'implementation', 'Owns the complete prototype change'),
+  node('spade-10-agent', 'spade', 'spade-10', 'ws-spade-10-main', 'Integrator agent', 600, 100, 'agent', 'implementation', 'Owns the complete prototype change', { width: 680, height: 860 }),
   node('spade-10-review-1', 'spade', 'spade-10', 'ws-spade-10-r1', 'Review round 1', 1340, 40, 'review', 'review', 'Independent correctness pass'),
   node('spade-10-fix-1', 'spade', 'spade-10', 'ws-spade-10-f1', 'Fix workspace 1', 2000, 40, 'fix', 'fix', 'Resolves navigation findings'),
   node('spade-10-review-2', 'spade', 'spade-10', 'ws-spade-10-r2', 'Review round 2', 1340, 560, 'review', 'review', 'Follow-up verification'),
   node('spade-10-fix-2', 'spade', 'spade-10', 'ws-spade-10-f2', 'Fix workspace 2', 2000, 560, 'fix', 'fix', 'Resolves grouping findings'),
-  node('spade-10-subagents', 'spade', 'spade-10', 'ws-spade-10-main', 'Delegated scouts · 3', 600, 680, 'agent', 'collapsed', 'Retired delegated stages remain discoverable'),
+  node('spade-10-subagents', 'spade', 'spade-10', 'ws-spade-10-main', 'Delegated scouts · 3', 600, 1080, 'agent', 'collapsed', 'Retired delegated stages remain discoverable'),
   node('spade-10-diff', 'spade', 'spade-10', 'ws-spade-10-main', 'Working diff', 1340, 1080, 'diff', 'changed', 'src/ +842 −64 · docs/ +22 −4'),
   node('spade-10-pr', 'spade', 'spade-10', 'ws-spade-10-main', 'Pull request #14', 2080, 1130, 'pull-request', 'done', 'active → review → done · open for human review'),
 
   node('spade-12-issue', 'spade', 'spade-12', null, 'Browser composition', 60, 1760, 'issue', 'active', 'Compare webview and native overlay'),
   node('spade-12-agent', 'spade', 'spade-12', 'ws-spade-12', 'Exploration agent', 600, 1760, 'agent', 'exploration', 'Running interaction checks'),
-  node('spade-8-issue', 'spade', 'spade-8', null, 'Focus history', 1400, 1760, 'task', 'blocked', 'Waiting for navigation direction'),
+  node('spade-12-browser', 'spade', 'spade-12', 'ws-spade-12', 'GitHub · Browser composition #12', 1340, 1680, 'browser', 'github', 'Issue page with discussion, labels, checks, and linked implementation activity'),
+  node('spade-8-issue', 'spade', 'spade-8', null, 'Focus history', 2240, 1760, 'task', 'blocked', 'Waiting for navigation direction'),
 
   node('paseo-41-issue', 'paseo', 'paseo-41', null, 'Durable recovery', 60, 100, 'issue', 'active', 'Restore interrupted sessions'),
-  node('paseo-41-agent', 'paseo', 'paseo-41', 'ws-paseo-41-main', 'Recovery author', 600, 100, 'agent', 'implementation', 'Checkpoint protocol in progress'),
+  node('paseo-41-agent', 'paseo', 'paseo-41', 'ws-paseo-41-main', 'Recovery author', 600, 100, 'agent', 'implementation', 'Checkpoint protocol in progress', { width: 640, height: 760 }),
   node('paseo-41-review', 'paseo', 'paseo-41', 'ws-paseo-41-test', 'Recovery review', 1320, 100, 'review', 'queued', 'Failure scenarios queued'),
-  node('paseo-38-issue', 'paseo', 'paseo-38', null, 'Workspace cleanup', 60, 800, 'issue', 'done', 'Archive lifecycle shipped'),
-  node('paseo-38-pr', 'paseo', 'paseo-38', 'ws-paseo-38', 'Merged pull request', 600, 800, 'pull-request', 'done', 'Cleanup verified'),
-  node('paseo-44-issue', 'paseo', 'paseo-44', null, 'Review telemetry', 1320, 800, 'issue', 'review', 'Expose queue latency'),
-  node('paseo-44-diff', 'paseo', 'paseo-44', 'ws-paseo-44', 'Telemetry diff', 1840, 800, 'diff', 'review', 'events/ +184 −21'),
+  node('paseo-38-issue', 'paseo', 'paseo-38', null, 'Workspace cleanup', 60, 1100, 'issue', 'done', 'Archive lifecycle shipped'),
+  node('paseo-38-pr', 'paseo', 'paseo-38', 'ws-paseo-38', 'Merged pull request', 600, 1100, 'pull-request', 'done', 'Cleanup verified'),
+  node('paseo-44-issue', 'paseo', 'paseo-44', null, 'Review telemetry', 1320, 1100, 'issue', 'review', 'Expose queue latency'),
+  node('paseo-44-diff', 'paseo', 'paseo-44', 'ws-paseo-44', 'Telemetry diff', 1840, 1100, 'diff', 'review', 'events/ +184 −21'),
+  node('paseo-44-browser', 'paseo', 'paseo-44', 'ws-paseo-44', 'Grafana · Review queue telemetry', 1320, 1660, 'browser', 'dashboard', 'Live queue latency, throughput, and failure-rate dashboard'),
 
   node('atlas-7-issue', 'atlas', 'atlas-7', null, 'Repository map refresh', 60, 100, 'issue', 'active', 'Incremental graph indexing'),
   node('atlas-7-agent', 'atlas', 'atlas-7', 'ws-atlas-7', 'Map refresh agent', 600, 100, 'agent', 'implementation', 'Scanning changed packages'),
@@ -116,10 +118,12 @@ const edges = [
   edge('spade-10-fix-2', 'spade-10-diff', 'derived'),
   edge('spade-10-diff', 'spade-10-pr', 'derived'),
   edge('spade-12-issue', 'spade-12-agent', 'spawned'),
+  edge('spade-12-issue', 'spade-12-browser', 'references'),
   edge('paseo-41-issue', 'paseo-41-agent', 'spawned'),
   edge('paseo-41-agent', 'paseo-41-review', 'delegated'),
   edge('paseo-38-issue', 'paseo-38-pr', 'derived'),
   edge('paseo-44-issue', 'paseo-44-diff', 'derived'),
+  edge('paseo-44-diff', 'paseo-44-browser', 'references'),
   edge('atlas-7-issue', 'atlas-7-agent', 'spawned'),
   edge('atlas-9-issue', 'atlas-9-agent', 'spawned'),
   edge('atlas-9-agent', 'atlas-9-review', 'delegated'),
@@ -201,7 +205,8 @@ function node(
   y: number,
   kind: PrototypeNodeConfig['kind'],
   stage: string,
-  detail: string
+  detail: string,
+  size?: CanvasNode['size']
 ): CanvasNode {
   return {
     version: DOMAIN_RECORD_VERSION,
@@ -211,6 +216,7 @@ function node(
     title,
     shortDescription: detail,
     position: { x, y: y + projectContentTop },
+    size,
     collapsed: stage === 'collapsed',
     projectId,
     workItemId,
@@ -218,7 +224,9 @@ function node(
     config: { kind, stage, detail } satisfies PrototypeNodeConfig,
     resourceRef: kind === 'issue' || kind === 'pull-request'
       ? { provider: 'mock-github', kind, id }
-      : { provider: 'mock-paseo', kind, id },
+      : kind === 'browser'
+        ? { provider: 'mock-browser', kind: 'page', id }
+        : { provider: 'mock-paseo', kind, id },
     createdAt,
     updatedAt: createdAt
   }

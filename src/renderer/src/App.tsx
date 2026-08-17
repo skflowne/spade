@@ -18,7 +18,6 @@ import {
   projectCanvas,
   projectSummary,
   type NavigationMode,
-  type ProjectLayout,
   type PrototypeFlowNode,
   type WorkItemGrouping
 } from './canvasProjection'
@@ -44,12 +43,6 @@ type HullDragSession = {
   memberPositions: ReadonlyMap<string, PrototypeFlowNode['position']>
 }
 
-function measuredNodeSize(node: PrototypeFlowNode): ProjectLayout['size'] | null {
-  const width = node.measured?.width ?? Number.parseFloat(String(node.style?.width ?? ''))
-  const height = node.measured?.height ?? Number.parseFloat(String(node.style?.height ?? ''))
-  return width > 0 && height > 0 ? { width, height } : null
-}
-
 export function App(): React.JSX.Element {
   const [navigation, setNavigation] = useState<NavigationMode>('dedicated')
   const [grouping, setGrouping] = useState<WorkItemGrouping>('hull')
@@ -57,7 +50,7 @@ export function App(): React.JSX.Element {
   const [projectsExpanded, setProjectsExpanded] = useState(true)
   const [controlsOpen, setControlsOpen] = useState(false)
   const [projectViewports, setProjectViewports] = useState<ProjectViewports>({})
-  const [projectLayouts, setProjectLayouts] = useState<Record<string, ProjectLayout>>({})
+  const [projectPositions, setProjectPositions] = useState<Record<string, PrototypeFlowNode['position']>>({})
   const [entities, setEntities] = useState(projectPrototypeRecords.nodes)
   const hullDrag = useRef<HullDragSession | null>(null)
   const records = useMemo(
@@ -65,8 +58,8 @@ export function App(): React.JSX.Element {
     [entities]
   )
   const projection = useMemo(
-    () => projectCanvas(records, navigation, grouping, selectedProjectId, projectLayouts),
-    [records, navigation, grouping, selectedProjectId, projectLayouts]
+    () => projectCanvas(records, navigation, grouping, selectedProjectId, projectPositions),
+    [records, navigation, grouping, selectedProjectId, projectPositions]
   )
   const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<PrototypeFlowNode>(projection.nodes)
   const defaultViewport = navigation === 'dedicated'
@@ -114,14 +107,12 @@ export function App(): React.JSX.Element {
   const onNodeDragStop: OnNodeDrag<PrototypeFlowNode> = useCallback((_, node) => {
     hullDrag.current = null
     const finalFlowNodes = flowNodes.map((candidate) => candidate.id === node.id ? node : candidate)
-    const visibleProjectLayouts = finalFlowNodes.flatMap((candidate) => {
-      if (candidate.type !== 'projectGroup') return []
-      const size = measuredNodeSize(candidate)
-      return size ? [[candidate.data.projectId, { position: candidate.position, size }] as const] : []
-    })
+    const visibleProjectPositions = finalFlowNodes.flatMap((candidate) => candidate.type === 'projectGroup'
+      ? [[candidate.data.projectId, candidate.position] as const]
+      : [])
 
-    if (visibleProjectLayouts.length > 0) {
-      setProjectLayouts((current) => ({ ...current, ...Object.fromEntries(visibleProjectLayouts) }))
+    if (visibleProjectPositions.length > 0) {
+      setProjectPositions((current) => ({ ...current, ...Object.fromEntries(visibleProjectPositions) }))
     }
 
     const positionChanges = finalFlowNodes.flatMap((candidate) => candidate.type === 'entity'

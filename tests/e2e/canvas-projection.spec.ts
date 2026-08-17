@@ -63,11 +63,28 @@ test('gives realistic entities distinct footprints and keeps collapsed conversat
     id: 'diff-1',
     config: { kind: 'diff', stage: 'changed', detail: 'Changes' } satisfies PrototypeNodeConfig
   }
+  const browser = {
+    ...entity,
+    id: 'browser-1',
+    config: { kind: 'browser', stage: 'github', detail: 'Page' } satisfies PrototypeNodeConfig
+  }
 
   expect(entityNodeSize(entity)).toEqual({ width: 460, height: 320 })
   expect(entityNodeSize(agent)).toEqual({ width: 640, height: 500 })
   expect(entityNodeSize(diff)).toEqual({ width: 640, height: 460 })
+  expect(entityNodeSize(browser)).toEqual({ width: 820, height: 940 })
+  expect(entityNodeSize({ ...agent, size: { width: 680, height: 860 } })).toEqual({ width: 680, height: 860 })
   expect(entityNodeSize({ ...agent, collapsed: true })).toEqual({ width: 400, height: 160 })
+})
+
+test('fits global project groups to their current node bounds', () => {
+  const projection = projectCanvas(records, 'global', 'hull', 'project-1')
+  const project = projection.nodes.find(({ type }) => type === 'projectGroup')
+
+  expect(project).toMatchObject({
+    position: { x: 0, y: 0 },
+    style: { width: 528, height: 938 }
+  })
 })
 
 test('derives canonical drag positions from the parent node type, not its identifier', () => {

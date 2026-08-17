@@ -4,7 +4,9 @@ import type { PrototypeNodeConfig } from './projectPrototypeData'
 
 export function GenericEntityNode({ data }: NodeProps<PrototypeEntityFlowNode>): React.JSX.Element {
   const { entity, config, workspace, workItem, accent } = data
-  const preview = entity.collapsed ? [] : previewEntries(config.kind, config.stage, config.detail)
+  const preview = entity.collapsed || config.kind === 'browser'
+    ? []
+    : previewEntries(config.kind, config.stage, config.detail)
 
   return (
     <article
@@ -24,6 +26,7 @@ export function GenericEntityNode({ data }: NodeProps<PrototypeEntityFlowNode>):
       </header>
       <div className="entity-node__body">
         <p>{config.detail}</p>
+        {config.kind === 'browser' && <BrowserPage variant={config.stage} />}
         {preview.length > 0 && (
           <div className="entity-node__preview" aria-label={`${config.kind} preview`}>
             {preview.map(({ label, text }, index) => (
@@ -42,6 +45,47 @@ export function GenericEntityNode({ data }: NodeProps<PrototypeEntityFlowNode>):
       </div>
       <Handle type="source" position={Position.Right} />
     </article>
+  )
+}
+
+function BrowserPage({ variant }: { variant: string }): React.JSX.Element {
+  const dashboard = variant === 'dashboard'
+
+  return (
+    <div className="browser-page" aria-label={dashboard ? 'Fake telemetry dashboard' : 'Fake GitHub issue page'}>
+      <div className="browser-page__toolbar">
+        <span aria-hidden="true">● ● ●</span>
+        <code>{dashboard ? 'telemetry.paseo.dev/d/review-queue' : 'github.com/skflowne/spade/issues/12'}</code>
+        <span aria-hidden="true">↻</span>
+      </div>
+      <div className="browser-page__document">
+        <aside>
+          <strong>{dashboard ? 'PASEO' : 'SPADE'}</strong>
+          <span>Overview</span>
+          <span>{dashboard ? 'Agent queues' : 'Issues'}</span>
+          <span>{dashboard ? 'Review health' : 'Pull requests'}</span>
+          <span>{dashboard ? 'Failures' : 'Actions'}</span>
+        </aside>
+        <section>
+          <small>{dashboard ? 'LIVE DASHBOARD · LAST 6 HOURS' : 'OPEN ISSUE · #12'}</small>
+          <h3>{dashboard ? 'Review queue telemetry' : 'Browser composition spike'}</h3>
+          <p>{dashboard
+            ? 'Queue latency is stable while active review volume increases.'
+            : 'Compare embedded webview behavior with a selected-node overlay under canvas transforms.'}</p>
+          <div className="browser-page__metrics">
+            <span><b>{dashboard ? '42s' : '14'}</b>{dashboard ? 'p95 wait' : 'comments'}</span>
+            <span><b>{dashboard ? '18' : '3'}</b>{dashboard ? 'active' : 'branches'}</span>
+            <span><b>{dashboard ? '99.2%' : '6'}</b>{dashboard ? 'success' : 'checks'}</span>
+          </div>
+          <div className="browser-page__activity">
+            <strong>{dashboard ? 'Recent queue activity' : 'Latest discussion'}</strong>
+            <p>{dashboard ? 'Review agent completed correctness pass' : 'Interaction matrix updated with zoom and focus results'}</p>
+            <p>{dashboard ? 'Two workspaces waiting for final validation' : 'Prototype branch linked to the issue timeline'}</p>
+            <p>{dashboard ? 'No stalled sessions detected' : 'All browser lifecycle checks are passing'}</p>
+          </div>
+        </section>
+      </div>
+    </div>
   )
 }
 
@@ -97,7 +141,8 @@ function kindMark(kind: PrototypeNodeConfig['kind']): string {
     fix: 'F',
     diff: '±',
     'pull-request': 'PR',
-    task: 'T'
+    task: 'T',
+    browser: '◎'
   }
   return marks[kind] ?? 'N'
 }
