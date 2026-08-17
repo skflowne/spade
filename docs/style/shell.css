@@ -77,20 +77,6 @@ body {
 }
 .docs-compare-button:hover { background: var(--cr-ink-800); }
 .docs-compare-button:focus-visible { outline: 2px solid var(--cr-blue-400); outline-offset: 2px; }
-.docs-compare-message {
-  position: fixed;
-  right: 18px;
-  bottom: 62px;
-  z-index: 10;
-  max-width: min(320px, calc(100vw - 36px));
-  padding: 10px 12px;
-  border: var(--cr-border);
-  border-radius: var(--cr-radius-control);
-  background: var(--cr-ink-850);
-  box-shadow: var(--cr-shadow-1);
-  color: var(--cr-ink-100);
-  font-size: var(--cr-text-sm);
-}
 
 @media (max-width: 760px) {
   .site-shell { grid-template-columns: 1fr; }
