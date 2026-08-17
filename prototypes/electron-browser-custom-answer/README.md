@@ -30,4 +30,37 @@ Environment: Electron 43 under Xvfb, attached through Chrome DevTools for direct
 
 Artifact: [`artifacts/m1-rich-answer.png`](artifacts/m1-rich-answer.png)
 
-Browser-composition checks are pending M2.
+### M2 — browser composition comparison
+
+Environment: Electron 43 under Xvfb, with host, guest-webview, and native-view targets inspected directly through Chrome DevTools.
+
+| Check | Observation | Result |
+|---|---|---|
+| GitHub guest | The persistent `<webview>` loaded issue 14 and emitted loading, navigation, DOM-ready, and focus events. | Pass |
+| CSS zoom | React Flow changed from scale `0.569286` to `0.683143`; the same live guest remained attached and rendered. | Pass |
+| CSS resize | The browser node changed from `600×620` to `1080×620`; the guest filled the resized clipped body. | Pass |
+| CSS clipping and stacking | The guest stayed inside the rounded, overflow-hidden node body and the `DOM stacking probe` rendered above its content. | Pass |
+| CSS pan/window clipping | Moving the browser chrome to `translate(-328.735px, 1257.71px)` kept the guest attached while the window clipped the transformed node. | Pass |
+| Reparent | Reparenting changed the button to `Detach from group`, moved the browser to the group's absolute transform `translate(100px, 110px)`, and retained one guest target and session. | Pass |
+| Focus and keyboard | The host logged `guest focused`; after focus, a Tab key inside the guest focused GitHub's `Skip to content` link. | Pass |
+| Wheel | Guest `scrollY` changed from `0` to `500` without panning the outer canvas. | Pass |
+| Popup policy | `window.open` was intercepted in main, denied as a new window, and navigated the same guest from issue 14 to `electron/electron/issues`; only one guest target remained. | Pass |
+| Navigation | Back returned the same guest to issue 14 and updated the address field. | Pass |
+| Session/remount | The marker `spade-p2-session-marker-v1` survived replacement of guest 1 with guest 2. | Pass |
+| Session/restart | The same marker was read after the Electron process and guest were fully restarted with the persistent partition. | Pass |
+| Browser drag boundary | Dragging the address form left the node at `translate(40px, 820px)`; dragging chrome moved it to `translate(-328.735px, 1257.71px)`. | Pass |
+| Native initial synchronization | The DOM surface reported `549, 603 · 340×296`, and a second GitHub target appeared for the WebContentsView. | Pass |
+| Native zoom synchronization | One zoom changed synchronized bounds to `531, 623 · 409×355`. | Pass |
+| Native pan synchronization | A deterministic pan changed x from `549` to `389`; rapid alternating pans settled at `709` without drift. | Pass |
+| Native resize synchronization | Resizing the node to `320×260` changed the native content rectangle from `340×296` to `181×91`. | Pass |
+| Native window clipping | Panning to raw x `1509` fully clipped and disposed the native target; panning it back created one replacement target. | Pass |
+| Native IPC guards | A stale sequence-1 hide left the active native target intact; a sequence-999 command with `NaN` bounds was rejected without advancing sequence, after which the normal dispose command still removed the target. | Pass |
+| Native disposal | `Dispose native view` removed the native target while leaving the guest target alive. | Pass |
+| Native visual limitations | The native rectangle moved above DOM controls and intercepted later clicks. Host CDP capture omitted native pixels and showed the underlying placeholder, proving it does not participate in DOM capture/stacking. | Limitation confirmed |
+
+Artifacts:
+
+- [`artifacts/m2-webview-composition.png`](artifacts/m2-webview-composition.png) — transformed/reparented guest with DOM stacking probe.
+- [`artifacts/m2-native-overlay-host-capture.png`](artifacts/m2-native-overlay-host-capture.png) — host capture while the native view was live; native pixels are absent by design.
+
+The browser-composition recommendation is recorded after the final direct-validation pass.

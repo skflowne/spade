@@ -87,6 +87,20 @@ input {
   fill: var(--line);
 }
 
+.viewport-probes {
+  display: flex;
+  gap: 6px;
+}
+
+.viewport-probes button {
+  padding: 6px 8px;
+  border: var(--cr-border);
+  border-radius: var(--cr-radius-control);
+  color: var(--text);
+  background: var(--panel);
+  cursor: pointer;
+}
+
 .prototype-node {
   display: grid;
   grid-template-rows: auto minmax(0, 1fr);
@@ -127,11 +141,20 @@ input {
 }
 
 .prototype-node__body {
+  position: relative;
   min-width: 0;
   min-height: 0;
   overflow: auto;
   overscroll-behavior: contain;
   cursor: default;
+}
+
+.react-flow__node-group {
+  border: 1px dashed var(--accent);
+  border-radius: var(--cr-radius-panel);
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 42%, transparent);
+  font-size: 0.8rem;
 }
 
 .rich-answer__standard {
@@ -255,4 +278,112 @@ input {
 .conversation-events small,
 .conversation-events__empty {
   color: var(--muted);
+}
+
+.browser-toolbar,
+.browser-probes,
+.native-toolbar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px;
+  border-bottom: var(--cr-border);
+  background: var(--panel);
+}
+
+.browser-toolbar {
+  flex-wrap: wrap;
+}
+
+.browser-toolbar button,
+.browser-probes button,
+.native-toolbar button,
+.browser-address button {
+  padding: 6px 8px;
+  font-size: 0.72rem;
+}
+
+.browser-address {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  padding: 8px;
+  border-bottom: var(--cr-border);
+}
+
+.browser-address input {
+  min-width: 0;
+  padding: 6px 8px;
+  border: var(--cr-border);
+  border-radius: var(--cr-radius-control);
+  color: var(--text);
+  background: var(--bg);
+}
+
+.browser-surface {
+  position: relative;
+  height: 330px;
+  min-height: 180px;
+  overflow: hidden;
+  border-bottom: var(--cr-border);
+  resize: vertical;
+}
+
+.browser-surface webview {
+  width: 100%;
+  height: 100%;
+}
+
+.stacking-probe {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 5;
+  padding: 6px 8px;
+  border: 1px solid var(--accent);
+  border-radius: var(--cr-radius-control);
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  pointer-events: none;
+}
+
+.browser-events {
+  display: grid;
+  gap: 2px;
+  max-height: 110px;
+  margin: 0;
+  padding: 8px 8px 8px 26px;
+  overflow: auto;
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.native-toolbar output {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.native-overlay-surface {
+  display: grid;
+  min-height: 0;
+  height: calc(100% - 47px);
+  place-content: center;
+  padding: 28px;
+  overflow: hidden;
+  border: 2px dashed var(--warning);
+  color: var(--muted);
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--bg),
+    var(--bg) 12px,
+    var(--panel-2) 12px,
+    var(--panel-2) 24px
+  );
+  text-align: center;
+}
+
+.native-overlay-surface p {
+  margin: 0 0 8px;
+  color: var(--text);
 }

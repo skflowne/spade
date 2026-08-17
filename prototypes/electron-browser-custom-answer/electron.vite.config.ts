@@ -18,7 +18,11 @@ export default defineConfig({
     build: {
       outDir: resolve(prototypeRoot, 'out/preload'),
       rollupOptions: {
-        input: { index: resolve(prototypeRoot, 'preload/index.ts') }
+        input: { index: resolve(prototypeRoot, 'preload/index.ts') },
+        output: {
+          format: 'cjs',
+          entryFileNames: '[name].js'
+        }
       }
     },
     plugins: [externalizeDepsPlugin()]
