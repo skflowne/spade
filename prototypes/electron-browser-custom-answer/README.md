@@ -23,7 +23,7 @@ Environment: Electron 43 under Xvfb, attached through Chrome DevTools for direct
 | `window.spade.annotate` | Annotating `browser-step` appended one `ANNOTATE` event with the target and text from runtime 1. | Pass |
 | Reload lifecycle | Reload replaced runtime 1 with runtime 2 and updated the visible lifecycle status. | Pass |
 | Dispose/mount lifecycle | Dispose removed the iframe and showed the disposed surface; Mount created one iframe again. | Pass |
-| Malformed bridge input | An iframe-origin annotation with `input: {}` at the active runtime left the conversation at its empty state. | Pass |
+| Malformed bridge input | Iframe-origin messages with annotation `input: {}` or an unknown outer key at the active runtime left the conversation at its empty state. | Pass |
 | Stale bridge input | An iframe-origin valid submit tagged with runtime 1 after reload to runtime 2 left the conversation at its empty state. | Pass |
 | Body drag boundary | Dragging `.markdown-output` left the rich node at `translate(100px, 80px)`. | Pass |
 | Chrome drag boundary | Dragging `.prototype-node__chrome` moved the rich node to `translate(-217.692px, 690.909px)`. | Pass |

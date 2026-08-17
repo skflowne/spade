@@ -42,6 +42,7 @@ function isBridgeMessage(value: unknown, runtime: number): value is BridgeMessag
 
   const candidate = value as Partial<BridgeMessage>
   if (
+    !hasOnlyKeys(value as Record<string, unknown>, ['source', 'runtime', 'method', 'input']) ||
     candidate.source !== 'spade-p2-answer' ||
     candidate.runtime !== runtime ||
     !candidate.input ||
