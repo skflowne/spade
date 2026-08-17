@@ -52,6 +52,13 @@ test('keeps long entity nodes inside both work-item grouping treatments while dr
       await expect.poll(async () => (await entity.boundingBox())?.x).toBeGreaterThan(initialBox!.x + 10)
       await expectContainedBy(entity, group)
     }
+
+    const parentPosition = await entity.boundingBox()
+    expect(parentPosition).not.toBeNull()
+    await window.getByRole('button', { name: 'Visual hull' }).click()
+    await expect(canvas.locator('.canvas-group--hull').filter({ hasText: '[SPADE-10]' })).toBeVisible()
+    await expect.poll(async () => (await entity.boundingBox())?.x).toBeCloseTo(parentPosition!.x, 0)
+    await expect.poll(async () => (await entity.boundingBox())?.y).toBeCloseTo(parentPosition!.y, 0)
   } finally {
     await application.close()
   }

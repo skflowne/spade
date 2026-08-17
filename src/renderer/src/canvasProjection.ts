@@ -41,11 +41,11 @@ export function canonicalNodePosition(
   position: CanvasNode['position']
 ): CanvasNode['position'] {
   const node = nodes.find(({ id }) => id === nodeId)
-  if (!node?.parentId?.startsWith('work-item-')) return position
+  if (!node?.parentId) return position
 
-  const workItemGroup = nodes.find(({ id }) => id === node.parentId)
-  return workItemGroup
-    ? { x: position.x + workItemGroup.position.x, y: position.y + workItemGroup.position.y }
+  const parent = nodes.find(({ id }) => id === node.parentId)
+  return parent?.type === 'workItemGroup'
+    ? { x: position.x + parent.position.x, y: position.y + parent.position.y }
     : position
 }
 
