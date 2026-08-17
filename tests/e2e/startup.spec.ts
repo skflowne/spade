@@ -25,6 +25,74 @@ async function dragBy(window: Page, target: Locator, x: number, y: number): Prom
   await window.mouse.up()
 }
 
+interface CanvasViewport {
+  x: number
+  y: number
+  zoom: number
+}
+
+async function readCanvasViewport(canvas: Locator): Promise<CanvasViewport> {
+  return canvas.locator('.react-flow__viewport').evaluate((viewport) => {
+    const transform = new DOMMatrixReadOnly(getComputedStyle(viewport).transform)
+    return { x: transform.m41, y: transform.m42, zoom: transform.a }
+  })
+}
+
+async function panAndZoom(window: Page, canvas: Locator, panX: number, panY: number, wheelY: number): Promise<void> {
+  const box = await canvas.boundingBox()
+  expect(box).not.toBeNull()
+
+  const startX = box!.x + box!.width / 2
+  const startY = box!.y + box!.height * 0.9
+  await window.mouse.move(startX, startY)
+  await window.mouse.wheel(0, wheelY)
+  await window.mouse.down()
+  await window.mouse.move(startX + panX, startY + panY, { steps: 5 })
+  await window.mouse.up()
+}
+
+async function expectCanvasViewport(canvas: Locator, expected: CanvasViewport): Promise<void> {
+  await expect.poll(async () => (await readCanvasViewport(canvas)).x).toBeCloseTo(expected.x, 1)
+  await expect.poll(async () => (await readCanvasViewport(canvas)).y).toBeCloseTo(expected.y, 1)
+  await expect.poll(async () => (await readCanvasViewport(canvas)).zoom).toBeCloseTo(expected.zoom, 2)
+}
+
+test('restores each dedicated project viewport after switching projects', async () => {
+  const application = await electron.launch({ args: [resolve('.')] })
+
+  try {
+    const window = await application.firstWindow()
+    const canvas = window.getByRole('region', { name: 'SPADE canvas' })
+    const projectLinks = window.getByRole('navigation', { name: 'Project canvases' })
+    const spade = projectLinks.getByRole('button', { name: /^SPADE/ })
+    const paseo = projectLinks.getByRole('button', { name: /^Paseo/ })
+
+    await panAndZoom(window, canvas, 90, -45, -240)
+    await expect.poll(async () => (await readCanvasViewport(canvas)).zoom).toBeGreaterThan(0.9)
+    const spadeViewport = await readCanvasViewport(canvas)
+
+    await paseo.click()
+    await expect(paseo).toHaveAttribute('aria-current', 'page')
+    await expectCanvasViewport(canvas, { x: 24, y: 30, zoom: 0.82 })
+    await panAndZoom(window, canvas, -70, 55, 180)
+    await expect.poll(async () => (await readCanvasViewport(canvas)).zoom).toBeLessThan(0.75)
+    const paseoViewport = await readCanvasViewport(canvas)
+    expect(Math.abs(paseoViewport.x - spadeViewport.x)).toBeGreaterThan(20)
+    expect(Math.abs(paseoViewport.y - spadeViewport.y)).toBeGreaterThan(20)
+    expect(Math.abs(paseoViewport.zoom - spadeViewport.zoom)).toBeGreaterThan(0.1)
+
+    await spade.click()
+    await expect(spade).toHaveAttribute('aria-current', 'page')
+    await expectCanvasViewport(canvas, spadeViewport)
+
+    await paseo.click()
+    await expect(paseo).toHaveAttribute('aria-current', 'page')
+    await expectCanvasViewport(canvas, paseoViewport)
+  } finally {
+    await application.close()
+  }
+})
+
 test('keeps long entity nodes inside both work-item grouping treatments while dragging', async () => {
   const application = await electron.launch({ args: [resolve('.')] })
 
