@@ -1,6 +1,6 @@
 # Electron browser and custom-answer composition prototype
 
-This directory is an isolated P2 experiment. It is not part of SPADE's normal Electron entries or `npm run build`.
+This directory is an isolated P2 experiment. It is not part of SPADE's normal Electron entries or `npm run build`, and its build output stays under this prototype's ignored `out/` directory.
 
 ```bash
 npm run prototype:p2
@@ -16,13 +16,15 @@ Environment: Electron 43 under Xvfb, attached through Chrome DevTools for direct
 
 | Check | Observation | Result |
 |---|---|---|
-| Dedicated entry | `npm run prototype:p2:build` selected the prototype config and emitted its own main, preload, and renderer entries. Root `npm run build` remains unchanged. | Pass |
+| Dedicated entry | `npm run prototype:p2:build` selected the prototype config and emitted main, preload, and renderer entries under the prototype's own `out/`. Root `npm run build` remains unchanged. | Pass |
 | Markdown | The Markdown source rendered as a heading, emphasized text, and a list. | Pass |
 | Mermaid | The flowchart rendered one SVG (`.mermaid-output svg`). | Pass |
 | `window.spade.submit` | Submitting “Use the guest webview for transformed nodes” appended one `SUBMIT` event from runtime 1 to the mock conversation. | Pass |
 | `window.spade.annotate` | Annotating `browser-step` appended one `ANNOTATE` event with the target and text from runtime 1. | Pass |
 | Reload lifecycle | Reload replaced runtime 1 with runtime 2 and updated the visible lifecycle status. | Pass |
 | Dispose/mount lifecycle | Dispose removed the iframe and showed the disposed surface; Mount created one iframe again. | Pass |
+| Malformed bridge input | An iframe-origin annotation with `input: {}` at the active runtime left the conversation at its empty state. | Pass |
+| Stale bridge input | An iframe-origin valid submit tagged with runtime 1 after reload to runtime 2 left the conversation at its empty state. | Pass |
 | Body drag boundary | Dragging `.markdown-output` left the rich node at `translate(100px, 80px)`. | Pass |
 | Chrome drag boundary | Dragging `.prototype-node__chrome` moved the rich node to `translate(-217.692px, 690.909px)`. | Pass |
 

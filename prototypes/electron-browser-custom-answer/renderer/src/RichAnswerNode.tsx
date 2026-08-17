@@ -33,18 +33,41 @@ const diagram = `flowchart LR
   B -->|submit| C[Follow-up message]
   B -->|annotate| D[Plan annotation]`
 
+function hasOnlyKeys(input: Record<string, unknown>, allowed: readonly string[]): boolean {
+  return Object.keys(input).every((key) => allowed.includes(key))
+}
+
 function isBridgeMessage(value: unknown, runtime: number): value is BridgeMessage {
   if (!value || typeof value !== 'object') return false
 
   const candidate = value as Partial<BridgeMessage>
-  return (
-    candidate.source === 'spade-p2-answer' &&
-    candidate.runtime === runtime &&
-    (candidate.method === 'submit' || candidate.method === 'annotate') &&
-    !!candidate.input &&
-    typeof candidate.input === 'object' &&
-    !Array.isArray(candidate.input)
-  )
+  if (
+    candidate.source !== 'spade-p2-answer' ||
+    candidate.runtime !== runtime ||
+    !candidate.input ||
+    typeof candidate.input !== 'object' ||
+    Array.isArray(candidate.input)
+  ) {
+    return false
+  }
+
+  if (candidate.method === 'submit') {
+    return (
+      hasOnlyKeys(candidate.input, ['message', 'data']) &&
+      (candidate.input.message === undefined || typeof candidate.input.message === 'string') &&
+      ('message' in candidate.input || 'data' in candidate.input)
+    )
+  }
+
+  if (candidate.method === 'annotate') {
+    return (
+      hasOnlyKeys(candidate.input, ['target', 'text', 'data']) &&
+      typeof candidate.input.text === 'string' &&
+      (candidate.input.target === undefined || typeof candidate.input.target === 'string')
+    )
+  }
+
+  return false
 }
 
 function summarize(message: BridgeMessage): string {

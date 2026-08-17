@@ -7,6 +7,7 @@ const prototypeRoot = resolve('prototypes/electron-browser-custom-answer')
 export default defineConfig({
   main: {
     build: {
+      outDir: resolve(prototypeRoot, 'out/main'),
       rollupOptions: {
         input: { index: resolve(prototypeRoot, 'main/index.ts') }
       }
@@ -15,6 +16,7 @@ export default defineConfig({
   },
   preload: {
     build: {
+      outDir: resolve(prototypeRoot, 'out/preload'),
       rollupOptions: {
         input: { index: resolve(prototypeRoot, 'preload/index.ts') }
       }
@@ -24,6 +26,7 @@ export default defineConfig({
   renderer: {
     root: resolve(prototypeRoot, 'renderer'),
     build: {
+      outDir: resolve(prototypeRoot, 'out/renderer'),
       rollupOptions: {
         input: { index: resolve(prototypeRoot, 'renderer/index.html') }
       }

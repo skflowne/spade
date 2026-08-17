@@ -4,7 +4,7 @@ import tseslint from 'typescript-eslint'
 
 export default defineConfig(
   {
-    ignores: ['node_modules', 'out', 'playwright-report', 'test-results', 'docs/style/vendor']
+    ignores: ['node_modules', 'out', '**/out', 'playwright-report', 'test-results', 'docs/style/vendor']
   },
   eslint.configs.recommended,
   tseslint.configs.recommended,
