@@ -132,8 +132,10 @@ body { overflow: hidden; }
 .react-flow__minimap-node { fill: var(--faint); }
 
 .entity-node {
-  width: 240px;
-  min-height: 132px;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   border: var(--cr-border);
   border-top: 2px solid var(--group-accent, var(--accent));
@@ -169,9 +171,19 @@ body { overflow: hidden; }
   font-size: var(--cr-text-xs);
   font-weight: 700;
 }
-.entity-node__body { display: grid; gap: var(--cr-space-4); padding: var(--cr-space-4); }
-.entity-node__body p { margin: 0; color: var(--text); font-size: var(--cr-text-xs); line-height: 1.45; }
-.entity-node__badges { display: flex; gap: var(--cr-space-2); align-items: center; overflow: hidden; }
+.entity-node__body { display: grid; gap: var(--cr-space-4); min-height: 0; padding: var(--cr-space-4); overflow: hidden; }
+.entity-node__body p {
+  display: -webkit-box;
+  margin: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: var(--cr-text-xs);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.entity-node__badges { display: flex; gap: var(--cr-space-2); align-items: center; min-width: 0; overflow: hidden; }
 .entity-node__badges span, .entity-node__badges code {
   max-width: 112px;
   overflow: hidden;

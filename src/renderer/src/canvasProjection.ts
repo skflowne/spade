@@ -52,8 +52,7 @@ export function canonicalNodePosition(
 export const defaultDedicatedViewport: Viewport = { x: 24, y: 30, zoom: 0.82 }
 export const defaultGlobalViewport: Viewport = { x: 32, y: 32, zoom: 0.34 }
 
-const nodeWidth = 240
-const nodeHeight = 132
+export const entityNodeGeometry = { width: 240, height: 132 } as const
 const workItemPadding = { x: 28, top: 54, bottom: 28 }
 const projectSize = { width: 1180, height: 800 }
 const projectGap = 80
@@ -181,6 +180,7 @@ function toEntityNode(
     parentId,
     extent: parentId ? 'parent' : undefined,
     dragHandle: '.entity-node__chrome',
+    style: entityNodeGeometry,
     data: {
       entity,
       config: entity.config as PrototypeNodeConfig,
@@ -195,8 +195,8 @@ function toEntityNode(
 function workItemBounds(nodes: readonly CanvasNode[]): { x: number; y: number; width: number; height: number } {
   const minX = Math.min(...nodes.map(({ position }) => position.x)) - workItemPadding.x
   const minY = Math.min(...nodes.map(({ position }) => position.y)) - workItemPadding.top
-  const maxX = Math.max(...nodes.map(({ position }) => position.x + nodeWidth)) + workItemPadding.x
-  const maxY = Math.max(...nodes.map(({ position }) => position.y + nodeHeight)) + workItemPadding.bottom
+  const maxX = Math.max(...nodes.map(({ position }) => position.x + entityNodeGeometry.width)) + workItemPadding.x
+  const maxY = Math.max(...nodes.map(({ position }) => position.y + entityNodeGeometry.height)) + workItemPadding.bottom
 
   return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
 }
