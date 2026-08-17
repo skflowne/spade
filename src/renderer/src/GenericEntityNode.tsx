@@ -1,9 +1,10 @@
-import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react'
-import type { PrototypeEntityFlowNode } from './canvasProjection'
+import { Handle, Position, useReactFlow, useStore, type NodeProps } from '@xyflow/react'
+import type { PrototypeEntityFlowNode, PrototypeFlowNode } from './canvasProjection'
 import type { PrototypeNodeConfig } from './projectPrototypeData'
 
 export function GenericEntityNode({ id, data }: NodeProps<PrototypeEntityFlowNode>): React.JSX.Element {
-  const { fitView } = useReactFlow<PrototypeEntityFlowNode>()
+  const { fitView, getInternalNode, setCenter } = useReactFlow<PrototypeFlowNode>()
+  const viewportHeight = useStore((state) => state.height)
   const { entity, config, workspace, workItem, accent } = data
   const preview = entity.collapsed || config.kind === 'browser'
     ? []
@@ -35,6 +36,27 @@ export function GenericEntityNode({ id, data }: NodeProps<PrototypeEntityFlowNod
           }}
         >
           Fit
+        </button>
+        <button
+          type="button"
+          className="entity-node__height nodrag nopan"
+          aria-label={`Fill ${entity.title} to screen height`}
+          title="Fill node to screen height"
+          onClick={(event) => {
+            event.stopPropagation()
+            const node = getInternalNode(id)
+            const width = node?.measured.width
+            const height = node?.measured.height
+            if (!node || !width || !height || viewportHeight <= 0) return
+
+            void setCenter(
+              node.internals.positionAbsolute.x + width / 2,
+              node.internals.positionAbsolute.y + height / 2,
+              { zoom: viewportHeight / height, duration: 280 }
+            )
+          }}
+        >
+          Height
         </button>
       </header>
       <div className="entity-node__body">

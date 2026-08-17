@@ -152,7 +152,7 @@ body { overflow: hidden; }
 .entity-node__chrome > div { display: grid; flex: 1; gap: var(--cr-space-1); min-width: 0; }
 .entity-node__chrome strong { overflow: hidden; font-size: var(--cr-text-body); text-overflow: ellipsis; white-space: nowrap; }
 .entity-node__chrome small { color: var(--muted); font-size: var(--cr-text-xs); text-transform: capitalize; }
-.entity-node__fit {
+.entity-node__fit, .entity-node__height {
   flex: 0 0 auto;
   min-width: 38px;
   min-height: 28px;
@@ -168,8 +168,8 @@ body { overflow: hidden; }
   text-transform: uppercase;
   cursor: pointer;
 }
-.entity-node__fit:hover { color: var(--text); border-color: var(--group-accent, var(--accent)); }
-.entity-node__fit:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.entity-node__fit:hover, .entity-node__height:hover { color: var(--text); border-color: var(--group-accent, var(--accent)); }
+.entity-node__fit:focus-visible, .entity-node__height:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .entity-node__kind {
   display: grid;
   flex: 0 0 28px;

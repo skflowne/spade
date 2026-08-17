@@ -188,7 +188,7 @@ export function App(): React.JSX.Element {
               onMoveEnd={onMoveEnd}
               defaultViewport={defaultViewport}
               minZoom={0.08}
-              maxZoom={1.5}
+              maxZoom={6}
               nodesConnectable={false}
               elementsSelectable
               proOptions={{ hideAttribution: true }}

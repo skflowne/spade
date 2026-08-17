@@ -218,7 +218,7 @@ test('keeps categorical project colors distinct from semantic states in every pr
   }
 })
 
-test('fits an individual node to the canvas viewport', async () => {
+test('fits an individual node or fills the viewport height', async () => {
   const application = await electron.launch({ args: [resolve('.')] })
 
   try {
@@ -227,13 +227,23 @@ test('fits an individual node to the canvas viewport', async () => {
     const nodes = canvas.locator('.react-flow__node:has(.entity-node)')
     const issue = nodes.filter({ hasText: 'GitHub issue #10' })
     const fitButton = issue.getByRole('button', { name: 'Fit GitHub issue #10 to screen' })
+    const heightButton = issue.getByRole('button', { name: 'Fill GitHub issue #10 to screen height' })
 
     await expect(nodes.getByRole('button', { name: /^Fit .+ to screen$/ })).toHaveCount(13)
+    await expect(nodes.getByRole('button', { name: /^Fill .+ to screen height$/ })).toHaveCount(13)
     await expect(fitButton).toHaveCSS('cursor', 'pointer')
+    await expect(heightButton).toHaveCSS('cursor', 'pointer')
     await fitButton.click()
 
     await expect.poll(async () => (await readCanvasViewport(canvas)).zoom).toBeCloseTo(1.1, 1)
     await expectContainedBy(issue, canvas)
+
+    const canvasBox = await canvas.boundingBox()
+    expect(canvasBox).not.toBeNull()
+    await heightButton.click()
+
+    await expect.poll(async () => (await readCanvasViewport(canvas)).zoom).toBeCloseTo(canvasBox!.height / 320, 1)
+    await expect.poll(async () => (await issue.boundingBox())?.height).toBeCloseTo(canvasBox!.height, 0)
   } finally {
     await application.close()
   }
