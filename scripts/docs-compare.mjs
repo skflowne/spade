@@ -208,6 +208,10 @@ function comparisonPage(page, base) {
     nav { display: flex; align-items: center; gap: 12px; }
     nav a, nav label { color: #8792a3; font-size: 12px; }
     nav a:hover { color: #e8edf5; }
+    .legend { display: flex; gap: 8px; }
+    .legend span::before { display: inline-block; width: 8px; height: 8px; margin-right: 4px; border-radius: 2px; content: ''; }
+    .legend__removed::before { background: #f85149; }
+    .legend__added::before { background: #3fb950; }
     main { display: grid; grid-template-columns: 1fr 1fr; height: calc(100vh - 49px); }
     iframe { width: 100%; height: 100%; border: 0; background: #0f1319; }
     iframe + iframe { border-left: 1px solid #2b3442; }
@@ -223,6 +227,8 @@ function comparisonPage(page, base) {
     <div class="revision"><span>BASE</span><b>${escapeHtml(base)}</b></div>
     <nav aria-label="Comparison controls">
       <a href="${backSource}">Back to page</a>
+      <div class="legend" aria-label="Diff colors"><span class="legend__removed">Removed</span><span class="legend__added">Added</span></div>
+      <label><input id="highlight" type="checkbox" checked> Highlight changes</label>
       <label><input id="sync" type="checkbox" checked> Sync scroll</label>
     </nav>
     <div class="revision"><span>CURRENT</span><b>Working tree</b></div>
@@ -234,8 +240,54 @@ function comparisonPage(page, base) {
   <script>
     const baseFrame = document.querySelector('#base')
     const currentFrame = document.querySelector('#current')
+    const highlightToggle = document.querySelector('#highlight')
     const syncToggle = document.querySelector('#sync')
+    const blockSelector = 'h1, h2, h3, h4, h5, h6, p, li, th, td, pre, blockquote, figcaption, img'
     let syncing = false
+
+    function diffBlocks(frame, kind, unchanged) {
+      const document = frame.contentDocument
+      const blocks = [...document.querySelectorAll(blockSelector)]
+        .filter((element) => !element.querySelector(blockSelector))
+      const style = document.createElement('style')
+      style.textContent =
+        'html.docs-diff-enabled [data-docs-diff="removed"] { background: rgb(248 81 73 / 20%) !important; box-shadow: inset 3px 0 #f85149; }' +
+        'html.docs-diff-enabled [data-docs-diff="added"] { background: rgb(63 185 80 / 20%) !important; box-shadow: inset 3px 0 #3fb950; }'
+      document.head.append(style)
+
+      for (const block of blocks) {
+        const signature = blockSignature(block)
+        const remaining = unchanged.get(signature) ?? 0
+        if (remaining > 0) {
+          unchanged.set(signature, remaining - 1)
+        } else {
+          block.dataset.docsDiff = kind
+        }
+      }
+    }
+
+    function signatures(frame) {
+      const counts = new Map()
+      const blocks = [...frame.contentDocument.querySelectorAll(blockSelector)]
+        .filter((element) => !element.querySelector(blockSelector))
+      for (const block of blocks) {
+        const signature = blockSignature(block)
+        counts.set(signature, (counts.get(signature) ?? 0) + 1)
+      }
+      return counts
+    }
+
+    function blockSignature(block) {
+      return block.tagName + ':' + (block.tagName === 'IMG'
+        ? block.getAttribute('src') + ':' + block.getAttribute('alt')
+        : block.textContent.replace(/\\s+/g, ' ').trim())
+    }
+
+    function setHighlighting(enabled) {
+      for (const frame of [baseFrame, currentFrame]) {
+        frame.contentDocument.documentElement.classList.toggle('docs-diff-enabled', enabled)
+      }
+    }
 
     function connect(source, target) {
       source.contentWindow.addEventListener('scroll', () => {
@@ -255,6 +307,10 @@ function comparisonPage(page, base) {
       new Promise((resolve) => baseFrame.addEventListener('load', resolve, { once: true })),
       new Promise((resolve) => currentFrame.addEventListener('load', resolve, { once: true }))
     ]).then(() => {
+      diffBlocks(baseFrame, 'removed', signatures(currentFrame))
+      diffBlocks(currentFrame, 'added', signatures(baseFrame))
+      setHighlighting(highlightToggle.checked)
+      highlightToggle.addEventListener('change', () => setHighlighting(highlightToggle.checked))
       connect(baseFrame, currentFrame)
       connect(currentFrame, baseFrame)
     })
