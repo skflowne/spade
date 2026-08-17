@@ -127,7 +127,7 @@
         </section>
 
         <section class="guide-section" id="node">
-          <div class="section-heading"><span class="section-number">06</span><div><h2>Generic entity node</h2><p>The shared container owns the canvas boundary and drag surface. The entity renderer owns the body.</p></div></div>
+          <div class="section-heading"><span class="section-number">06</span><div><h2>Generic canvas container</h2><p>Project, Group, and Node containers share canvas framing, movement, and viewport actions. Entity renderers own node bodies.</p></div></div>
           <div class="section-body">
             <div class="subsection component-stage node-stage">
               <div class="guide-grid"></div><div class="guide-edge"></div>
@@ -138,7 +138,8 @@
             <div class="rule-list">
               <div class="rule"><i>01</i><div><b>Shared ownership</b><p>The container owns chrome, border, handles, and canvas interaction.</p></div></div>
               <div class="rule"><i>02</i><div><b>Body ownership</b><p>Entity renderers own body content while consuming shared visual tokens.</p></div></div>
-              <div class="rule"><i>03</i><div><b>No speculative chrome</b><p>Add no status, menu, badge, or entity action until its behavior exists and ownership is settled.</p></div></div>
+              <div class="rule"><i>03</i><div><b>Shared viewport actions</b><p>Project, Group, and Node chrome expose consistent Fit and Full height controls with visible labels or accessible names.</p></div></div>
+              <div class="rule"><i>04</i><div><b>No speculative chrome</b><p>Add no other status, menu, badge, or entity action until its behavior exists and ownership is settled.</p></div></div>
             </div>
           </div>
         </section>
