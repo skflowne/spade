@@ -3,8 +3,8 @@ import {
   Background,
   MiniMap,
   ReactFlow,
-  type NodeChange,
   type NodeTypes,
+  type OnNodeDrag,
   type Viewport
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -58,18 +58,16 @@ export function App(): React.JSX.Element {
     : defaultGlobalViewport
   const flowKey = navigation === 'dedicated' ? `project-${selectedProjectId}` : 'global'
 
-  const onNodesChange = useCallback((changes: NodeChange<PrototypeFlowNode>[]) => {
-    const positionChanges = changes.flatMap((change) => {
-      if (change.type !== 'position' || !change.position) return []
-      return [{
-        ...change,
-        position: canonicalNodePosition(projection.nodes, change.id, change.position)
-      }]
-    })
+  const onNodeDragStop: OnNodeDrag<PrototypeFlowNode> = useCallback((_, node) => {
+    if (node.type !== 'entity') return
 
-    if (positionChanges.length > 0) {
-      setEntities((current) => applyCanvasNodePositionChanges(current, positionChanges))
-    }
+    const position = canonicalNodePosition(projection.nodes, node.id, node.position)
+    setEntities((current) => applyCanvasNodePositionChanges(current, [{
+      id: node.id,
+      type: 'position',
+      position,
+      dragging: false
+    }]))
   }, [projection.nodes])
 
   const onMoveEnd = useCallback((_: MouseEvent | TouchEvent | null, viewport: Viewport) => {
@@ -167,7 +165,7 @@ export function App(): React.JSX.Element {
               nodes={projection.nodes}
               edges={projection.edges}
               nodeTypes={nodeTypes}
-              onNodesChange={onNodesChange}
+              onNodeDragStop={onNodeDragStop}
               onMoveEnd={onMoveEnd}
               defaultViewport={defaultViewport}
               minZoom={0.2}
