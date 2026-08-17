@@ -1,6 +1,6 @@
 # Repository rules
 
-SPADE is the Spatial Agent Development Environment. [`docs/plan.html`](./docs/plan.html) owns product direction, [`docs/foundation.html`](./docs/foundation.html) owns current system invariants, [`docs/architecture.html`](./docs/architecture.html) owns architecture diagrams and system boundaries, [`docs/testing.html`](./docs/testing.html) owns automated-test policy, and [`docs/style/style-guide.html`](./docs/style/style-guide.html) owns visual design. Read `docs/testing.html` before changing behavior, tests, or test infrastructure.
+SPADE is the Spatial Agent Development Environment. [`docs/plan.html`](./docs/plan.html) owns product direction, [`docs/foundation.html`](./docs/foundation.html) owns current system invariants, [`docs/architecture.html`](./docs/architecture.html) owns architecture diagrams and system boundaries, [`docs/testing.html`](./docs/testing.html) owns automated-test policy, and [`docs/style/style-guide.html`](./docs/style/style-guide.html) owns visual design.
 
 ## Workflow
 
@@ -8,7 +8,8 @@ SPADE is the Spatial Agent Development Environment. [`docs/plan.html`](./docs/pl
 - Issue and PR titles begin `[SPADE-<issue-number>]`; PRs use their primary issue number.
 - Make each change complete and cohesive. Keep unrelated corrections separate.
 - Before handoff, determine whether the change affects facts presented under `docs/`. Update every affected canonical page and verify changed pages in the browser; work is incomplete while its documentation is stale.
-- Apply rigor proportionally. Changes confined to documentation, mockups, prototypes, or other non-production artifacts do not require automated tests; verify the artifact directly. Changes that affect production behavior still follow `docs/testing.html`.
+- Apply rigor proportionally. Changes confined to documentation, mockups, prototypes, or other non-production artifacts do not require automated tests; verify the artifact directly.
+- A prototype, as its name implies, is built to answer questions, it DOES NOT redefine docs
 
 ## Design
 
