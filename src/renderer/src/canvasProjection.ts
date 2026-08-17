@@ -131,7 +131,7 @@ function appendProjectNodes(
     const members = records.nodes.filter((node) => node.workItemId === workItem.id)
     if (members.length === 0) continue
 
-    const bounds = workItemBounds(members)
+    const bounds = workItemBounds(members, projectParentId ? projectSize : undefined)
     const workItemGroupId = `work-item-${workItem.id}`
     const accent = records.projectAccents[project.id]
 
@@ -192,13 +192,20 @@ function toEntityNode(
   }
 }
 
-function workItemBounds(nodes: readonly CanvasNode[]): { x: number; y: number; width: number; height: number } {
+function workItemBounds(
+  nodes: readonly CanvasNode[],
+  parentSize?: { width: number; height: number }
+): { x: number; y: number; width: number; height: number } {
   const minX = Math.min(...nodes.map(({ position }) => position.x)) - workItemPadding.x
   const minY = Math.min(...nodes.map(({ position }) => position.y)) - workItemPadding.top
   const maxX = Math.max(...nodes.map(({ position }) => position.x + entityNodeGeometry.width)) + workItemPadding.x
   const maxY = Math.max(...nodes.map(({ position }) => position.y + entityNodeGeometry.height)) + workItemPadding.bottom
+  const x = parentSize ? Math.max(0, minX) : minX
+  const y = parentSize ? Math.max(0, minY) : minY
+  const right = parentSize ? Math.min(parentSize.width, maxX) : maxX
+  const bottom = parentSize ? Math.min(parentSize.height, maxY) : maxY
 
-  return { x: minX, y: minY, width: maxX - minX, height: maxY - minY }
+  return { x, y, width: right - x, height: bottom - y }
 }
 
 function groupStyle(accent: ProjectAccent, size: { width: number; height: number }): CSSProperties {
