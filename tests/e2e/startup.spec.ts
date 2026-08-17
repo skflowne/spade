@@ -66,21 +66,24 @@ test('keeps categorical project colors distinct from semantic states in every pr
     const projectColors = await projectLinks.locator('i').evaluateAll((indicators) =>
       indicators.map((indicator) => getComputedStyle(indicator).backgroundColor)
     )
-    const semanticColors = await window.locator(':root').evaluate((root) => {
+    const semanticAliases = ['--accent', '--success', '--warning', '--danger']
+    const semanticColors = await window.locator(':root').evaluate((root, aliases) => {
       const styles = getComputedStyle(root)
-      return [styles.getPropertyValue('--success').trim(), styles.getPropertyValue('--warning').trim()]
-        .map((color) => {
-          const probe = document.createElement('span')
-          probe.style.color = color
-          root.appendChild(probe)
-          const resolved = getComputedStyle(probe).color
-          probe.remove()
-          return resolved
-        })
-    })
+      return aliases.map((alias) => {
+        const probe = document.createElement('span')
+        probe.style.color = styles.getPropertyValue(alias).trim()
+        root.appendChild(probe)
+        const color = getComputedStyle(probe).color
+        probe.remove()
+        return { alias, color }
+      })
+    }, semanticAliases)
 
     expect(new Set(projectColors).size).toBe(4)
-    expect(projectColors).not.toEqual(expect.arrayContaining(semanticColors))
+    expect(
+      semanticColors.filter(({ color }) => projectColors.includes(color)),
+      'categorical project colors must not collide with interaction or semantic colors'
+    ).toEqual([])
 
     await window.getByRole('button', { name: 'Global canvas' }).click()
     const projectGroups = window.locator('.canvas-group--project')
