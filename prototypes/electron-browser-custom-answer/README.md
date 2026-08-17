@@ -3,7 +3,15 @@
 This directory is an isolated P2 experiment. It is not part of SPADE's normal Electron entries or `npm run build`, and its build output stays under this prototype's ignored `out/` directory.
 
 ```bash
+npm install
 npm run prototype:p2
+```
+
+For deterministic integrity checks:
+
+```bash
+npm run prototype:p2:typecheck
+npm run prototype:p2:build
 ```
 
 The prototype treats generated HTML as trusted. Its unsandboxed same-origin `srcdoc` can access the parent document and any APIs exposed by the prototype preload. Message-source and runtime checks protect deterministic lifecycle handling; they are not a security boundary.
@@ -57,6 +65,8 @@ Environment: Electron 43 under Xvfb, with host, guest-webview, and native-view t
 | Native full window clipping | Panning to raw x `1509` fully clipped and disposed the native target; panning it back created one replacement target. | Pass |
 | Native IPC guards | A stale sequence-1 hide left the active native target intact; a sequence-999 command with `NaN` bounds was rejected without advancing sequence, after which the normal dispose command still removed the target. | Pass |
 | Native disposal | `Dispose native view` removed the native target while leaving the guest target alive. | Pass |
+| Native focus and keyboard | The live native target reported `document.hasFocus(): true`; Tab focused GitHub's `Skip to content` link. | Pass |
+| Native wheel | Wheel input changed the native document's `scrollY` from `0` to `400`. | Pass |
 | Native visual limitations | The native rectangle moved above DOM controls and intercepted later clicks. Host CDP capture omitted native pixels and showed the underlying placeholder, proving it does not participate in DOM capture/stacking. | Limitation confirmed |
 
 Artifacts:
@@ -64,4 +74,41 @@ Artifacts:
 - [`artifacts/m2-webview-composition.png`](artifacts/m2-webview-composition.png) — transformed/reparented guest with DOM stacking probe.
 - [`artifacts/m2-native-overlay-host-capture.png`](artifacts/m2-native-overlay-host-capture.png) — host capture while the native view was live; native pixels are absent by design.
 
-The browser-composition recommendation is recorded after the final direct-validation pass.
+## Reproduction checklist
+
+1. Run `npm run prototype:p2` and use React Flow controls plus **Pan left/right** to transform the canvas.
+2. Resize both browser nodes from their border handles. Confirm the guest scales/clips with its node and the native status reports changing window bounds.
+3. Reparent the guest, drag browser bodies and chrome, focus each browser, press Tab, and scroll each page.
+4. Use **Request popup**, Back, the address field, and Reload. Confirm popup navigation remains in the same guest.
+5. Write the session marker, Remount, and read it. Restart Electron and read it again.
+6. Show the native view, pan it over DOM controls and across a window edge, then dispose it.
+7. Submit and annotate inside the custom answer; reload, dispose, and remount its runtime while observing the mock conversation.
+
+## Conclusion and recommendation
+
+Use Electron `<webview>` for browser content that must behave as an arbitrary React Flow node. In this prototype it remained live through CSS pan, zoom, resize, window clipping, DOM stacking, node reparenting, focus, keyboard, wheel, navigation, popup interception, remount, and process-persistent session checks. This is sufficient to select the guest composition model for the next vertical slice, while retaining Electron's official rendering/navigation/event-routing warning as a reliability risk to monitor.
+
+Do not use one `WebContentsView` per canvas node. Bounds synchronization itself was inexpensive and responsive, but the native child cannot inherit rounded clipping or DOM stacking, can intercept controls drawn above it, disappears from host capture, and reflows at partial window clipping. If guest stability later fails, use one selected/expanded native overlay or a separate window where those limitations are explicit rather than pretending it is a transformed node.
+
+The trusted custom-answer document completed deterministic mount/reload/dispose behavior. Both `window.spade.submit` and `window.spade.annotate` produced validated explicit mock-conversation events; malformed and stale messages were rejected.
+
+## Final validation
+
+| Command | Result |
+|---|---|
+| `npm run prototype:p2:typecheck` | Pass |
+| `npm run prototype:p2:build` | Pass |
+| `npm run typecheck` | Pass |
+| `npm run lint` | Pass |
+| `git diff --check` | Pass |
+| `xvfb-run -a npm test` | 6 passed; `docs-compare.spec.ts` failed because this prototype intentionally leaves `docs/plan.html` identical to `origin/main`, while that spec requires both added and removed documentation blocks. |
+
+The docs-comparison failure is unrelated to the prototype runtime: all domain, command, canvas-state, and Electron startup checks passed. Adding artificial canonical-doc changes or weakening the existing assertion would violate this issue's prototype-only scope.
+
+## Residual risks and scope outcome
+
+- Electron still officially warns against `<webview>` stability. This bounded prototype did not run long-duration, crash-recovery, download, authentication-provider, or multi-guest stress tests.
+- Generated HTML is intentionally unsandboxed and same-origin. It can reach its parent and prototype preload APIs; message validation is lifecycle correctness, not security isolation.
+- `WebContentsView` synchronization uses continuous animation-frame bounds observation only for this comparison and is not a general overlay compositor.
+- The prototype uses a persistent local Electron partition. Clear its application data manually when a clean-session run is required.
+- No production domain contracts or normal Electron entries changed, no automated coverage was added, and canonical documentation remains unchanged because this prototype records evidence rather than redefining system invariants.
