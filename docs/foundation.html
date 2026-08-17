@@ -29,9 +29,8 @@
       </header>
       <article class="docs-content">
 <h2 id="current-state">Current state</h2>
-<p>SPADE is an early desktop prototype. Its Electron window compares dedicated per-project React Flow canvases selected from an expandable sidebar with a global canvas containing four colored project groups. A second control switches work-item presentation between non-parent visual hulls and React Flow parent groups.</p>
-<p>Both strategies project the same deterministic in-memory records: four projects, ten work items, fifteen workspaces and twenty-eight canvas nodes. The scenario includes parallel issues, mixed workflow stages and one complete issue-to-PR workflow. Dedicated canvases remember each project's pan and zoom while the app is running.</p>
-<p>There is no persistence, project loading, agent connection, GitHub connection, or real workspace management yet. Mock resource references preserve provider provenance without contacting those providers. The <a href="plan.html">plan</a> describes the intended product and records the prototype's selected direction; this page describes only what exists now.</p>
+<p>SPADE is an early desktop prototype. It opens an Electron window and displays a React Flow canvas with two connected mock note nodes. The nodes can be dragged, and their positions are kept in memory until the app closes.</p>
+<p>There is no persistence, project loading, agent connection, GitHub connection, or workspace management yet. The <a href="plan.html">plan</a> describes the intended product; this page describes only what exists now.</p>
 <h2 id="core-concepts">Core concepts</h2>
 <p>The shared data model defines the main things SPADE will place and track:</p>
 <table>
@@ -62,11 +61,11 @@
 </thead>
 <tbody>
 <tr><td><code>src/main</code></td><td>Starts Electron and opens a sandboxed window. It does not run canvas workflows.</td></tr>
-<tr><td><code>src/renderer</code></td><td>Owns deterministic prototype fixtures, derives every navigation/grouping projection, renders the canvas, and keeps node and per-project viewport state in memory.</td></tr>
+<tr><td><code>src/renderer</code></td><td>Renders the canvas and keeps the current prototype state in memory.</td></tr>
 <tr><td><code>src/shared</code></td><td>Defines the records, node types, and basic commands used to create and connect nodes.</td></tr>
 </tbody>
 </table>
-<p>The project comparison uses one generic prototype-record node presentation backed by deterministic fixtures. Existing generic canvas commands and the mock entity adapter remain available in the shared core; the prototype does not call an external service or create another record model. See the <a href="architecture.html">architecture diagrams</a> for how these areas connect.</p>
+<p>The only registered node type is currently a mock note. It provides deterministic data for developing the canvas without depending on an external service. See the <a href="architecture.html">architecture diagrams</a> for how these areas connect.</p>
 <h2 id="developer-commands">Developer commands</h2>
 <ul>
 <li><code>npm install</code> — install dependencies from the lockfile.</li>
