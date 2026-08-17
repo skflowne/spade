@@ -56,13 +56,29 @@ export function canonicalNodePosition(
     : position
 }
 
-export const defaultDedicatedViewport: Viewport = { x: 24, y: 30, zoom: 0.82 }
-export const defaultGlobalViewport: Viewport = { x: 32, y: 32, zoom: 0.34 }
+export const defaultDedicatedViewport: Viewport = { x: 24, y: 30, zoom: 0.55 }
+export const defaultGlobalViewport: Viewport = { x: 32, y: 32, zoom: 0.14 }
 
-export const entityNodeGeometry = { width: 240, height: 132 } as const
+const entityGeometry: Record<PrototypeNodeConfig['kind'], ProjectLayout['size']> = {
+  issue: { width: 460, height: 320 },
+  agent: { width: 640, height: 500 },
+  workspace: { width: 460, height: 280 },
+  review: { width: 560, height: 420 },
+  fix: { width: 560, height: 420 },
+  diff: { width: 640, height: 460 },
+  'pull-request': { width: 520, height: 360 },
+  task: { width: 440, height: 300 }
+}
+const collapsedEntityGeometry = { width: 400, height: 160 }
 const workItemPadding = { x: 28, top: 54, bottom: 28 }
-const projectSize = { width: 1180, height: 800 }
-const projectGap = 80
+const minimumProjectSize = { width: 2000, height: 1500 }
+const projectGap = 120
+
+export function entityNodeSize(entity: CanvasNode): ProjectLayout['size'] {
+  if (entity.size) return entity.size
+  if (entity.collapsed) return collapsedEntityGeometry
+  return entityGeometry[(entity.config as PrototypeNodeConfig).kind]
+}
 
 export function projectCanvas(
   records: ProjectPrototypeRecords,
@@ -75,12 +91,13 @@ export function projectCanvas(
     ? records.projects
     : records.projects.filter(({ id }) => id === selectedProjectId)
   const nodes: PrototypeFlowNode[] = []
+  const defaultProjectSizes = visibleProjects.map((project) => defaultProjectSize(records, project.id))
 
   visibleProjects.forEach((project, index) => {
     const projectParentId = mode === 'global' ? `project-group-${project.id}` : undefined
 
     const projectLayout = projectLayouts[project.id]
-    const currentProjectSize = projectLayout?.size ?? projectSize
+    const currentProjectSize = projectLayout?.size ?? defaultProjectSizes[index]
 
     if (projectParentId) {
       const column = index % 2
@@ -88,10 +105,7 @@ export function projectCanvas(
       nodes.push({
         id: projectParentId,
         type: 'projectGroup',
-        position: projectLayout?.position ?? {
-          x: column * (projectSize.width + projectGap),
-          y: row * (projectSize.height + projectGap)
-        },
+        position: projectLayout?.position ?? projectGridPosition(defaultProjectSizes, column, row),
         data: {
           label: project.name,
           meta: projectSummary(records, project.id),
@@ -212,7 +226,7 @@ function toEntityNode(
     parentId,
     extent: constrainToParent ? 'parent' : undefined,
     dragHandle: '.entity-node__chrome',
-    style: entityNodeGeometry,
+    style: entityNodeSize(entity),
     data: {
       entity,
       config: entity.config as PrototypeNodeConfig,
@@ -230,14 +244,45 @@ function workItemBounds(
 ): { x: number; y: number; width: number; height: number } {
   const minX = Math.min(...nodes.map(({ position }) => position.x)) - workItemPadding.x
   const minY = Math.min(...nodes.map(({ position }) => position.y)) - workItemPadding.top
-  const maxX = Math.max(...nodes.map(({ position }) => position.x + entityNodeGeometry.width)) + workItemPadding.x
-  const maxY = Math.max(...nodes.map(({ position }) => position.y + entityNodeGeometry.height)) + workItemPadding.bottom
+  const maxX = Math.max(...nodes.map((node) => node.position.x + entityNodeSize(node).width)) + workItemPadding.x
+  const maxY = Math.max(...nodes.map((node) => node.position.y + entityNodeSize(node).height)) + workItemPadding.bottom
   const x = parentSize ? Math.max(0, minX) : minX
   const y = parentSize ? Math.max(0, minY) : minY
   const right = parentSize ? Math.min(parentSize.width, maxX) : maxX
   const bottom = parentSize ? Math.min(parentSize.height, maxY) : maxY
 
   return { x, y, width: right - x, height: bottom - y }
+}
+
+function defaultProjectSize(records: ProjectPrototypeRecords, projectId: string): ProjectLayout['size'] {
+  const nodes = records.nodes.filter((node) => node.projectId === projectId)
+  return {
+    width: Math.max(
+      minimumProjectSize.width,
+      ...nodes.map((node) => node.position.x + entityNodeSize(node).width + workItemPadding.x)
+    ),
+    height: Math.max(
+      minimumProjectSize.height,
+      ...nodes.map((node) => node.position.y + entityNodeSize(node).height + workItemPadding.bottom)
+    )
+  }
+}
+
+function projectGridPosition(
+  sizes: readonly ProjectLayout['size'][],
+  column: number,
+  row: number
+): CanvasNode['position'] {
+  const firstColumnWidth = Math.max(...sizes.filter((_, index) => index % 2 === 0).map(({ width }) => width))
+  const y = Array.from({ length: row }, (_, previousRow) => {
+    const rowSizes = sizes.slice(previousRow * 2, previousRow * 2 + 2)
+    return Math.max(...rowSizes.map(({ height }) => height)) + projectGap
+  }).reduce((total, rowHeight) => total + rowHeight, 0)
+
+  return {
+    x: column === 0 ? 0 : firstColumnWidth + projectGap,
+    y
+  }
 }
 
 function groupStyle(accent: ProjectAccent, size: { width: number; height: number }): CSSProperties {

@@ -166,7 +166,14 @@ body { overflow: hidden; }
   font-size: var(--cr-text-xs);
   font-weight: 700;
 }
-.entity-node__body { display: grid; gap: var(--cr-space-4); min-height: 0; padding: var(--cr-space-4); overflow: hidden; }
+.entity-node__body {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr) auto;
+  gap: var(--cr-space-4);
+  min-height: 0;
+  padding: var(--cr-space-4);
+  overflow: hidden;
+}
 .entity-node__body p {
   display: -webkit-box;
   margin: 0;
@@ -178,9 +185,38 @@ body { overflow: hidden; }
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
 }
+.entity-node__preview {
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: var(--cr-radius-control);
+  background: var(--bg);
+}
+.entity-node__preview > div {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: var(--cr-space-4);
+  padding: var(--cr-space-3) var(--cr-space-4);
+  border-bottom: 1px solid var(--line);
+}
+.entity-node__preview > div:last-child { border-bottom: 0; }
+.entity-node__preview small {
+  color: var(--group-accent, var(--accent));
+  font-family: var(--mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+.entity-node__preview span {
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: var(--cr-text-xs);
+  line-height: 1.45;
+}
 .entity-node__badges { display: flex; gap: var(--cr-space-2); align-items: center; min-width: 0; overflow: hidden; }
 .entity-node__badges span, .entity-node__badges code {
-  max-width: 112px;
+  max-width: 220px;
   overflow: hidden;
   padding: 2px var(--cr-space-2);
   border: 1px solid var(--line);
@@ -191,6 +227,8 @@ body { overflow: hidden; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.entity-node[data-collapsed='true'] .entity-node__body { grid-template-rows: auto auto; gap: var(--cr-space-2); padding: var(--cr-space-3); }
+.entity-node[data-collapsed='true'] .entity-node__body p { -webkit-line-clamp: 1; }
 .entity-node[data-stage='blocked'] { border-top-color: var(--warning); }
 .entity-node[data-stage='done'], .entity-node[data-stage='ready'] { border-top-color: var(--success); }
 

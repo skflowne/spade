@@ -72,38 +72,38 @@ const workspaces = [
 ]
 
 const nodes = [
-  node('spade-10-issue', 'spade', 'spade-10', null, 'GitHub issue #10', 40, 70, 'issue', 'intake', 'Implement selected from a mocked issue browser'),
-  node('spade-10-agent', 'spade', 'spade-10', 'ws-spade-10-main', 'Integrator agent', 320, 70, 'agent', 'implementation', 'Owns the complete prototype change'),
-  node('spade-10-review-1', 'spade', 'spade-10', 'ws-spade-10-r1', 'Review round 1', 600, 30, 'review', 'review', 'Independent correctness pass'),
-  node('spade-10-fix-1', 'spade', 'spade-10', 'ws-spade-10-f1', 'Fix workspace 1', 880, 30, 'fix', 'fix', 'Resolves navigation findings'),
-  node('spade-10-review-2', 'spade', 'spade-10', 'ws-spade-10-r2', 'Review round 2', 600, 178, 'review', 'review', 'Follow-up verification'),
-  node('spade-10-fix-2', 'spade', 'spade-10', 'ws-spade-10-f2', 'Fix workspace 2', 880, 178, 'fix', 'fix', 'Resolves grouping findings'),
-  node('spade-10-subagents', 'spade', 'spade-10', 'ws-spade-10-main', 'Delegated scouts · 3', 320, 218, 'agent', 'collapsed', 'Retired delegated stages remain discoverable'),
-  node('spade-10-diff', 'spade', 'spade-10', 'ws-spade-10-main', 'Working diff', 600, 326, 'diff', 'changed', 'src/ +842 −64 · docs/ +22 −4'),
-  node('spade-10-pr', 'spade', 'spade-10', 'ws-spade-10-main', 'Pull request #14', 880, 326, 'pull-request', 'done', 'active → review → done · open for human review'),
+  node('spade-10-issue', 'spade', 'spade-10', null, 'GitHub issue #10', 60, 100, 'issue', 'intake', 'Implement selected from a mocked issue browser'),
+  node('spade-10-agent', 'spade', 'spade-10', 'ws-spade-10-main', 'Integrator agent', 600, 100, 'agent', 'implementation', 'Owns the complete prototype change'),
+  node('spade-10-review-1', 'spade', 'spade-10', 'ws-spade-10-r1', 'Review round 1', 1340, 40, 'review', 'review', 'Independent correctness pass'),
+  node('spade-10-fix-1', 'spade', 'spade-10', 'ws-spade-10-f1', 'Fix workspace 1', 2000, 40, 'fix', 'fix', 'Resolves navigation findings'),
+  node('spade-10-review-2', 'spade', 'spade-10', 'ws-spade-10-r2', 'Review round 2', 1340, 560, 'review', 'review', 'Follow-up verification'),
+  node('spade-10-fix-2', 'spade', 'spade-10', 'ws-spade-10-f2', 'Fix workspace 2', 2000, 560, 'fix', 'fix', 'Resolves grouping findings'),
+  node('spade-10-subagents', 'spade', 'spade-10', 'ws-spade-10-main', 'Delegated scouts · 3', 600, 680, 'agent', 'collapsed', 'Retired delegated stages remain discoverable'),
+  node('spade-10-diff', 'spade', 'spade-10', 'ws-spade-10-main', 'Working diff', 1340, 1080, 'diff', 'changed', 'src/ +842 −64 · docs/ +22 −4'),
+  node('spade-10-pr', 'spade', 'spade-10', 'ws-spade-10-main', 'Pull request #14', 2080, 1130, 'pull-request', 'done', 'active → review → done · open for human review'),
 
-  node('spade-12-issue', 'spade', 'spade-12', null, 'Browser composition', 40, 560, 'issue', 'active', 'Compare webview and native overlay'),
-  node('spade-12-agent', 'spade', 'spade-12', 'ws-spade-12', 'Exploration agent', 320, 560, 'agent', 'exploration', 'Running interaction checks'),
-  node('spade-8-issue', 'spade', 'spade-8', null, 'Focus history', 640, 560, 'task', 'blocked', 'Waiting for navigation direction'),
+  node('spade-12-issue', 'spade', 'spade-12', null, 'Browser composition', 60, 1760, 'issue', 'active', 'Compare webview and native overlay'),
+  node('spade-12-agent', 'spade', 'spade-12', 'ws-spade-12', 'Exploration agent', 600, 1760, 'agent', 'exploration', 'Running interaction checks'),
+  node('spade-8-issue', 'spade', 'spade-8', null, 'Focus history', 1400, 1760, 'task', 'blocked', 'Waiting for navigation direction'),
 
-  node('paseo-41-issue', 'paseo', 'paseo-41', null, 'Durable recovery', 40, 70, 'issue', 'active', 'Restore interrupted sessions'),
-  node('paseo-41-agent', 'paseo', 'paseo-41', 'ws-paseo-41-main', 'Recovery author', 320, 70, 'agent', 'implementation', 'Checkpoint protocol in progress'),
-  node('paseo-41-review', 'paseo', 'paseo-41', 'ws-paseo-41-test', 'Recovery review', 600, 70, 'review', 'queued', 'Failure scenarios queued'),
-  node('paseo-38-issue', 'paseo', 'paseo-38', null, 'Workspace cleanup', 40, 310, 'issue', 'done', 'Archive lifecycle shipped'),
-  node('paseo-38-pr', 'paseo', 'paseo-38', 'ws-paseo-38', 'Merged pull request', 320, 310, 'pull-request', 'done', 'Cleanup verified'),
-  node('paseo-44-issue', 'paseo', 'paseo-44', null, 'Review telemetry', 640, 310, 'issue', 'review', 'Expose queue latency'),
-  node('paseo-44-diff', 'paseo', 'paseo-44', 'ws-paseo-44', 'Telemetry diff', 900, 310, 'diff', 'review', 'events/ +184 −21'),
+  node('paseo-41-issue', 'paseo', 'paseo-41', null, 'Durable recovery', 60, 100, 'issue', 'active', 'Restore interrupted sessions'),
+  node('paseo-41-agent', 'paseo', 'paseo-41', 'ws-paseo-41-main', 'Recovery author', 600, 100, 'agent', 'implementation', 'Checkpoint protocol in progress'),
+  node('paseo-41-review', 'paseo', 'paseo-41', 'ws-paseo-41-test', 'Recovery review', 1320, 100, 'review', 'queued', 'Failure scenarios queued'),
+  node('paseo-38-issue', 'paseo', 'paseo-38', null, 'Workspace cleanup', 60, 800, 'issue', 'done', 'Archive lifecycle shipped'),
+  node('paseo-38-pr', 'paseo', 'paseo-38', 'ws-paseo-38', 'Merged pull request', 600, 800, 'pull-request', 'done', 'Cleanup verified'),
+  node('paseo-44-issue', 'paseo', 'paseo-44', null, 'Review telemetry', 1320, 800, 'issue', 'review', 'Expose queue latency'),
+  node('paseo-44-diff', 'paseo', 'paseo-44', 'ws-paseo-44', 'Telemetry diff', 1840, 800, 'diff', 'review', 'events/ +184 −21'),
 
-  node('atlas-7-issue', 'atlas', 'atlas-7', null, 'Repository map refresh', 40, 70, 'issue', 'active', 'Incremental graph indexing'),
-  node('atlas-7-agent', 'atlas', 'atlas-7', 'ws-atlas-7', 'Map refresh agent', 320, 70, 'agent', 'implementation', 'Scanning changed packages'),
-  node('atlas-9-issue', 'atlas', 'atlas-9', null, 'Search result ranking', 40, 350, 'issue', 'review', 'Tune symbol relevance'),
-  node('atlas-9-agent', 'atlas', 'atlas-9', 'ws-atlas-9-main', 'Ranking author', 320, 350, 'agent', 'implementation', 'Evaluation set complete'),
-  node('atlas-9-review', 'atlas', 'atlas-9', 'ws-atlas-9-review', 'Ranking review', 600, 350, 'review', 'review', 'Precision checks running'),
+  node('atlas-7-issue', 'atlas', 'atlas-7', null, 'Repository map refresh', 60, 100, 'issue', 'active', 'Incremental graph indexing'),
+  node('atlas-7-agent', 'atlas', 'atlas-7', 'ws-atlas-7', 'Map refresh agent', 600, 100, 'agent', 'implementation', 'Scanning changed packages'),
+  node('atlas-9-issue', 'atlas', 'atlas-9', null, 'Search result ranking', 60, 780, 'issue', 'review', 'Tune symbol relevance'),
+  node('atlas-9-agent', 'atlas', 'atlas-9', 'ws-atlas-9-main', 'Ranking author', 600, 780, 'agent', 'implementation', 'Evaluation set complete'),
+  node('atlas-9-review', 'atlas', 'atlas-9', 'ws-atlas-9-review', 'Ranking review', 1320, 780, 'review', 'review', 'Precision checks running'),
 
-  node('relay-15-issue', 'relay', 'relay-15', null, 'Notification batching', 40, 70, 'issue', 'blocked', 'Awaiting delivery limits'),
-  node('relay-15-agent', 'relay', 'relay-15', 'ws-relay-15', 'Batching author', 320, 70, 'agent', 'paused', 'Implementation paused safely'),
-  node('relay-18-issue', 'relay', 'relay-18', null, 'Delivery audit trail', 40, 350, 'issue', 'done', 'Immutable delivery history'),
-  node('relay-18-pr', 'relay', 'relay-18', 'ws-relay-18', 'Merged audit PR', 320, 350, 'pull-request', 'done', 'Released to production')
+  node('relay-15-issue', 'relay', 'relay-15', null, 'Notification batching', 60, 100, 'issue', 'blocked', 'Awaiting delivery limits'),
+  node('relay-15-agent', 'relay', 'relay-15', 'ws-relay-15', 'Batching author', 600, 100, 'agent', 'paused', 'Implementation paused safely'),
+  node('relay-18-issue', 'relay', 'relay-18', null, 'Delivery audit trail', 60, 780, 'issue', 'done', 'Immutable delivery history'),
+  node('relay-18-pr', 'relay', 'relay-18', 'ws-relay-18', 'Merged audit PR', 600, 780, 'pull-request', 'done', 'Released to production')
 ]
 
 const edges = [

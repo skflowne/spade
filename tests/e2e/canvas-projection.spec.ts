@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { canonicalNodePosition, projectCanvas } from '../../src/renderer/src/canvasProjection'
+import { canonicalNodePosition, entityNodeSize, projectCanvas } from '../../src/renderer/src/canvasProjection'
 import type { ProjectPrototypeRecords, PrototypeNodeConfig } from '../../src/renderer/src/projectPrototypeData'
 import { DOMAIN_RECORD_VERSION, type CanvasNode } from '../../src/shared/domain'
 
@@ -45,11 +45,29 @@ test('projects entity dimensions and work-item bounds from one geometry contract
   const projectedEntity = projection.nodes.find(({ id }) => id === entity.id)
   const workItem = projection.nodes.find(({ id }) => id === 'work-item-item-1')
 
-  expect(projectedEntity?.style).toMatchObject({ width: 240, height: 132 })
+  expect(projectedEntity?.style).toMatchObject({ width: 460, height: 320 })
   expect(workItem).toMatchObject({
     position: { x: 12, y: 536 },
-    style: { width: 296, height: 214 }
+    style: { width: 516, height: 402 }
   })
+})
+
+test('gives realistic entities distinct footprints and keeps collapsed conversations compact', () => {
+  const agent = {
+    ...entity,
+    id: 'agent-1',
+    config: { kind: 'agent', stage: 'implementation', detail: 'Conversation' } satisfies PrototypeNodeConfig
+  }
+  const diff = {
+    ...entity,
+    id: 'diff-1',
+    config: { kind: 'diff', stage: 'changed', detail: 'Changes' } satisfies PrototypeNodeConfig
+  }
+
+  expect(entityNodeSize(entity)).toEqual({ width: 460, height: 320 })
+  expect(entityNodeSize(agent)).toEqual({ width: 640, height: 500 })
+  expect(entityNodeSize(diff)).toEqual({ width: 640, height: 460 })
+  expect(entityNodeSize({ ...agent, collapsed: true })).toEqual({ width: 400, height: 160 })
 })
 
 test('derives canonical drag positions from the parent node type, not its identifier', () => {

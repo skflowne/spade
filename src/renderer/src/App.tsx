@@ -196,7 +196,7 @@ export function App(): React.JSX.Element {
               onNodeDragStop={onNodeDragStop}
               onMoveEnd={onMoveEnd}
               defaultViewport={defaultViewport}
-              minZoom={0.2}
+              minZoom={0.08}
               maxZoom={1.5}
               nodesConnectable={false}
               elementsSelectable
