@@ -1,8 +1,9 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useLayoutEffect, useMemo, useState } from 'react'
 import {
   Background,
   MiniMap,
   ReactFlow,
+  useNodesState,
   type NodeTypes,
   type OnNodeDrag,
   type Viewport
@@ -52,10 +53,13 @@ export function App(): React.JSX.Element {
     () => projectCanvas(records, navigation, grouping, selectedProjectId),
     [records, navigation, grouping, selectedProjectId]
   )
+  const [flowNodes, setFlowNodes, onNodesChange] = useNodesState<PrototypeFlowNode>(projection.nodes)
   const defaultViewport = navigation === 'dedicated'
     ? projectViewport(projectViewports, selectedProjectId, defaultDedicatedViewport)
     : defaultGlobalViewport
   const flowKey = navigation === 'dedicated' ? `project-${selectedProjectId}` : 'global'
+
+  useLayoutEffect(() => setFlowNodes(projection.nodes), [projection.nodes, setFlowNodes])
 
   const onNodeDragStop: OnNodeDrag<PrototypeFlowNode> = useCallback((_, node) => {
     if (node.type !== 'entity') return
@@ -121,9 +125,10 @@ export function App(): React.JSX.Element {
           <section className="canvas" aria-label="SPADE canvas">
             <ReactFlow
               key={flowKey}
-              nodes={projection.nodes}
+              nodes={flowNodes}
               edges={projection.edges}
               nodeTypes={nodeTypes}
+              onNodesChange={onNodesChange}
               onNodeDragStop={onNodeDragStop}
               onMoveEnd={onMoveEnd}
               defaultViewport={defaultViewport}
