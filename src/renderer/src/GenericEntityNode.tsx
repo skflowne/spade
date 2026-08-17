@@ -1,8 +1,9 @@
-import { Handle, Position, type NodeProps } from '@xyflow/react'
+import { Handle, Position, useReactFlow, type NodeProps } from '@xyflow/react'
 import type { PrototypeEntityFlowNode } from './canvasProjection'
 import type { PrototypeNodeConfig } from './projectPrototypeData'
 
-export function GenericEntityNode({ data }: NodeProps<PrototypeEntityFlowNode>): React.JSX.Element {
+export function GenericEntityNode({ id, data }: NodeProps<PrototypeEntityFlowNode>): React.JSX.Element {
+  const { fitView } = useReactFlow<PrototypeEntityFlowNode>()
   const { entity, config, workspace, workItem, accent } = data
   const preview = entity.collapsed || config.kind === 'browser'
     ? []
@@ -23,6 +24,18 @@ export function GenericEntityNode({ data }: NodeProps<PrototypeEntityFlowNode>):
           <strong>{entity.title}</strong>
           <small>{config.kind} · {config.stage}</small>
         </div>
+        <button
+          type="button"
+          className="entity-node__fit nodrag nopan"
+          aria-label={`Fit ${entity.title} to screen`}
+          title="Fit node to screen"
+          onClick={(event) => {
+            event.stopPropagation()
+            void fitView({ nodes: [{ id }], padding: 0.12, duration: 280, maxZoom: 1.1 })
+          }}
+        >
+          Fit
+        </button>
       </header>
       <div className="entity-node__body">
         <p>{config.detail}</p>

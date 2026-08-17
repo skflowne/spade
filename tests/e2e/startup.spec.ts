@@ -17,7 +17,7 @@ async function dragBy(window: Page, target: Locator, x: number, y: number): Prom
   const box = await target.boundingBox()
   expect(box).not.toBeNull()
 
-  const startX = box!.x + box!.width - 15
+  const startX = box!.x + box!.width / 2
   const startY = box!.y + box!.height / 2
   await window.mouse.move(startX, startY)
   await window.mouse.down()
@@ -218,6 +218,27 @@ test('keeps categorical project colors distinct from semantic states in every pr
   }
 })
 
+test('fits an individual node to the canvas viewport', async () => {
+  const application = await electron.launch({ args: [resolve('.')] })
+
+  try {
+    const window = await application.firstWindow()
+    const canvas = window.getByRole('region', { name: 'SPADE canvas' })
+    const nodes = canvas.locator('.react-flow__node:has(.entity-node)')
+    const issue = nodes.filter({ hasText: 'GitHub issue #10' })
+    const fitButton = issue.getByRole('button', { name: 'Fit GitHub issue #10 to screen' })
+
+    await expect(nodes.getByRole('button', { name: /^Fit .+ to screen$/ })).toHaveCount(13)
+    await expect(fitButton).toHaveCSS('cursor', 'pointer')
+    await fitButton.click()
+
+    await expect.poll(async () => (await readCanvasViewport(canvas)).zoom).toBeCloseTo(1.1, 1)
+    await expectContainedBy(issue, canvas)
+  } finally {
+    await application.close()
+  }
+})
+
 test('renders generic nodes and drags them only from the full header', async () => {
   const application = await electron.launch({ args: [resolve('.')] })
 
@@ -262,7 +283,7 @@ test('renders generic nodes and drags them only from the full header', async () 
 
     const headerPosition = await header.boundingBox()
     expect(headerPosition).not.toBeNull()
-    const headerDragX = headerPosition!.x + headerPosition!.width - 15
+    const headerDragX = headerPosition!.x + headerPosition!.width / 2
     const headerDragY = headerPosition!.y + headerPosition!.height / 2
     await window.mouse.move(headerDragX, headerDragY)
     await window.mouse.down()
