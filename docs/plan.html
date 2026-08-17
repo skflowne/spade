@@ -30,7 +30,7 @@
         <p>Product direction, proposed capabilities, prototypes, and open decisions.</p>
       </header>
       <article class="docs-content">
-<p><em>Last updated: 2026-08-15</em></p>
+<p><em>Last updated: 2026-08-17</em></p>
 <h2 id="1-product-vision">1. Product vision</h2>
 <p>SPADE (Spatial Agent Development Environment) is a desktop, graph/canvas-based development environment built around a spatial representation of agent work.</p>
 <p>The canvas is a <strong>mind map of ongoing work</strong>, not an executable dataflow engine. Nodes represent live resources and durable artifacts: agent conversations, terminals, workspaces, diffs, browsers, files, whiteboards, and later task boards. Directed connections record where work came from, what it references, and how it branched over time.</p>
@@ -63,8 +63,9 @@
 <li>
 <p><strong>Projects, logical work, and execution workspaces are separate concepts</strong></p>
 <ul>
-<li>Current hypothesis: one project owns one canvas, selected from an expandable sidebar.</li>
-<li>Issues and ad-hoc tasks become logical work items that are grouped automatically on that canvas.</li>
+<li>One global canvas contains auto-sized project containers; the sidebar is an activity overview and jump surface, not a project switcher.</li>
+<li>Issues and ad-hoc tasks become logical work items grouped automatically inside their project container.</li>
+<li>Projects that belong together can be arranged spatially inside higher-level group containers without merging their identities.</li>
 <li>A logical work item may contain many Paseo workspaces, branches, and agents created by implementation, review, and fix stages.</li>
 <li>A workspace remains the concrete checkout/worktree/cwd execution fact; it is visible on nodes but is not the primary manual grouping unit.</li>
 </ul>
@@ -274,16 +275,26 @@
   id: string;
   paseoProjectId?: string;
   projectKey?: string;
-  rootPath?: string;
+  hostId: string;
+  rootPath: string;
   gitRemote?: string;
   name: string;
-  canvasId: string;
 };
 </code></pre>
-<p>This lets an issue browser be associated with a repository before any worktree exists.</p>
-<h4 id="project-navigation-hypothesis">Project navigation hypothesis</h4>
-<p>The leading design is an expandable global sidebar for switching projects, with one persisted canvas per project. This keeps repository navigation stable and lets the canvas organize logical work rather than repository boundaries.</p>
-<p>The competing design—one global canvas with projects as colored groups—must remain a lightweight prototype view over the same records until the navigation test resolves it. Do not build separate persistence models for the two views.</p>
+<p>This lets an issue browser be associated with a repository before any worktree exists. The host and root folder are explicit project-creation inputs rather than being inferred later from a workspace.</p>
+<h4 id="selected-project-navigation-direction">Selected project navigation direction</h4>
+<p>SPADE uses one persisted global canvas. Each project is represented by an auto-sized <strong>Project container</strong>, which specializes the shared Group container with project identity, host/root metadata, activity state, and project actions.</p>
+<p>The sidebar is an activity overview and jump-to bar, not a canvas switcher:</p>
+<ul>
+<li>Its top action opens or creates a project by selecting a configured host and root folder.</li>
+<li>Its header summarizes activity with a status indicator, running count, and active work-item count.</li>
+<li>It lists projects with collapsible work-item rows and current activity/status.</li>
+<li>Selecting a project or work item immediately centers that container on the global canvas; it does not replace the canvas or restore a separate per-project viewport.</li>
+</ul>
+<p>Projects may be positioned near one another or placed in user-created Group containers when they belong together. Spatial grouping does not alter project identity, host/root ownership, or work-item membership.</p>
+<h4 id="project-empty-state-and-creation">Project empty state and creation</h4>
+<p>When no projects exist, the global canvas remains visible and shows an <code>Open project…</code> action as a canvas overlay. The same action remains available at the top of the activity sidebar after projects exist.</p>
+<p>Project creation first selects the execution host, then a root folder on that host. SPADE derives a proposed name and Git metadata when available, allows confirmation, creates the Project record and Project container, and jumps to it.</p>
 <h3 id="4-5-logical-work-item">4.5 Logical work item</h3>
 <p>A work item is the automatic organizational unit for an issue, request, investigation, or ad-hoc objective.</p>
 <pre><code class="language-ts">type WorkItem = {
@@ -464,15 +475,25 @@
 <li>Common menus and navigation</li>
 <li>Capability invocation and audit UI</li>
 </ul>
-<h2 id="6-generic-node-container">6. Generic node container</h2>
-<p>Every node uses the same outer container.</p>
+<h2 id="6-generic-canvas-containers">6. Generic canvas containers</h2>
+<p>Canvas surfaces share one container contract rather than independently reimplementing movement, framing, and navigation controls.</p>
+<h3 id="container-hierarchy">Container hierarchy</h3>
+<ul>
+<li><strong>Group container:</strong> the reusable auto-sizing spatial container for related canvas members, including nested projects or work-item content.</li>
+<li><strong>Project container:</strong> a Group-container specialization that owns project identity, host/root metadata, project activity, and project actions. It must reuse Group geometry and interaction behavior.</li>
+<li><strong>Node wrapper:</strong> the common outer container around an entity renderer.</li>
+</ul>
+<p>Group containment communicates spatial organization. Semantic membership remains explicit through project and work-item identifiers; moving a container does not rewrite those identities.</p>
 <h3 id="container-owned-behavior">Container-owned behavior</h3>
 <ul>
 <li>Title, icon and short description</li>
-<li>Logical work-item color and workspace identity/role badge</li>
+<li>Logical work-item color and workspace identity/role badge where relevant</li>
 <li>Runtime status and reconnect/error state</li>
 <li>Dedicated drag handle</li>
-<li>Resize, collapse, focus and archive controls</li>
+<li>Automatic bounds for containers with children</li>
+<li><code>Fit</code> to center and fit the complete container in the viewport</li>
+<li><code>Full height</code> to center the container and scale it to the full viewport height, even when that makes its width overflow</li>
+<li>Resize, collapse, focus and archive controls where supported</li>
 <li><code>Spawn connected…</code> menu</li>
 <li><code>Connect existing…</code> mode</li>
 <li>Incoming/outgoing provenance controls</li>
@@ -480,6 +501,7 @@
 <li>Minimap color, icon and label</li>
 <li>Context-sharing indicator</li>
 </ul>
+<p><code>Fit</code> and <code>Full height</code> are present on Project containers, Group containers, and Node wrappers. They are common container navigation controls rather than entity-specific actions.</p>
 <h3 id="renderer-owned-behavior">Renderer-owned behavior</h3>
 <p>The entity renderer owns only the node body and entity-specific toolbar/actions.</p>
 <h3 id="interaction-rule">Interaction rule</h3>
@@ -601,7 +623,7 @@ const defaultConversationExpansion = {
 <h3 id="8-1-recommended-creation-flow">8.1 Recommended creation flow</h3>
 <p>The reliable ordering is likely:</p>
 <ol>
-<li>User selects a project from the global sidebar and opens its canvas.</li>
+<li>User selects a project or work item in the activity sidebar and SPADE jumps to its container on the global canvas. If the project does not exist, the user opens it by selecting a host and root folder.</li>
 <li>User opens an issue in a project-scoped browser node, or creates an ad-hoc objective.</li>
 <li><code>Implement</code> creates a logical work item and assigns the source node as its root.</li>
 <li>SPADE asks for or infers base branch/ref and workspace mode.</li>
@@ -641,14 +663,10 @@ const defaultConversationExpansion = {
 </ul>
 <p>The Changes node should clearly state what comparison it is showing. A prototype must decide whether the default comparison tracks the moving base branch, the creation-time base revision, or Git merge-base semantics. Do not hide this in the branch name.</p>
 <h3 id="8-4-logical-grouping-and-workspace-presentation">8.4 Logical grouping and workspace presentation</h3>
-<p>The colored background should represent the <strong>logical work item</strong>, not each operational workspace. Work item presentation is derived from membership and should not require manual containment maintenance.</p>
-<p>Prototype both:</p>
-<ul>
-<li>An auto-sized React Flow parent/group that grows around member nodes.</li>
-<li>A non-parent visual hull computed from member-node bounds.</li>
-</ul>
+<p>The colored work-item container represents the <strong>logical work item</strong>, not each operational workspace. Its bounds are derived from member nodes and update automatically, so routine work never requires manual containment maintenance.</p>
+<p>Project containers and work-item containers specialize the shared Group container. A Project container automatically fits its work-item groups and project-scoped nodes. A work-item container automatically fits nodes carrying its <code>workItemId</code>. Group movement changes spatial presentation, not semantic membership.</p>
+<p>The global canvas also permits user-created Group containers around projects that belong together—for example, a product and its supporting services. These groups are spatial organization only; each nested Project container retains its independent host, root, work items, and activity.</p>
 <p>Workspace identity remains visible through node badges, a workspace inspector, and optional nested accents. Selecting a workspace badge can highlight every node using that checkout and expose branch, cwd, base ref, dirty state, role, and lifecycle.</p>
-<p>The prototype should prefer the visual hull if React Flow parenting makes membership changes or free placement feel like manual group maintenance.</p>
 <h2 id="9-context-passed-to-agents">9. Context passed to agents</h2>
 <p>Connections do not automatically inject unlimited content. SPADE builds an explicit, bounded context projection.</p>
 <pre><code class="language-ts">type AgentContextReference = {
@@ -732,15 +750,16 @@ const defaultConversationExpansion = {
 <p>Large-canvas navigation is a core feature, not polish.</p>
 <h3 id="required-behavior">Required behavior</h3>
 <ul>
-<li>Fit entire canvas</li>
-<li>Fit current workspace/group</li>
+<li>Fit the entire global canvas</li>
+<li>Expose <code>Fit</code> and <code>Full height</code> controls on every Project container, Group container, and Node wrapper</li>
+<li>Jump immediately to a project or work item from the activity sidebar</li>
 <li>Center/focus a node</li>
 <li>Follow an edge to its source/target</li>
 <li>Back/forward focus history</li>
-<li>Search nodes by title/type/workspace/status</li>
+<li>Search nodes by title/type/project/workspace/status</li>
 <li>Keyboard navigation between related nodes</li>
 <li>Breadcrumb or current-focus indicator</li>
-<li>Minimap overview with work-item colors, project context, and node-type icons</li>
+<li>Minimap overview with work-item colors, project containers, higher-level groups, and node-type icons</li>
 </ul>
 <h3 id="minimap-and-level-of-detail">Minimap and level of detail</h3>
 <p>React Flow's minimap is SVG-only and should show simplified node representations.</p>
@@ -959,40 +978,46 @@ const defaultConversationExpansion = {
 <p>They are adjacent products solving parallel-agent/worktree UX. Calling Paseo a derivative would require root-history and source-similarity analysis; feature similarity is insufficient.</p>
 <h2 id="19-prototypes">19. Prototypes</h2>
 <h3 id="p1-project-navigation-and-minimal-complete-issue-workflow">P1 — Project navigation and minimal complete issue workflow</h3>
-<p>Build the smallest React Flow desktop prototype that exercises organization rather than real agent execution. Use deterministic mock adapters and one shared data model.</p>
-<p>Provide two switchable project presentations over the same records:</p>
+<p>Build the smallest React Flow desktop prototype that exercises the selected global-canvas direction rather than real agent execution. Use deterministic mock adapters and one shared data model.</p>
+<p>Provide:</p>
+<ul>
+<li>One global canvas with auto-sized Project containers.</li>
+<li>An activity overview/jump sidebar with an <code>Open project…</code> action, activity summary, collapsible projects, and collapsible work items.</li>
+<li>An empty-canvas <code>Open project…</code> overlay when no projects exist.</li>
+<li>Host and root-folder selection during project creation.</li>
+<li>User-created Group containers that can spatially organize related Project containers.</li>
+<li><code>Fit</code> and <code>Full height</code> controls on Project containers, Group containers, and Node wrappers.</li>
+</ul>
+<p>Inside the global view, run this complete mocked issue workflow:</p>
 <ol>
-<li>Expandable sidebar: selecting a project opens its dedicated canvas.</li>
-<li>Global canvas: projects appear as top-level colored groups.</li>
-</ol>
-<p>Inside either view, run this complete mocked issue workflow:</p>
-<ol>
+<li>Open or create a project from a selected host and root folder.</li>
 <li>Open a GitHub issue browser node.</li>
 <li>Select <code>Implement</code> to create a logical work item.</li>
 <li>Spawn an integrator agent and workspace.</li>
 <li>Simulate two review-round workspaces and two fixer workspaces, matching the current <code>paseo-issue-to-pr</code> shape.</li>
 <li>Spawn collapsed delegated subagent nodes.</li>
 <li>Update one diff node with folder/file <code>+</code>/<code>-</code> statistics.</li>
-<li>Transition the work item through active → review → done.</li>
+<li>Transition the work item through active → review → done and reflect it in the activity sidebar.</li>
 <li>Create a PR browser node and collapse retired operational stages.</li>
 </ol>
 <p>Validate:</p>
 <ul>
-<li>Generic node container and dedicated drag handles</li>
-<li>Automatic <code>projectId</code>/<code>workItemId</code> inheritance</li>
-<li>Work-item hull/group maintenance with zero routine manual regrouping</li>
+<li>Shared Group geometry with Project-specific metadata/actions</li>
+<li>Automatic Project/work-item bounds and <code>projectId</code>/<code>workItemId</code> inheritance</li>
 <li>Workspace role/branch/cwd badges without workspace-colored clutter</li>
-<li>Save/reload of layout, edges, focus, and membership</li>
-<li>Minimap, project jump, work-item jump, and focus history</li>
+<li>Save/reload of global layout, spatial groups, edges, focus, and membership</li>
+<li>Activity counts and instant project/work-item jumps</li>
+<li>Minimap, focus history, <code>Fit</code>, and <code>Full height</code></li>
 <li>Configurable conversation expansion defaults</li>
 </ul>
 <p>Pass criteria:</p>
 <ul>
-<li>Completing the workflow requires no manual movement into groups.</li>
+<li>Completing the workflow requires no manual movement into semantic groups.</li>
 <li>All five simulated operational workspaces remain discoverable under one logical issue.</li>
-<li>Switching projects takes one sidebar action and restores project viewport/focus.</li>
-<li>The same records can render in both project-navigation variants.</li>
-<li>A short usability comparison selects sidebar-per-project or global-project-groups before persistence architecture is fixed.</li>
+<li>A sidebar project/work-item action jumps to the correct global-canvas container without changing canvas mode.</li>
+<li>Project containers reuse Group behavior and automatically refit after member movement.</li>
+<li>Spatially grouping projects does not change project or work-item identity.</li>
+<li>The empty state and sidebar project actions both complete host/root selection.</li>
 <li>Any node can spawn a connected node and inherited membership is predictable.</li>
 </ul>
 <h3 id="p2-electron-browser-and-custom-answer-composition">P2 — Electron browser and custom-answer composition</h3>
@@ -1022,7 +1047,7 @@ const defaultConversationExpansion = {
 <h3 id="p3-real-paseo-issue-to-pr-bridge">P3 — Real Paseo issue-to-PR bridge</h3>
 <p>On one local Git repository:</p>
 <ol>
-<li>Select the project from the sidebar and open Issues in a browser node.</li>
+<li>Open the project from a selected host/root folder, then use the activity sidebar to jump to its Project container and open Issues in a browser node.</li>
 <li>Create one work item from an issue.</li>
 <li>Create/attach the integrator Paseo worktree and agent.</li>
 <li>Show normalized conversation events and configured panel expansion.</li>
@@ -1056,8 +1081,8 @@ const defaultConversationExpansion = {
 </ul>
 <h2 id="20-proposed-implementation-sequence">20. Proposed implementation sequence</h2>
 <ol>
-<li>P1 project-navigation and minimal complete issue-workflow prototype.</li>
-<li>Select sidebar-per-project versus global project groups, and work-item hull versus parent group.</li>
+<li>P1 global-canvas project management and minimal complete issue-workflow prototype.</li>
+<li>Harden the shared Group container, Project specialization, activity sidebar, project creation, and container view controls selected by P1.</li>
 <li>P2 Electron browser/custom-answer composition prototype.</li>
 <li>Decide browser implementation; consider Tauri only if Electron fails or footprint becomes decisive.</li>
 <li>P3 real Paseo integration prototype with multiple operational workspaces under one work item.</li>
@@ -1072,8 +1097,6 @@ const defaultConversationExpansion = {
 <ol>
 <li>Must SPADE remain proprietary-compatible, or is AGPL-compatible open source acceptable?</li>
 <li>Can Paseo provide a commercial license for its client/protocol packages?</li>
-<li>Does P1 confirm sidebar-per-project with one canvas each, or a global canvas with project groups?</li>
-<li>Does a work-item hull or React Flow parent group avoid manual membership maintenance better?</li>
 <li>Does Electron <code>&lt;webview&gt;</code> survive transformed-node interaction tests, or must browser content use a selected overlay/window?</li>
 <li>Is a base diff pinned to creation revision or tracked through merge-base with a moving base branch?</li>
 <li>Does spawning an issue agent always create a new worktree, or offer existing checkout/new worktree choices?</li>
