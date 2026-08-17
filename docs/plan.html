@@ -281,9 +281,9 @@
 };
 </code></pre>
 <p>This lets an issue browser be associated with a repository before any worktree exists.</p>
-<h4 id="project-navigation-hypothesis">Project navigation hypothesis</h4>
-<p>The leading design is an expandable global sidebar for switching projects, with one persisted canvas per project. This keeps repository navigation stable and lets the canvas organize logical work rather than repository boundaries.</p>
-<p>The competing design—one global canvas with projects as colored groups—must remain a lightweight prototype view over the same records until the navigation test resolves it. Do not build separate persistence models for the two views.</p>
+<h4 id="project-navigation-direction">Project navigation direction</h4>
+<p>Use an expandable global sidebar for switching projects, with one canvas per project. The P1 prototype kept four projects visible in the sidebar with active-issue and workspace counts, while each dedicated canvas retained readable node detail and restored its in-memory pan and zoom after a single project switch.</p>
+<p>Keep the global canvas with colored project groups as an optional overview projection over the same records, not as a second persistence model. At the prototype's realistic density—four projects, ten work items, fifteen workspaces and twenty-eight nodes—the global view preserved portfolio awareness but required a 34% zoom to fit, making operational detail too small for primary navigation.</p>
 <h3 id="4-5-logical-work-item">4.5 Logical work item</h3>
 <p>A work item is the automatic organizational unit for an issue, request, investigation, or ad-hoc objective.</p>
 <pre><code class="language-ts">type WorkItem = {
@@ -648,7 +648,7 @@ const defaultConversationExpansion = {
 <li>A non-parent visual hull computed from member-node bounds.</li>
 </ul>
 <p>Workspace identity remains visible through node badges, a workspace inspector, and optional nested accents. Selecting a workspace badge can highlight every node using that checkout and expose branch, cwd, base ref, dirty state, role, and lifecycle.</p>
-<p>The prototype should prefer the visual hull if React Flow parenting makes membership changes or free placement feel like manual group maintenance.</p>
+<p><strong>Selected direction:</strong> use a non-parent visual hull for work-item presentation. P1 showed both treatments over the same ten work items. The hull preserved canonical canvas positions and free placement without nesting work-item membership into React Flow coordinates. Parent groups remained functional, but nesting them inside global project parents required coordinate translation on drag and coupled group bounds to node movement. Membership stays authoritative on <code>node.workItemId</code>; either presentation remains derived.</p>
 <h2 id="9-context-passed-to-agents">9. Context passed to agents</h2>
 <p>Connections do not automatically inject unlimited content. SPADE builds an explicit, bounded context projection.</p>
 <pre><code class="language-ts">type AgentContextReference = {
@@ -995,6 +995,13 @@ const defaultConversationExpansion = {
 <li>A short usability comparison selects sidebar-per-project or global-project-groups before persistence architecture is fixed.</li>
 <li>Any node can spawn a connected node and inherited membership is predictable.</li>
 </ul>
+<h4 id="p1-outcome">P1 outcome</h4>
+<p>The functional prototype projected one deterministic record set into both navigation strategies and both grouping treatments. Its scenario contained four simultaneous projects, ten work items, fifteen workspaces, twenty-eight nodes, parallel issues, mixed active/blocked/review/done states, and a complete issue-to-PR path with an integrator, two review workspaces, two fixer workspaces, delegated scouts, diff and PR.</p>
+<ul>
+<li><strong>Navigation:</strong> prefer the expandable sidebar with dedicated project canvases. Dedicated views kept node content readable and restored project-specific in-memory viewport position and zoom. The sidebar's status counts retained cross-project awareness. The global view was useful as an overview, but fitting all four project groups at once reduced the prototype to 34% zoom.</li>
+<li><strong>Grouping:</strong> prefer visual hulls. They communicated work-item membership without changing the node coordinate owner. React Flow parent groups were understandable but added parent-relative coordinate translation, especially when nested inside global project groups.</li>
+<li><strong>Scope:</strong> both alternatives remain renderer projections over shared <code>Project</code>, <code>WorkItem</code>, <code>Workspace</code>, <code>CanvasNode</code> and <code>CanvasEdge</code> mock records. The prototype adds no persistence or external integration.</li>
+</ul>
 <h3 id="p2-electron-browser-and-custom-answer-composition">P2 — Electron browser and custom-answer composition</h3>
 <p>Embed in React Flow:</p>
 <ul>
@@ -1057,7 +1064,7 @@ const defaultConversationExpansion = {
 <h2 id="20-proposed-implementation-sequence">20. Proposed implementation sequence</h2>
 <ol>
 <li>P1 project-navigation and minimal complete issue-workflow prototype.</li>
-<li>Select sidebar-per-project versus global project groups, and work-item hull versus parent group.</li>
+<li>Apply the P1 selections: sidebar-per-project for primary navigation and visual hulls for work-item grouping; retain the global grouped canvas as an optional overview projection.</li>
 <li>P2 Electron browser/custom-answer composition prototype.</li>
 <li>Decide browser implementation; consider Tauri only if Electron fails or footprint becomes decisive.</li>
 <li>P3 real Paseo integration prototype with multiple operational workspaces under one work item.</li>
@@ -1072,8 +1079,7 @@ const defaultConversationExpansion = {
 <ol>
 <li>Must SPADE remain proprietary-compatible, or is AGPL-compatible open source acceptable?</li>
 <li>Can Paseo provide a commercial license for its client/protocol packages?</li>
-<li>Does P1 confirm sidebar-per-project with one canvas each, or a global canvas with project groups?</li>
-<li>Does a work-item hull or React Flow parent group avoid manual membership maintenance better?</li>
+
 <li>Does Electron <code>&lt;webview&gt;</code> survive transformed-node interaction tests, or must browser content use a selected overlay/window?</li>
 <li>Is a base diff pinned to creation revision or tracked through merge-base with a moving base branch?</li>
 <li>Does spawning an issue agent always create a new worktree, or offer existing checkout/new worktree choices?</li>
