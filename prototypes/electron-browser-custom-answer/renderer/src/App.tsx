@@ -146,6 +146,7 @@ export function App(): React.JSX.Element {
           ...node,
           parentId: undefined,
           extent: undefined,
+          expandParent: undefined,
           position: { x: 40, y: 820 }
         }
       }
@@ -154,6 +155,7 @@ export function App(): React.JSX.Element {
         ...node,
         parentId: 'browser-group',
         extent: 'parent',
+        expandParent: true,
         position: { x: 60, y: 70 }
       }
     }))

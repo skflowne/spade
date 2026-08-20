@@ -49,7 +49,7 @@ Environment: Electron 43 under Xvfb, with host, guest-webview, and native-view t
 | CSS resize | The browser node changed from `600×620` to `1080×620`; the guest filled the resized clipped body. | Pass |
 | CSS clipping and stacking | The guest stayed inside the rounded, overflow-hidden node body and the `DOM stacking probe` rendered above its content. | Pass |
 | CSS pan/window clipping | Moving the browser chrome to `translate(-328.735px, 1257.71px)` kept the guest attached while the window clipped the transformed node. | Pass |
-| Reparent | Reparenting changed the button to `Detach from group`, moved the browser to the group's absolute transform `translate(100px, 110px)`, and retained one guest target and session. | Pass |
+| Reparent | Reparenting changed the button to `Detach from group` and moved the browser to the group's absolute transform `translate(100px, 110px)`. Dragging beyond the previous boundary expanded the group instead of constraining the browser, while retaining one guest target and session. | Pass |
 | Focus and keyboard | The host logged `guest focused`; after focus, a Tab key inside the guest focused GitHub's `Skip to content` link. | Pass |
 | Wheel | Guest `scrollY` changed from `0` to `500` without panning the outer canvas. | Pass |
 | Popup policy | `window.open` was intercepted in main, denied as a new window, and navigated the same guest from issue 14 to `electron/electron/issues`; only one guest target remained. | Pass |
@@ -78,7 +78,7 @@ Artifacts:
 
 1. Run `npm run prototype:p2` and use React Flow controls plus **Pan left/right** to transform the canvas.
 2. Resize both browser nodes from their border handles. Confirm the guest scales/clips with its node and the native status reports changing window bounds.
-3. Reparent the guest, drag browser bodies and chrome, focus each browser, press Tab, and scroll each page.
+3. Reparent the guest, drag it beyond the group's previous boundary, and confirm the group expands without detaching or constraining it. Drag browser bodies and chrome, focus each browser, press Tab, and scroll each page.
 4. Use **Request popup**, Back, the address field, and Reload. Confirm popup navigation remains in the same guest.
 5. Write the session marker, Remount, and read it. Restart Electron and read it again.
 6. Show the native view, pan it over DOM controls and across a window edge, then dispose it.
