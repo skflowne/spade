@@ -1,6 +1,11 @@
 import { useCallback, useContext, useEffect, useState } from 'react'
 import { useViewport } from '@xyflow/react'
-import { GITHUB_ISSUE_URL } from '../../shared/constants'
+import {
+  GITHUB_ISSUE_URL,
+  GITHUB_LOGIN_URL,
+  GITHUB_PARTITION
+} from '../../shared/constants'
+import { guestZoomStyle, readGitHubAuthentication } from './guestWebview'
 import { BrowserCanvasContext } from './PrototypeContext'
 import { PrototypeNodeFrame } from './PrototypeNodeFrame'
 import type { PrototypeWebviewElement, WebviewNavigationEvent } from './prototype-api'
@@ -15,6 +20,7 @@ export function BrowserNode(): React.JSX.Element {
   const [url, setUrl] = useState(GITHUB_ISSUE_URL)
   const [ready, setReady] = useState(false)
   const [history, setHistory] = useState({ back: false, forward: false })
+  const [authStatus, setAuthStatus] = useState('Authentication not checked')
   const [events, setEvents] = useState<string[]>([])
 
   const record = useCallback((message: string) => {
@@ -93,6 +99,21 @@ export function BrowserNode(): React.JSX.Element {
     })
   }
 
+  const checkAuthentication = (): void => {
+    if (!guest) return
+    setAuthStatus('Checking authentication…')
+    run(async () => {
+      const authentication = await readGitHubAuthentication(guest)
+      const status = authentication.login
+        ? `Signed in as ${authentication.login}`
+        : authentication.path === '/login'
+          ? 'GitHub sign-in page is open'
+          : 'Signed out of GitHub'
+      setAuthStatus(status)
+      record(status)
+    })
+  }
+
   return (
     <PrototypeNodeFrame title="GitHub guest" kind="Electron <webview> · persistent partition" resizable>
       <div className="browser-toolbar">
@@ -128,6 +149,15 @@ export function BrowserNode(): React.JSX.Element {
         <button type="button" onClick={readSessionMarker} disabled={!ready}>Read session marker</button>
         <button
           type="button"
+          onClick={() => guest && run(() => guest.loadURL(GITHUB_LOGIN_URL))}
+          disabled={!ready}
+        >
+          Open GitHub sign in
+        </button>
+        <button type="button" onClick={checkAuthentication} disabled={!ready}>Check auth</button>
+        <output className="browser-auth-status">{authStatus}</output>
+        <button
+          type="button"
           disabled={!ready}
           onClick={() => {
             if (!guest) return
@@ -144,14 +174,9 @@ export function BrowserNode(): React.JSX.Element {
           key={guestRevision}
           ref={(element) => setGuest(element as PrototypeWebviewElement | null)}
           src={GITHUB_ISSUE_URL}
-          partition="persist:spade-p2-github"
+          partition={GITHUB_PARTITION}
           allowpopups={'' as unknown as boolean}
-          style={{
-            width: `${zoom * 100}%`,
-            height: `${zoom * 100}%`,
-            transform: `scale(${1 / zoom})`,
-            transformOrigin: 'top left'
-          }}
+          style={guestZoomStyle(zoom)}
         />
         <div className="stacking-probe">DOM stacking probe</div>
       </div>

@@ -45,6 +45,12 @@ Environment: Electron 43 under Xvfb, with host, guest-webview, and native-view t
 | Check | Observation | Result |
 |---|---|---|
 | GitHub guest | The persistent `<webview>` loaded issue 14 and emitted loading, navigation, DOM-ready, and focus events. | Pass |
+| Twenty-guest grid | Twenty stress guests plus the primary browser guest loaded concurrently as 21 live webview targets. All 20 stress guests reached DOM-ready in a 5×4 grid. | Pass |
+| Desktop guest viewports | Every stress guest retained an exact `1024×640` page viewport while React Flow fit the `6480×3240` grid at scale `0.190123`; canvas zoom changed presentation without triggering mobile responsive layouts. | Pass |
+| Multi-guest resize stress | All 20 guests cycled together through `1024×640`, `1280×720`, and `800×600`. After repeated cycles every guest remained ready, reported the same resize count, and reset to `1024×640` without console errors. | Pass |
+| Windows GitHub passkey | The same Electron 43 build running natively on Windows opened Windows Hello and completed GitHub passkey authentication in the persistent primary guest. | Pass |
+| Shared Windows authentication | After native process restarts, all 20 stress guests loaded concurrently from the shared persistent partition and reported the same authenticated GitHub account. | Pass |
+| WSLg GitHub passkey | Under WSLg, GitHub reported partial passkey support and remained at “Waiting for input from browser interaction” without completing the platform prompt. Native Windows success isolates this as an environment integration limitation rather than a general `<webview>` failure. | Limitation confirmed |
 | Initial presentation | The canvas opened at scale `1`; the `620×720` browser node gave its live guest a crisp `618×497` CSS-pixel surface instead of shrinking the complete experiment to fit. | Pass |
 | CSS zoom | React Flow changed from scale `1` to `0.694444`; the same live guest remained attached while its backing viewport changed from `618×497` to `429×345` CSS pixels. An inverse guest transform kept those backing pixels aligned with the final screen size instead of bitmap-scaling the full-size page into a blurry result. | Pass |
 | CSS resize | The browser node changed from `620×720` to `1343×260`; the same guest remained attached and filled the `1326×180` minimum-height surface. | Pass |
@@ -73,6 +79,7 @@ Environment: Electron 43 under Xvfb, with host, guest-webview, and native-view t
 Artifacts:
 
 - [`artifacts/m2-webview-composition.png`](artifacts/m2-webview-composition.png) — transformed/reparented guest with DOM stacking probe.
+- [`artifacts/m2-stress-lab-host.png`](artifacts/m2-stress-lab-host.png) — 20 live desktop-sized guests arranged in the complete 5×4 stress grid.
 - [`artifacts/m2-native-overlay-host-capture.png`](artifacts/m2-native-overlay-host-capture.png) — host capture while the native view was live; native pixels are absent by design.
 
 ## Reproduction checklist
@@ -80,10 +87,12 @@ Artifacts:
 1. Run `npm run prototype:p2`. Confirm the browser opens at scale 1 with a large, crisp guest surface, then zoom out and confirm the guest reflows sharply at its displayed size. Use **Pan left/right** to transform the canvas.
 2. Resize both browser nodes from their border handles. Confirm the guest scales/clips with its node and the native status reports changing window bounds.
 3. Reparent the guest, drag it beyond the group's previous boundary, and confirm the group expands without detaching or constraining it. Drag browser bodies and chrome, focus each browser, press Tab, and scroll each page.
-4. Use **Request popup**, Back, the address field, and Reload. Confirm popup navigation remains in the same guest.
-5. Write the session marker, Remount, and read it. Restart Electron and read it again.
-6. Show the native view, pan it over DOM controls and across a window edge, then dispose it.
-7. Submit and annotate inside the custom answer; reload, dispose, and remount its runtime while observing the mock conversation.
+4. Use **Focus stress lab** to frame the 20-guest grid. Run the resize loop and confirm all guests cycle through desktop/tablet viewport sizes before resetting to `1024×640`.
+5. Use **Request popup**, Back, the address field, and Reload. Confirm popup navigation remains in the same guest.
+6. Write the session marker, Remount, and read it. Restart Electron and read it again.
+7. On native Windows, use **Open GitHub sign in** and complete a passkey prompt through Windows Hello. Use **Check shared auth** to inspect the shared persistent session.
+8. Show the native view, pan it over DOM controls and across a window edge, then dispose it.
+9. Submit and annotate inside the custom answer; reload, dispose, and remount its runtime while observing the mock conversation.
 
 ## Conclusion and recommendation
 
@@ -102,15 +111,14 @@ The trusted custom-answer document completed deterministic mount/reload/dispose 
 | `npm run typecheck` | Pass |
 | `npm run lint` | Pass |
 | `git diff --check` | Pass |
-| `xvfb-run -a npm test` | 6 passed; `docs-compare.spec.ts` failed because this prototype intentionally leaves `docs/plan.html` identical to `origin/main`, while that spec requires both added and removed documentation blocks. |
-
-The docs-comparison failure is unrelated to the prototype runtime: all domain, command, canvas-state, and Electron startup checks passed. Adding artificial canonical-doc changes or weakening the existing assertion would violate this issue's prototype-only scope.
+| `xvfb-run -a npm test` | 7 passed |
 
 ## Residual risks and scope outcome
 
-- Electron still officially warns against `<webview>` stability. This bounded prototype did not run long-duration, crash-recovery, download, authentication-provider, or multi-guest stress tests.
-- Fractional canvas zoom resizes and inverse-scales the guest so its backing viewport matches its final on-screen pixels. This avoids blur but intentionally lets responsive pages reflow at the displayed size; sites that react poorly to frequent viewport resizes remain a risk.
+- Electron still officially warns against `<webview>` stability. This bounded prototype now covers 20 simultaneous guests, repeated desktop viewport resizing, and GitHub passkey login, but not long-duration, crash-recovery, download, or other authentication-provider tests.
+- GitHub passkey authentication completed through Windows Hello in native Windows Electron but stalled under WSLg. Authentication acceptance therefore depends on the host platform's authenticator integration.
+- The primary browser node resizes and inverse-scales its guest at fractional canvas zoom to keep final screen pixels sharp, which lets responsive pages reflow. The stress grid instead preserves desktop backing viewports while the canvas scales their presentation, accepting blur at overview zoom to keep page layout stable.
 - Generated HTML is intentionally unsandboxed and same-origin. It can reach its parent and prototype preload APIs; message validation is lifecycle correctness, not security isolation.
 - `WebContentsView` synchronization uses continuous animation-frame bounds observation only for this comparison and is not a general overlay compositor.
 - The prototype uses a persistent local Electron partition. Clear its application data manually when a clean-session run is required.
-- No production domain contracts or normal Electron entries changed, no automated coverage was added, and canonical documentation remains unchanged because this prototype records evidence rather than redefining system invariants.
+- No production domain contracts or normal Electron entries changed, and no automated coverage was added. Canonical documentation changed only to record the user-validated navigation rule that container chrome and persistent gaps between children must remain available for outer-canvas zoom and pan.

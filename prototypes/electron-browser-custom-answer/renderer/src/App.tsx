@@ -12,6 +12,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { BrowserNode } from './BrowserNode'
+import { BrowserStressNode } from './BrowserStressNode'
 import { NativeOverlayNode } from './NativeOverlayNode'
 import { BrowserCanvasContext } from './PrototypeContext'
 import { PrototypeNodeFrame } from './PrototypeNodeFrame'
@@ -26,12 +27,14 @@ type GroupFlowNode = Node<{ label: string }, 'group'>
 type RichFlowNode = Node<Record<string, never>, 'rich-answer'>
 type ConversationFlowNode = Node<Record<string, never>, 'conversation'>
 type BrowserFlowNode = Node<Record<string, never>, 'browser'>
+type BrowserStressFlowNode = Node<Record<string, never>, 'browser-stress'>
 type NativeOverlayFlowNode = Node<Record<string, never>, 'native-overlay'>
 type PrototypeFlowNode =
   | GroupFlowNode
   | RichFlowNode
   | ConversationFlowNode
   | BrowserFlowNode
+  | BrowserStressFlowNode
   | NativeOverlayFlowNode
 
 const initialNodes: PrototypeFlowNode[] = [
@@ -73,6 +76,14 @@ const initialNodes: PrototypeFlowNode[] = [
     dragHandle: '.prototype-node__chrome',
     style: { width: 600, height: 620 },
     data: {}
+  },
+  {
+    id: 'browser-stress',
+    type: 'browser-stress',
+    position: { x: 40, y: 1700 },
+    dragHandle: '.prototype-node__chrome',
+    style: { width: 6480, height: 3240 },
+    data: {}
   }
 ]
 
@@ -110,6 +121,7 @@ const nodeTypes = {
   'rich-answer': RichAnswerFlowNode,
   conversation: ConversationNode,
   browser: BrowserNode,
+  'browser-stress': BrowserStressNode,
   'native-overlay': NativeOverlayNode
 } satisfies NodeTypes
 
@@ -119,9 +131,14 @@ function ViewportProbeControls(): React.JSX.Element {
     const viewport = flow.getViewport()
     void flow.setViewport({ ...viewport, x: viewport.x + offset }, { duration: 0 })
   }
+  const focusNode = (id: string, minZoom = 0.8): void => {
+    void flow.fitView({ nodes: [{ id }], padding: 0.04, minZoom, maxZoom: 1 })
+  }
 
   return (
     <Panel position="top-right" className="viewport-probes">
+      <button type="button" onClick={() => focusNode('github-browser')}>Focus browser</button>
+      <button type="button" onClick={() => focusNode('browser-stress', 0.1)}>Focus stress lab</button>
       <button type="button" onClick={() => pan(-160)}>Pan left</button>
       <button type="button" onClick={() => pan(160)}>Pan right</button>
     </Panel>
@@ -185,7 +202,7 @@ export function App(): React.JSX.Element {
               nodeTypes={nodeTypes}
               onNodesChange={onNodesChange}
               nodesConnectable={false}
-              minZoom={0.25}
+              minZoom={0.1}
               maxZoom={1.6}
               defaultViewport={{ x: 0, y: 0, zoom: 1 }}
             >
