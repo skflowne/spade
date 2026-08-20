@@ -161,7 +161,7 @@ Responsibilities intentionally remain separate:
 
 The checkout port accepts only an opaque Paseo workspace ID. It does not accept a renderer-supplied cwd or infer a checkout from branch names. Returned checkout status must match the requested workspace identity, and the renderer keys status to the current workspace selection so stale responses cannot appear under another checkout.
 
-This branch deliberately injects no concrete checkout adapter because issue #18 has not merged. The UI therefore reports checkout actions as unavailable on this standalone branch. After integration, #18's existing single adapter must implement these methods; #19 must not create a second daemon connection or copy #18 reconciliation logic.
+This branch deliberately injects no concrete checkout adapter because issue #18 has not merged. In the default standalone seed, checkout refresh reports that the selected placeholder is not a Paseo workspace; mutation actions report that the Paseo checkout adapter is unavailable. After integration, #18's existing single adapter must implement these methods and supply live Paseo workspace nodes; #19 must not create a second daemon connection or copy #18 reconciliation logic.
 
 ## Workflow-agnostic shell invariants
 

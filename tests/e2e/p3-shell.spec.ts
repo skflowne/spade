@@ -92,6 +92,11 @@ test('runs the generic P3 shell through narrow IPC and restores the exact ledger
     })
     expect(publicationCount).toBe(1)
 
+    await window.getByRole('button', { name: 'Refresh checkout' }).click()
+    await expect(window.getByRole('alert')).toContainText(
+      'missing-workspace: Selected node is not a Paseo workspace checkout.'
+    )
+
     const viewport = window.locator('.react-flow__viewport')
     const transformBeforeFocus = await viewport.getAttribute('style')
     await activity.getByRole('button', { name: 'Focus Issue 17 · Generic shell' }).click()
