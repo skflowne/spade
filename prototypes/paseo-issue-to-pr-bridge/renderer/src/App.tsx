@@ -19,6 +19,7 @@ import type { PrototypeLedger, WorkItemStatus } from '../../shared/model'
 import { projectActivitySidebar, projectGroupHull } from '../../shared/projection'
 
 type HullData = Record<string, unknown> & {
+  id: string
   name: string
   kind: 'group' | 'work-item'
   status: WorkItemStatus | null
@@ -38,9 +39,9 @@ function GroupHull({ data }: NodeProps<HullNode>): React.JSX.Element {
   return (
     <section className="group-hull" data-kind={data.kind} data-focused={String(data.focused)}>
       <header className="group-hull__chrome">
-        <span>{data.kind === 'work-item' ? 'WORKITEM' : 'GROUP'}</span>
+        <span>{data.kind === 'work-item' ? 'WORKITEM' : 'GROUP'} · {data.id}</span>
         <strong>{data.name}</strong>
-        {data.status && <small>{data.status.toUpperCase()}</small>}
+        {data.status && <small className={`status status--${data.status}`}>{data.status.toUpperCase()}</small>}
       </header>
     </section>
   )
@@ -68,14 +69,20 @@ function GenericNode({ data }: NodeProps<PlaceholderNode>): React.JSX.Element {
 
 const nodeTypes = { hull: GroupHull, placeholder: GenericNode } satisfies NodeTypes
 
-function FocusController({ groupId }: { groupId: string | null }): null {
+type FocusTarget = { position: { x: number; y: number }; size: { width: number; height: number } }
+
+function FocusController({ target }: { target: FocusTarget | null }): null {
   const flow = useReactFlow()
 
   useEffect(() => {
-    if (groupId) {
-      void flow.fitView({ nodes: [{ id: `hull:${groupId}` }], padding: 0.25, minZoom: 0.7, maxZoom: 1.15 })
+    if (target) {
+      void flow.setCenter(
+        target.position.x + target.size.width / 2,
+        target.position.y + target.size.height / 2,
+        { zoom: 1, duration: 0 }
+      )
     }
-  }, [flow, groupId])
+  }, [flow, target])
 
   return null
 }
@@ -95,6 +102,7 @@ function toFlowNodes(ledger: PrototypeLedger, focusedGroupId: string | null): P3
         zIndex: -1
       },
       data: {
+        id: projection.id,
         name: projection.name,
         kind: projection.kind,
         status: projection.status,
@@ -175,6 +183,11 @@ export function App(): React.JSX.Element {
     [ledger?.groups]
   )
   const edges = useMemo(() => (ledger ? toFlowEdges(ledger) : []), [ledger])
+  const focusTarget = useMemo(() => {
+    if (!ledger || !focusedGroupId) return null
+    const group = ledger.groups.find(({ id }) => id === focusedGroupId)
+    return group ? projectGroupHull(group, ledger.nodes).geometry : null
+  }, [focusedGroupId, ledger])
 
   if (!ledger) {
     return <main className="loading-shell">Loading P3 prototype…</main>
@@ -231,7 +244,7 @@ export function App(): React.JSX.Element {
             >
               <Background gap={20} size={1} />
               <Controls />
-              <FocusController groupId={focusedGroupId} />
+              <FocusController target={focusTarget} />
             </ReactFlow>
           </div>
         </section>

@@ -1,5 +1,10 @@
 import type { PrototypeCommand } from './commands'
-import type { ExternalResourceReference, PrototypeLedger } from './model'
+import {
+  isProvenanceRelation,
+  isWorkItemStatus,
+  type ExternalResourceReference,
+  type PrototypeLedger
+} from './model'
 
 export const P3_SNAPSHOT_CHANNEL = 'spade:p3:snapshot'
 export const P3_COMMAND_CHANNEL = 'spade:p3:command'
@@ -23,7 +28,7 @@ export function isPrototypeCommand(value: unknown): value is PrototypeCommand {
         hasText(value.name) &&
         hasText(value.task) &&
         (value.sourceRef === undefined || isResourceReference(value.sourceRef)) &&
-        (value.status === undefined || isStatus(value.status))
+        (value.status === undefined || isWorkItemStatus(value.status))
       )
     case 'spawn-placeholder':
     case 'attach-placeholder':
@@ -39,13 +44,13 @@ export function isPrototypeCommand(value: unknown): value is PrototypeCommand {
         hasOnlyKeys(value, ['type', 'fromNodeId', 'toNodeId', 'relation']) &&
         hasText(value.fromNodeId) &&
         hasText(value.toNodeId) &&
-        ['spawned', 'attached', 'connected'].includes(String(value.relation))
+        isProvenanceRelation(value.relation)
       )
     case 'set-work-item-status':
       return (
         hasOnlyKeys(value, ['type', 'workItemId', 'status']) &&
         hasText(value.workItemId) &&
-        isStatus(value.status)
+        isWorkItemStatus(value.status)
       )
     default:
       return false
@@ -62,10 +67,6 @@ function hasOnlyKeys(record: Record<string, unknown>, keys: readonly string[]): 
 
 function hasText(value: unknown): value is string {
   return typeof value === 'string' && value.trim().length > 0
-}
-
-function isStatus(value: unknown): boolean {
-  return ['active', 'blocked', 'review', 'done'].includes(String(value))
 }
 
 function isResourceReference(value: unknown): value is ExternalResourceReference {

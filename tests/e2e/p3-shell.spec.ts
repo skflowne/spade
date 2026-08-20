@@ -59,11 +59,21 @@ test('runs the generic P3 shell through narrow IPC and restores the exact ledger
       api: ['execute', 'snapshot', 'subscribe']
     })
 
+    const viewport = window.locator('.react-flow__viewport')
+    const transformBeforeFocus = await viewport.getAttribute('style')
     await activity.getByRole('button', { name: 'Focus Issue 17 · Generic shell' }).click()
-    await expect(hulls.filter({ hasText: 'Issue 17 · Generic shell' })).toHaveAttribute(
-      'data-focused',
-      'true'
-    )
+    const workItemHull = hulls.filter({ hasText: 'Issue 17 · Generic shell' })
+    await expect(workItemHull).toHaveAttribute('data-focused', 'true')
+    await expect.poll(() => viewport.getAttribute('style')).not.toBe(transformBeforeFocus)
+    await expect(workItemHull).toContainText('work-item-1')
+
+    await window.evaluate(() => (globalThis as unknown as P3Window).spadeP3.execute({
+      type: 'set-work-item-status',
+      workItemId: 'work-item-1',
+      status: 'blocked'
+    }))
+    await expect(workItemHull.locator('.status--blocked')).toHaveText('BLOCKED')
+    await expect(workItemHull.locator('.status--blocked')).toHaveCSS('color', 'rgb(240, 120, 120)')
 
     await window.getByLabel('New group name').fill('Second task')
     await window.getByLabel('Work item task').fill('Exercise generic creation')
@@ -96,9 +106,18 @@ test('runs the generic P3 shell through narrow IPC and restores the exact ledger
       'More than one group is named “Duplicate”. Use a stable group ID.'
     )
 
+    const ambiguousLedger = await window.evaluate(() =>
+      (globalThis as unknown as P3Window).spadeP3.snapshot()
+    )
+    const duplicateId = ambiguousLedger.groups.find(({ name }) => name === 'Duplicate')!.id
+    await window.getByLabel('Target group').fill(duplicateId)
+    await window.getByRole('button', { name: 'Spawn agent' }).click()
+    await expect(window.getByRole('alert')).toHaveCount(0)
+    await expect(window.locator('.generic-node')).toHaveCount(5)
+
     const beforeReload = await window.evaluate(() => (globalThis as unknown as P3Window).spadeP3.snapshot())
     expect(beforeReload.groups).toHaveLength(5)
-    expect(beforeReload.nodes).toHaveLength(4)
+    expect(beforeReload.nodes).toHaveLength(5)
     expect(beforeReload.edges).toHaveLength(2)
     expect(beforeReload.nodes.find(({ title }) => title === 'Added agent')?.resourceRef).toEqual({
       provider: 'placeholder',
@@ -113,7 +132,7 @@ test('runs the generic P3 shell through narrow IPC and restores the exact ledger
     window = await application.firstWindow()
 
     await expect(window.locator('.group-hull')).toHaveCount(5)
-    await expect(window.locator('.generic-node')).toHaveCount(4)
+    await expect(window.locator('.generic-node')).toHaveCount(5)
     await expect(window.locator('.react-flow__edge')).toHaveCount(2)
     await expect(window.getByRole('navigation', { name: 'Work item activity' }).getByRole('button')).toHaveCount(2)
 
@@ -133,20 +152,31 @@ test('rejects malformed renderer commands at runtime', async () => {
 
   try {
     const window = await application.firstWindow()
-    const message = await window.evaluate(async () => {
-      try {
-        await (globalThis as unknown as P3Window).spadeP3.execute({
-          type: 'create-group',
-          name: 'Invalid',
-          unexpected: true
-        })
-        return 'accepted'
-      } catch (error) {
-        return String(error)
-      }
+    const messages = await window.evaluate(async () => {
+      const commands = [
+        { type: 'create-group', name: 'Invalid', unexpected: true },
+        { type: 'create-work-item', name: 'Invalid', task: 'Invalid', status: ['active'] },
+        {
+          type: 'connect-nodes',
+          fromNodeId: 'node-3',
+          toNodeId: 'node-4',
+          relation: ['connected']
+        }
+      ]
+      return Promise.all(commands.map(async (command) => {
+        try {
+          await (globalThis as unknown as P3Window).spadeP3.execute(command)
+          return 'accepted'
+        } catch (error) {
+          return String(error)
+        }
+      }))
     })
-    expect(message).toContain('Invalid P3 prototype command')
-    expect((await window.evaluate(() => (globalThis as unknown as P3Window).spadeP3.snapshot())).groups).toHaveLength(2)
+    expect(messages).toHaveLength(3)
+    for (const message of messages) expect(message).toContain('Invalid P3 prototype command')
+    const snapshot = await window.evaluate(() => (globalThis as unknown as P3Window).spadeP3.snapshot())
+    expect(snapshot.groups).toHaveLength(2)
+    expect(snapshot.edges).toHaveLength(1)
   } finally {
     await application.close()
     await rm(directory, { recursive: true, force: true })

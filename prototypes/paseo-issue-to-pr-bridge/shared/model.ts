@@ -28,6 +28,10 @@ export type Group = GroupContainer & {
 
 export type WorkItemStatus = 'active' | 'blocked' | 'review' | 'done'
 
+export function isWorkItemStatus(value: unknown): value is WorkItemStatus {
+  return typeof value === 'string' && ['active', 'blocked', 'review', 'done'].includes(value)
+}
+
 export type WorkItem = GroupContainer & {
   kind: 'work-item'
   task: string
@@ -50,6 +54,10 @@ export type PrototypeNode = {
 }
 
 export type ProvenanceRelation = 'spawned' | 'attached' | 'connected'
+
+export function isProvenanceRelation(value: unknown): value is ProvenanceRelation {
+  return typeof value === 'string' && ['spawned', 'attached', 'connected'].includes(value)
+}
 
 export type PrototypeEdge = {
   id: string
@@ -105,7 +113,7 @@ function isGroup(value: unknown): value is PrototypeGroup {
     value.kind === 'work-item' &&
     hasString(value, 'task') &&
     (value.sourceRef === null || isResourceReference(value.sourceRef)) &&
-    ['active', 'blocked', 'review', 'done'].includes(String(value.status))
+    isWorkItemStatus(value.status)
   )
 }
 
@@ -129,7 +137,7 @@ function isEdge(value: unknown): value is PrototypeEdge {
     hasString(value, 'id') &&
     hasString(value, 'fromNodeId') &&
     hasString(value, 'toNodeId') &&
-    ['spawned', 'attached', 'connected'].includes(String(value.relation))
+    isProvenanceRelation(value.relation)
   )
 }
 

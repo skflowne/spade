@@ -92,9 +92,10 @@ input, select { width: 100%; padding: 6px 8px; color: var(--text); background: v
 .group-hull[data-kind='group'] { border-style: dashed; }
 .group-hull[data-focused='true'] { border-color: var(--accent); box-shadow: 0 0 0 2px rgb(var(--accent-rgb) / 18%); }
 .group-hull__chrome { display: flex; align-items: center; gap: 10px; height: 44px; padding: 0 12px; border-bottom: 1px solid var(--hull-line); }
-.group-hull__chrome span, .group-hull__chrome small { color: var(--muted); font: 700 var(--cr-text-xs) var(--mono); letter-spacing: .08em; }
+.group-hull__chrome span { color: var(--muted); }
+.group-hull__chrome span, .group-hull__chrome small { font: 700 var(--cr-text-xs) var(--mono); letter-spacing: .08em; }
 .group-hull__chrome strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.group-hull__chrome small { margin-left: auto; color: var(--success); }
+.group-hull__chrome small { margin-left: auto; }
 
 .generic-node {
   overflow: hidden;
