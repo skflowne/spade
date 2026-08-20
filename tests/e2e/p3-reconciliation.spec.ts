@@ -160,11 +160,21 @@ test('bounds normalized timelines and deduplicates sequenced and unsequenced rep
     item: { type: 'assistant_message', text: `Message ${index}` }
   }))
   entries.push(entries.at(-1)!)
-  const normalized = normalizeTimelineEvents(entries, 'epoch-1')
+  const reversed = normalizeTimelineEvents([...entries].reverse(), 'epoch-1')
+  const shuffled = normalizeTimelineEvents(
+    [...entries].sort((left, right) => ((left.seqStart ?? 0) % 7) - ((right.seqStart ?? 0) % 7)),
+    'epoch-1'
+  )
 
-  expect(normalized).toHaveLength(PASEO_TIMELINE_LIMIT)
-  expect(normalized[0].sequenceStart).toBe(6)
-  expect(new Set(normalized.map(({ id }) => id)).size).toBe(normalized.length)
+  for (const normalized of [reversed, shuffled]) {
+    expect(normalized).toHaveLength(PASEO_TIMELINE_LIMIT)
+    expect(normalized[0].sequenceStart).toBe(6)
+    expect(normalized.at(-1)?.sequenceStart).toBe(45)
+    expect(normalized.map(({ sequenceStart }) => sequenceStart)).toEqual(
+      [...normalized.map(({ sequenceStart }) => sequenceStart)].sort((left, right) => left! - right!)
+    )
+    expect(new Set(normalized.map(({ id }) => id)).size).toBe(normalized.length)
+  }
 
   const unsequenced = normalizeTimelineEvents([
     {

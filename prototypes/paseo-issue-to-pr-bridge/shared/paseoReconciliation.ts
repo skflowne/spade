@@ -211,7 +211,27 @@ export function normalizeTimelineEvents(
     const id = timelineEventId(entry, epoch)
     byId.set(id, normalizeTimelineEvent(entry, epoch, id))
   }
-  return [...byId.values()].slice(-PASEO_TIMELINE_LIMIT)
+  return [...byId.values()]
+    .sort(compareTimelineEvents)
+    .slice(-PASEO_TIMELINE_LIMIT)
+}
+
+function compareTimelineEvents(
+  left: NormalizedConversationEvent,
+  right: NormalizedConversationEvent
+): number {
+  if (
+    left.epoch === right.epoch &&
+    left.sequenceStart !== null &&
+    right.sequenceStart !== null &&
+    left.sequenceStart !== right.sequenceStart
+  ) {
+    return left.sequenceStart - right.sequenceStart
+  }
+
+  const timestampOrder = left.timestamp.localeCompare(right.timestamp)
+  if (timestampOrder !== 0) return timestampOrder
+  return left.id.localeCompare(right.id)
 }
 
 function normalizeTimelineEvent(

@@ -170,6 +170,48 @@ test('rejects duplicate identities and collision-prone sequence state', () => {
       nextSequence: 6
     },
     { ...ledger, edges: [...ledger.edges, { ...ledger.edges[0], id: 'edge-5' }], nextSequence: 6 },
+    {
+      ...ledger,
+      nodes: ledger.nodes.map((node) => node.id === 'node-2'
+        ? {
+            ...node,
+            paseo: {
+              type: 'managed-agent',
+              state: 'connected',
+              parentAgentId: null,
+              workspaceId: null,
+              provider: 'claude',
+              model: 'model-1',
+              status: 'idle',
+              cwd: '/opaque/display/path',
+              timeline: [
+                {
+                  id: 'seq:epoch-1:1:1',
+                  timestamp: '2026-08-20T10:00:00Z',
+                  epoch: 'epoch-1',
+                  sequenceStart: 1,
+                  sequenceEnd: 1,
+                  kind: 'assistant-message',
+                  summary: 'Done',
+                  detail: 'Done',
+                  initialExpanded: true
+                },
+                {
+                  id: 'seq:epoch-1:1:1',
+                  timestamp: '2026-08-20T10:00:00Z',
+                  epoch: 'epoch-1',
+                  sequenceStart: 1,
+                  sequenceEnd: 1,
+                  kind: 'assistant-message',
+                  summary: 'Done',
+                  detail: 'Done',
+                  initialExpanded: true
+                }
+              ]
+            }
+          }
+        : node)
+    },
     { ...ledger, nextSequence: 4 }
   ]
   for (const invalid of invalidLedgers) expect(isPrototypeLedger(invalid)).toBe(false)

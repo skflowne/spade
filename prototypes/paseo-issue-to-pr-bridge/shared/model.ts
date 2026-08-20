@@ -288,7 +288,12 @@ function isConversationEvent(value: unknown): value is NormalizedConversationEve
 }
 
 function isTimeline(value: unknown): value is NormalizedConversationEvent[] {
-  return Array.isArray(value) && value.length <= PASEO_TIMELINE_LIMIT && value.every(isConversationEvent)
+  return (
+    Array.isArray(value) &&
+    value.length <= PASEO_TIMELINE_LIMIT &&
+    value.every(isConversationEvent) &&
+    hasUniqueValues(value.map(({ id }) => id))
+  )
 }
 
 function isPaseoRuntime(value: unknown): value is PaseoNodeRuntime {
