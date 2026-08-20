@@ -60,9 +60,14 @@ export class P3IntegrationService {
           return { ok: true, value: { type: request.type, ledger } }
         }
         case 'checkout-status': {
-          const status = await this.requireCheckout().checkoutStatus(
-            this.workspaceId(request.workspaceNodeId)
-          )
+          const workspaceId = this.workspaceId(request.workspaceNodeId)
+          const status = await this.requireCheckout().checkoutStatus(workspaceId)
+          if (status.workspaceId !== workspaceId) {
+            throw new CheckoutAdapterError(
+              'check',
+              'Paseo returned checkout status for a different workspace.'
+            )
+          }
           return { ok: true, value: { type: request.type, status } }
         }
         case 'checkout-commit': {

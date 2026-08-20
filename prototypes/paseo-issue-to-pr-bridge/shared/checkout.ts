@@ -12,6 +12,28 @@ export type CheckoutStatus = {
   conflicts: number
 }
 
+export type SelectedCheckoutStatus = {
+  workspaceNodeId: string
+  status: CheckoutStatus
+}
+
+export function bindCheckoutStatus(
+  requestedWorkspaceNodeId: string,
+  selectedWorkspaceNodeId: string,
+  status: CheckoutStatus
+): SelectedCheckoutStatus | null {
+  return requestedWorkspaceNodeId === selectedWorkspaceNodeId
+    ? { workspaceNodeId: requestedWorkspaceNodeId, status }
+    : null
+}
+
+export function checkoutStatusForSelection(
+  selected: SelectedCheckoutStatus | null,
+  workspaceNodeId: string
+): CheckoutStatus | null {
+  return selected?.workspaceNodeId === workspaceNodeId ? selected.status : null
+}
+
 export type CheckoutCommitResult = {
   revision: string
 }

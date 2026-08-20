@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   applyNodeChanges,
   Background,
@@ -14,7 +14,12 @@ import {
   type NodeTypes
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import type { CheckoutStatus } from '../../shared/checkout'
+import {
+  bindCheckoutStatus,
+  checkoutStatusForSelection,
+  type CheckoutStatus,
+  type SelectedCheckoutStatus
+} from '../../shared/checkout'
 import type { PrototypeCommand } from '../../shared/commands'
 import type { GitHubIssue, GitHubPullRequest } from '../../shared/github'
 import type {
@@ -385,7 +390,8 @@ export function App(): React.JSX.Element {
   const [issueNumber, setIssueNumber] = useState('1')
   const [selectedIssue, setSelectedIssue] = useState<GitHubIssue | null>(null)
   const [workspaceNodeId, setWorkspaceNodeId] = useState('')
-  const [checkoutStatus, setCheckoutStatus] = useState<CheckoutStatus | null>(null)
+  const workspaceNodeIdRef = useRef('')
+  const [checkoutStatus, setCheckoutStatus] = useState<SelectedCheckoutStatus | null>(null)
   const [commitMessage, setCommitMessage] = useState('')
   const [pullRequestTitle, setPullRequestTitle] = useState('')
   const [pullRequestBody, setPullRequestBody] = useState('')
@@ -447,7 +453,12 @@ export function App(): React.JSX.Element {
     if (!fromNodeId) setFromNodeId(ledger.nodes[0].id)
     if (!toNodeId) setToNodeId(ledger.nodes[Math.min(1, ledger.nodes.length - 1)].id)
     const workspaces = ledger.nodes.filter((node) => node.kind === 'workspace')
-    if (!workspaceNodeId && workspaces.length > 0) setWorkspaceNodeId(workspaces[0].id)
+    if (!workspaces.some(({ id }) => id === workspaceNodeId)) {
+      const nextWorkspaceNodeId = workspaces[0]?.id ?? ''
+      workspaceNodeIdRef.current = nextWorkspaceNodeId
+      setWorkspaceNodeId(nextWorkspaceNodeId)
+      setCheckoutStatus(null)
+    }
   }, [fromNodeId, ledger, toNodeId, workspaceNodeId])
 
   const run = useCallback(async (command: PrototypeCommand): Promise<void> => {
@@ -478,6 +489,7 @@ export function App(): React.JSX.Element {
     () => ledger?.nodes.filter((node) => node.kind === 'workspace') ?? [],
     [ledger?.nodes]
   )
+  const visibleCheckoutStatus = checkoutStatusForSelection(checkoutStatus, workspaceNodeId)
 
   if (!ledger) {
     return <main className="loading-shell">Loading P3 prototype…</main>
@@ -504,8 +516,18 @@ export function App(): React.JSX.Element {
   }
 
   const refreshCheckout = async (): Promise<void> => {
-    const response = await integrate({ type: 'checkout-status', workspaceNodeId })
-    if (response?.type === 'checkout-status') setCheckoutStatus(response.status)
+    const requestedWorkspaceNodeId = workspaceNodeIdRef.current
+    const response = await integrate({
+      type: 'checkout-status',
+      workspaceNodeId: requestedWorkspaceNodeId
+    })
+    if (response?.type === 'checkout-status') {
+      setCheckoutStatus(bindCheckoutStatus(
+        requestedWorkspaceNodeId,
+        workspaceNodeIdRef.current,
+        response.status
+      ))
+    }
   }
 
   const commitCheckout = async (): Promise<void> => {
@@ -739,14 +761,18 @@ export function App(): React.JSX.Element {
           <select
             id="workspace-node"
             value={workspaceNodeId}
-            onChange={(event) => setWorkspaceNodeId(event.target.value)}
+            onChange={(event) => {
+              workspaceNodeIdRef.current = event.target.value
+              setWorkspaceNodeId(event.target.value)
+              setCheckoutStatus(null)
+            }}
           >
             {workspaceNodes.map((node) => (
               <option key={node.id} value={node.id}>{node.title} · {node.resourceRef.id}</option>
             ))}
           </select>
           <button type="button" onClick={() => void refreshCheckout()}>Refresh checkout</button>
-          {checkoutStatus && <CheckoutSummary status={checkoutStatus} />}
+          {visibleCheckoutStatus && <CheckoutSummary status={visibleCheckoutStatus} />}
           <label>
             Commit message
             <input value={commitMessage} onChange={(event) => setCommitMessage(event.target.value)} />

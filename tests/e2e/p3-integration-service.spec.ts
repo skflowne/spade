@@ -7,9 +7,11 @@ import {
   applyPrototypeCommand,
   createInitialLedger
 } from '../../prototypes/paseo-issue-to-pr-bridge/shared/commands'
-import type {
-  CheckoutStatus,
-  CreateCheckoutPullRequestInput
+import {
+  bindCheckoutStatus,
+  checkoutStatusForSelection,
+  type CheckoutStatus,
+  type CreateCheckoutPullRequestInput
 } from '../../prototypes/paseo-issue-to-pr-bridge/shared/checkout'
 import type {
   GitHubIssue,
@@ -173,6 +175,33 @@ test('passes only the selected opaque workspace ID to generic checkout methods',
     { method: 'commit', workspaceId: 'workspace-opaque-1', value: 'Build fixture' },
     { method: 'push', workspaceId: 'workspace-opaque-1' }
   ])
+})
+
+test('rejects checkout status returned for a different opaque workspace', async () => {
+  const service = await commandService()
+  const integrations = new P3IntegrationService(
+    service,
+    { getIssue: async () => issue, getPullRequest: async () => pullRequest },
+    checkoutAdapter({
+      checkoutStatus: async () => ({ ...checkoutStatus, workspaceId: 'workspace-opaque-other' })
+    }),
+    async () => undefined
+  )
+
+  await expect(integrations.execute({
+    type: 'checkout-status',
+    workspaceNodeId: 'node-3'
+  })).resolves.toEqual({
+    ok: false,
+    error: { kind: 'check', message: 'Paseo returned checkout status for a different workspace.' }
+  })
+})
+
+test('binds checkout status to its selection and drops stale race responses', () => {
+  const selected = bindCheckoutStatus('node-a', 'node-a', checkoutStatus)
+  expect(checkoutStatusForSelection(selected, 'node-a')).toEqual(checkoutStatus)
+  expect(checkoutStatusForSelection(selected, 'node-b')).toBeNull()
+  expect(bindCheckoutStatus('node-a', 'node-b', checkoutStatus)).toBeNull()
 })
 
 test('creates and refreshes one PR node from checkout-returned identity', async () => {
