@@ -12,6 +12,7 @@ export type PrototypeLedgerStore = {
 
 export class PrototypeCommandService {
   private ledger: PrototypeLedger | null = null
+  private executionQueue: Promise<void> = Promise.resolve()
 
   constructor(private readonly store: PrototypeLedgerStore) {}
 
@@ -28,11 +29,18 @@ export class PrototypeCommandService {
     return structuredClone(this.ledger)
   }
 
-  async execute(command: PrototypeCommand): Promise<PrototypeLedger> {
-    const current = this.snapshot()
-    const next = applyPrototypeCommand(current, command).ledger
-    await this.store.save(next)
-    this.ledger = next
-    return this.snapshot()
+  execute(command: PrototypeCommand): Promise<PrototypeLedger> {
+    const operation = this.executionQueue.then(async () => {
+      const current = this.snapshot()
+      const next = applyPrototypeCommand(current, command).ledger
+      await this.store.save(next)
+      this.ledger = next
+      return this.snapshot()
+    })
+    this.executionQueue = operation.then(
+      () => undefined,
+      () => undefined
+    )
+    return operation
   }
 }

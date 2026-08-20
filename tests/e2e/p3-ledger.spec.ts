@@ -195,6 +195,41 @@ test('failed initial persistence leaves the command service uninitialized', asyn
   expect(() => service.snapshot()).toThrow('Prototype command service is not initialized.')
 })
 
+test('the command service serializes concurrent mutation and persistence sequences', async () => {
+  const state: { stored: PrototypeLedger | null } = { stored: null }
+  let releaseFirstSave = (): void => undefined
+  let markFirstSaveStarted = (): void => undefined
+  const firstSaveStarted = new Promise<void>((resolve) => {
+    markFirstSaveStarted = resolve
+  })
+  const firstSaveReleased = new Promise<void>((resolve) => {
+    releaseFirstSave = resolve
+  })
+  const service = new PrototypeCommandService({
+    load: async () => state.stored,
+    save: async (ledger) => {
+      if (ledger.groups.some(({ name }) => name === 'First')) {
+        markFirstSaveStarted()
+        await firstSaveReleased
+      }
+      state.stored = structuredClone(ledger)
+    }
+  })
+  await service.initialize(createInitialLedger('project-1', 'Prototype project'))
+
+  const first = service.execute({ type: 'create-group', name: 'First' })
+  await firstSaveStarted
+  const second = service.execute({ type: 'create-group', name: 'Second' })
+  releaseFirstSave()
+  await Promise.all([first, second])
+
+  expect(service.snapshot().groups.map(({ id, name }) => ({ id, name }))).toEqual([
+    { id: 'group-1', name: 'First' },
+    { id: 'group-2', name: 'Second' }
+  ])
+  expect(state.stored?.groups).toEqual(service.snapshot().groups)
+})
+
 test('the command service exposes a mutation only after persistence succeeds', async () => {
   const state: { stored: PrototypeLedger | null } = { stored: null }
   let rejectSave = false
