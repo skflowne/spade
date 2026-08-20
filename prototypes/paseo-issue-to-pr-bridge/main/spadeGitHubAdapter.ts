@@ -78,7 +78,7 @@ export class SpadeGitHubAdapter {
       '--json',
       'number,title,state,labels,body,url,updatedAt'
     ])
-    return parseIssue(result.stdout, target)
+    return parseIssue(result.stdout, target, issueNumber)
   }
 
   async getPullRequest(repository: string, number: number): Promise<GitHubPullRequest> {
@@ -112,10 +112,11 @@ export class SpadeGitHubAdapter {
         '--method',
         'GET',
         `repos/${target}/pulls/${pullRequestNumber}/comments`,
-        '--paginate'
+        '--paginate',
+        '--slurp'
       ])
     ])
-    return parsePullRequest(detail.stdout, reviewComments.stdout, target)
+    return parsePullRequest(detail.stdout, reviewComments.stdout, target, pullRequestNumber)
   }
 
   private async run(arguments_: readonly string[]): Promise<GhCommandResult> {
@@ -138,22 +139,30 @@ export class SpadeGitHubAdapter {
   }
 }
 
-export function parseIssue(serialized: string, repository: string): GitHubIssue {
+export function parseIssue(
+  serialized: string,
+  repository: string,
+  expectedNumber: number
+): GitHubIssue {
+  const target = validateRepository(repository)
+  const issueNumber = validateNumber(expectedNumber, 'issue')
   const value = parseJson(serialized, 'GitHub issue')
   const record = requireRecord(value, 'GitHub issue')
+  const responseNumber = requirePositiveInteger(record.number, 'GitHub issue number')
   const state = requireOneOf(record.state, ['OPEN', 'CLOSED'] as const, 'GitHub issue state')
   const labels = requireArray(record.labels, 'GitHub issue labels').map((label, index) =>
     requireString(requireRecord(label, `GitHub issue label ${index + 1}`).name, 'GitHub issue label name')
   )
+  requireResourceIdentity(record.url, target, 'issues', issueNumber, responseNumber)
 
   return {
-    repository: validateRepository(repository),
-    number: requirePositiveInteger(record.number, 'GitHub issue number'),
+    repository: target,
+    number: responseNumber,
     title: requireString(record.title, 'GitHub issue title'),
     state: state satisfies GitHubIssueState,
     labels,
     body: requireString(record.body, 'GitHub issue body', true),
-    url: requireUrl(record.url, 'GitHub issue URL'),
+    url: requireString(record.url, 'GitHub issue URL'),
     updatedAt: requireTimestamp(record.updatedAt, 'GitHub issue update timestamp')
   }
 }
@@ -161,23 +170,28 @@ export function parseIssue(serialized: string, repository: string): GitHubIssue 
 export function parsePullRequest(
   serialized: string,
   serializedReviewComments: string,
-  repository: string
+  repository: string,
+  expectedNumber: number
 ): GitHubPullRequest {
+  const target = validateRepository(repository)
+  const pullRequestNumber = validateNumber(expectedNumber, 'pull request')
   const record = requireRecord(parseJson(serialized, 'GitHub pull request'), 'GitHub pull request')
+  const responseNumber = requirePositiveInteger(record.number, 'GitHub pull request number')
   const state = requireOneOf(
     record.state,
     ['OPEN', 'CLOSED', 'MERGED'] as const,
     'GitHub pull request state'
   )
   const author = requireRecord(record.author, 'GitHub pull request author')
+  requireResourceIdentity(record.url, target, 'pull', pullRequestNumber, responseNumber)
 
   return {
-    repository: validateRepository(repository),
-    number: requirePositiveInteger(record.number, 'GitHub pull request number'),
+    repository: target,
+    number: responseNumber,
     title: requireString(record.title, 'GitHub pull request title'),
     state: state satisfies GitHubPullRequestState,
     author: requireString(author.login, 'GitHub pull request author login'),
-    url: requireUrl(record.url, 'GitHub pull request URL'),
+    url: requireString(record.url, 'GitHub pull request URL'),
     baseBranch: requireString(record.baseRefName, 'GitHub pull request base branch'),
     headBranch: requireString(record.headRefName, 'GitHub pull request head branch'),
     latestRevision: requireString(record.headRefOid, 'GitHub pull request latest revision'),
@@ -245,8 +259,12 @@ function parseComments(value: unknown): GitHubComment[] {
 }
 
 function parseReviewComments(serialized: string): GitHubReviewComment[] {
-  const value = parseJson(serialized, 'GitHub pull request review comments')
-  return requireArray(value, 'GitHub pull request review comments').map((item, index) => {
+  const value = parseJson(serialized, 'GitHub pull request review comment pages')
+  const pages = requireArray(value, 'GitHub pull request review comment pages')
+  const comments = pages.flatMap((page, index) =>
+    requireArray(page, `GitHub pull request review comment page ${index + 1}`)
+  )
+  return comments.map((item, index) => {
     const comment = requireRecord(item, `GitHub review comment ${index + 1}`)
     return {
       author: requireString(
@@ -261,13 +279,33 @@ function parseReviewComments(serialized: string): GitHubReviewComment[] {
 }
 
 function checkRunState(status: string, conclusion: string | null): GitHubCheckState {
+  const knownStatuses = ['QUEUED', 'IN_PROGRESS', 'COMPLETED', 'WAITING', 'REQUESTED', 'PENDING']
+  if (!knownStatuses.includes(status)) throw invalidResponse(`GitHub check status “${status}” is invalid.`)
   if (status !== 'COMPLETED') return 'pending'
-  if (['SUCCESS', 'NEUTRAL'].includes(conclusion ?? '')) return 'passed'
-  if (['SKIPPED', 'STALE'].includes(conclusion ?? '')) return 'skipped'
+
+  const knownConclusions = [
+    'ACTION_REQUIRED',
+    'CANCELLED',
+    'FAILURE',
+    'NEUTRAL',
+    'SKIPPED',
+    'STALE',
+    'STARTUP_FAILURE',
+    'SUCCESS',
+    'TIMED_OUT'
+  ]
+  if (conclusion === null || !knownConclusions.includes(conclusion)) {
+    throw invalidResponse('Completed GitHub check conclusion is invalid.')
+  }
+  if (['SUCCESS', 'NEUTRAL'].includes(conclusion)) return 'passed'
+  if (['SKIPPED', 'STALE'].includes(conclusion)) return 'skipped'
   return 'failed'
 }
 
 function statusContextState(state: string): GitHubCheckState {
+  if (!['ERROR', 'EXPECTED', 'FAILURE', 'PENDING', 'SUCCESS'].includes(state)) {
+    throw invalidResponse(`GitHub status context state “${state}” is invalid.`)
+  }
   if (state === 'SUCCESS') return 'passed'
   if (['PENDING', 'EXPECTED'].includes(state)) return 'pending'
   return 'failed'
@@ -379,6 +417,30 @@ function requireUrl(value: unknown, label: string): string {
     throw invalidResponse(`${label} is invalid.`, error)
   }
   return url
+}
+
+function requireResourceIdentity(
+  value: unknown,
+  repository: string,
+  resourcePath: 'issues' | 'pull',
+  expectedNumber: number,
+  responseNumber: number
+): void {
+  if (responseNumber !== expectedNumber) {
+    throw invalidResponse('GitHub response number does not match the requested resource.')
+  }
+  const url = requireUrl(value, 'GitHub resource URL')
+  const parsed = new URL(url)
+  const expectedPath = `/${repository}/${resourcePath}/${expectedNumber}`.toLowerCase()
+  if (
+    parsed.protocol !== 'https:' ||
+    parsed.hostname.toLowerCase() !== 'github.com' ||
+    parsed.pathname.toLowerCase() !== expectedPath ||
+    parsed.search !== '' ||
+    parsed.hash !== ''
+  ) {
+    throw invalidResponse('GitHub response URL does not match the requested resource.')
+  }
 }
 
 function optionalUrl(value: unknown, label: string): string | null {

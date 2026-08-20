@@ -60,12 +60,18 @@ const pullRequestResponse = JSON.stringify({
 })
 
 const reviewCommentsResponse = JSON.stringify([
-  {
+  [{
     user: { login: 'reviewer' },
     body: 'Inline review comment.',
     path: 'src/App.vue',
     created_at: '2026-08-20T12:41:00Z'
-  }
+  }],
+  [{
+    user: { login: 'second-reviewer' },
+    body: 'Second page comment.',
+    path: 'src/main.ts',
+    created_at: '2026-08-20T12:42:00Z'
+  }]
 ])
 
 function commandFailure(stderr: string): GhCommandRunner {
@@ -120,7 +126,8 @@ test('keeps PR checks, reviews, conversation comments, and inline review comment
   const pullRequest = parsePullRequest(
     pullRequestResponse,
     reviewCommentsResponse,
-    'skflowne/spade-fixture'
+    'skflowne/spade-fixture',
+    7
   )
 
   expect(pullRequest).toMatchObject({
@@ -136,7 +143,10 @@ test('keeps PR checks, reviews, conversation comments, and inline review comment
     ],
     reviews: [{ author: 'reviewer', state: 'CHANGES_REQUESTED' }],
     comments: [{ author: 'maintainer', body: 'General PR comment.' }],
-    reviewComments: [{ author: 'reviewer', body: 'Inline review comment.', path: 'src/App.vue' }]
+    reviewComments: [
+      { author: 'reviewer', body: 'Inline review comment.', path: 'src/App.vue' },
+      { author: 'second-reviewer', body: 'Second page comment.', path: 'src/main.ts' }
+    ]
   })
 })
 
@@ -158,7 +168,8 @@ test('builds separate structured PR detail and inline-review-comment commands', 
     '--method',
     'GET',
     'repos/skflowne/spade-fixture/pulls/7/comments',
-    '--paginate'
+    '--paginate',
+    '--slurp'
   ])
   const detailCall = calls.find(([command]) => command === 'pr')
   expect(detailCall?.at(-1)).toContain('statusCheckRollup')
@@ -174,13 +185,49 @@ test('rejects invalid repositories and malformed or partial responses before use
   expect(called).toBe(false)
 
   for (const response of ['not-json', JSON.stringify({ number: 1, title: 'Incomplete' })]) {
-    expect(() => parseIssue(response, 'skflowne/spade-fixture')).toThrow(GitHubAdapterError)
+    expect(() => parseIssue(response, 'skflowne/spade-fixture', 1)).toThrow(GitHubAdapterError)
     try {
-      parseIssue(response, 'skflowne/spade-fixture')
+      parseIssue(response, 'skflowne/spade-fixture', 1)
     } catch (error) {
       expect((error as GitHubAdapterError).kind).toBe('invalid-response')
     }
   }
+})
+
+test('rejects response identities that differ from the requested GitHub resource', () => {
+  const wrongNumber = JSON.stringify({ ...JSON.parse(issueResponse), number: 2 })
+  const wrongHost = JSON.stringify({
+    ...JSON.parse(issueResponse),
+    url: 'https://example.com/skflowne/spade-fixture/issues/1'
+  })
+  const wrongPath = JSON.stringify({
+    ...JSON.parse(issueResponse),
+    url: 'https://github.com/skflowne/other/issues/1'
+  })
+
+  for (const response of [wrongNumber, wrongHost, wrongPath]) {
+    expect(() => parseIssue(response, 'skflowne/spade-fixture', 1)).toThrow(
+      /does not match the requested resource/
+    )
+  }
+})
+
+test('rejects unknown check states instead of silently categorizing them', () => {
+  const response = JSON.parse(pullRequestResponse) as Record<string, unknown>
+  response.statusCheckRollup = [{
+    __typename: 'CheckRun',
+    name: 'build',
+    status: 'UNKNOWN',
+    conclusion: null,
+    detailsUrl: null
+  }]
+
+  expect(() => parsePullRequest(
+    JSON.stringify(response),
+    reviewCommentsResponse,
+    'skflowne/spade-fixture',
+    7
+  )).toThrow('GitHub check status “UNKNOWN” is invalid.')
 })
 
 test('classifies auth, repository, network, missing-resource, and generic command failures', async () => {
