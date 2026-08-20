@@ -1,0 +1,8 @@
+{
+  "extends": "../../tsconfig.web.json",
+  "compilerOptions": {
+    "paths": {},
+    "skipLibCheck": true
+  },
+  "include": ["renderer/src/**/*.ts", "renderer/src/**/*.tsx", "shared/**/*.ts"]
+}

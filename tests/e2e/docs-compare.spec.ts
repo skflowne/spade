@@ -1,13 +1,21 @@
-import { spawn } from 'node:child_process'
+import { execFileSync, spawn } from 'node:child_process'
 import { resolve } from 'node:path'
 import { _electron as electron, expect, test } from '@playwright/test'
 
 test('comparison highlights added and removed documentation blocks', async () => {
   const port = 4174
+  const [, previousRevision] = execFileSync(
+    'git',
+    ['log', '--format=%H', '--', 'docs/plan.html'],
+    { encoding: 'utf8' }
+  ).trim().split('\n')
+  if (!previousRevision) throw new Error('Docs comparison test requires two plan revisions.')
+
   const docsServer = spawn(process.execPath, [
     'scripts/docs-compare.mjs',
     '--port', String(port),
-    '--page', 'docs/plan.html'
+    '--page', 'docs/plan.html',
+    '--base', previousRevision
   ])
   await new Promise<void>((resolveReady, reject) => {
     docsServer.stdout.on('data', (chunk) => {
@@ -20,7 +28,9 @@ test('comparison highlights added and removed documentation blocks', async () =>
 
   try {
     const window = await application.firstWindow()
-    await window.goto(`http://127.0.0.1:${port}/__compare?base=origin%2Fmain&page=docs%2Fplan.html`)
+    await window.goto(
+      `http://127.0.0.1:${port}/__compare?base=${encodeURIComponent(previousRevision)}&page=docs%2Fplan.html`
+    )
     const baseFrame = window.frameLocator('#base')
     const currentFrame = window.frameLocator('#current')
 
