@@ -490,6 +490,8 @@
 <li>Logical work-item color and workspace identity/role badge where relevant</li>
 <li>Runtime status and reconnect/error state</li>
 <li>Dedicated drag handle</li>
+<li>Canvas zoom-in/out remains available when the pointer is over container chrome or any non-interactive container surface</li>
+<li>Persistent navigation gutters between contained elements so dense layouts always leave space for outer-canvas pan and zoom</li>
 <li>Automatic bounds for containers with children</li>
 <li><code>Fit</code> to center and fit the complete container in the viewport</li>
 <li><code>Full height</code> to center the container and scale it to the full viewport height, even when that makes its width overflow</li>
@@ -505,7 +507,7 @@
 <h3 id="renderer-owned-behavior">Renderer-owned behavior</h3>
 <p>The entity renderer owns only the node body and entity-specific toolbar/actions.</p>
 <h3 id="interaction-rule">Interaction rule</h3>
-<p>Dragging starts only from node chrome. Editor selection, terminal input, browser interaction, scrolling, whiteboard gestures and links must not drag the node or pan the outer canvas.</p>
+<p>Dragging starts only from node chrome. Editor selection, terminal input, browser interaction, scrolling, whiteboard gestures and links must not drag the node or pan the outer canvas. Canvas zoom-in/out remains available when the pointer is over Project, Group, work-item, or Node container surfaces, including node chrome. Containers with children preserve targetable gaps between those children; these navigation gutters route pan and zoom to the outer canvas even in dense layouts. A child renderer may consume wheel or pinch input only inside its interactive content; surrounding chrome, gutters, and non-interactive container space never become a canvas-navigation dead zone.</p>
 <p>Heavy interactive renderers should support:</p>
 <ul>
 <li>Inactive preview mode</li>
@@ -751,6 +753,8 @@ const defaultConversationExpansion = {
 <h3 id="required-behavior">Required behavior</h3>
 <ul>
 <li>Fit the entire global canvas</li>
+<li>Allow canvas zoom-in/out over every container's chrome and non-interactive surface</li>
+<li>Preserve navigation gutters between contained elements for outer-canvas pan and zoom</li>
 <li>Expose <code>Fit</code> and <code>Full height</code> controls on every Project container, Group container, and Node wrapper</li>
 <li>Jump immediately to a project or work item from the activity sidebar</li>
 <li>Center/focus a node</li>

@@ -1,0 +1,553 @@
+@import '../../../../src/styles/control-room-tokens.css';
+
+:root {
+  color: var(--text);
+  background: var(--bg);
+  font-family: var(--font);
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+#root {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  overflow: hidden;
+}
+
+button,
+input,
+select {
+  font: inherit;
+}
+
+.prototype-shell {
+  display: grid;
+  grid-template-rows: auto 1fr;
+  width: 100%;
+  height: 100%;
+}
+
+.prototype-header {
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 74px;
+  padding: 12px 20px;
+  border-bottom: var(--cr-border);
+  background: var(--panel);
+}
+
+.prototype-header p,
+.prototype-header h1 {
+  margin: 0;
+}
+
+.prototype-header p {
+  color: var(--accent);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.15em;
+}
+
+.prototype-header h1 {
+  margin-top: 4px;
+  font-size: 1.25rem;
+}
+
+.prototype-header span {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.prototype-canvas {
+  min-width: 0;
+  min-height: 0;
+}
+
+.react-flow {
+  background: var(--canvas);
+}
+
+.react-flow__pane.draggable:not(.dragging),
+.react-flow__node.draggable:not(.dragging) {
+  cursor: default;
+}
+
+.react-flow__background pattern circle {
+  fill: var(--line);
+}
+
+.viewport-probes {
+  display: flex;
+  gap: 6px;
+}
+
+.viewport-probes button {
+  padding: 6px 8px;
+  border: var(--cr-border);
+  border-radius: var(--cr-radius-control);
+  color: var(--text);
+  background: var(--panel);
+  cursor: pointer;
+}
+
+.prototype-node {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  border: var(--cr-border);
+  border-radius: var(--cr-radius-panel);
+  background: var(--panel);
+  box-shadow: var(--cr-shadow-2);
+}
+
+.prototype-node__chrome {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  padding: 9px 12px;
+  border-bottom: var(--cr-border);
+  background: var(--panel-2);
+  cursor: grab;
+}
+
+.prototype-node__chrome:active {
+  cursor: grabbing;
+}
+
+.prototype-node__chrome div {
+  display: grid;
+  gap: 2px;
+}
+
+.prototype-node__chrome small,
+.prototype-node__chrome > span {
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.prototype-node__body {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: auto;
+  overscroll-behavior: contain;
+  cursor: default;
+}
+
+.react-flow__node-group {
+  border: 1px dashed var(--accent);
+  border-radius: var(--cr-radius-panel);
+  color: var(--muted);
+  background: color-mix(in srgb, var(--panel) 42%, transparent);
+  font-size: 0.8rem;
+}
+
+.rich-answer__standard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.9fr);
+  gap: 12px;
+  padding: 12px;
+  border-bottom: var(--cr-border);
+}
+
+.markdown-output {
+  line-height: 1.45;
+}
+
+.markdown-output h2 {
+  margin: 0 0 8px;
+  font-size: 1rem;
+}
+
+.markdown-output ul {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.mermaid-output {
+  display: grid;
+  min-height: 145px;
+  place-items: center;
+  overflow: hidden;
+  border: var(--cr-border);
+  border-radius: var(--cr-radius-control);
+  background: var(--bg);
+}
+
+.mermaid-output svg {
+  max-width: 100%;
+  max-height: 180px;
+}
+
+.prototype-error {
+  overflow: auto;
+  color: var(--danger);
+  white-space: pre-wrap;
+}
+
+.runtime-toolbar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 9px 12px;
+  border-bottom: var(--cr-border);
+}
+
+.runtime-toolbar button,
+.prototype-node__body button {
+  padding: 7px 10px;
+  border: var(--cr-border);
+  border-radius: var(--cr-radius-control);
+  color: var(--text);
+  background: var(--bg);
+  cursor: pointer;
+}
+
+.runtime-toolbar button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.runtime-toolbar output {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.75rem;
+}
+
+.answer-runtime {
+  display: block;
+  width: calc(100% - 24px);
+  min-height: 300px;
+  margin: 12px;
+  border: var(--cr-border);
+  border-radius: var(--cr-radius-control);
+  background: var(--bg);
+}
+
+.answer-runtime--disposed {
+  display: grid;
+  place-items: center;
+  color: var(--muted);
+}
+
+.conversation-intro {
+  margin: 0;
+  padding: 12px;
+  border-bottom: var(--cr-border);
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.conversation-events {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px;
+  list-style: none;
+}
+
+.conversation-events li {
+  display: grid;
+  gap: 4px;
+  padding: 10px;
+  border: var(--cr-border);
+  border-radius: var(--cr-radius-control);
+  background: var(--bg);
+}
+
+.conversation-events strong {
+  color: var(--accent);
+  text-transform: uppercase;
+}
+
+.conversation-events small,
+.conversation-events__empty {
+  color: var(--muted);
+}
+
+.react-flow__node-browser .prototype-node__body {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(180px, 1fr) auto;
+  overflow: auto;
+}
+
+.browser-toolbar,
+.browser-probes,
+.native-toolbar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 8px;
+  border-bottom: var(--cr-border);
+  background: var(--panel);
+}
+
+.browser-toolbar,
+.browser-probes {
+  flex-wrap: wrap;
+}
+
+.browser-auth-status {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.browser-toolbar button,
+.browser-probes button,
+.native-toolbar button,
+.browser-address button {
+  padding: 6px 8px;
+  font-size: 0.72rem;
+}
+
+.browser-address {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 6px;
+  padding: 8px;
+  border-bottom: var(--cr-border);
+}
+
+.browser-address input {
+  min-width: 0;
+  padding: 6px 8px;
+  border: var(--cr-border);
+  border-radius: var(--cr-radius-control);
+  color: var(--text);
+  background: var(--bg);
+}
+
+.browser-surface {
+  position: relative;
+  min-height: 180px;
+  overflow: hidden;
+  background: var(--text);
+}
+
+.browser-surface webview {
+  width: 100%;
+  height: 100%;
+}
+
+.stacking-probe {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  z-index: 5;
+  padding: 6px 8px;
+  border: 1px solid var(--accent);
+  border-radius: var(--cr-radius-control);
+  color: var(--text);
+  background: color-mix(in srgb, var(--panel) 88%, transparent);
+  pointer-events: none;
+}
+
+.browser-events-panel {
+  min-width: 0;
+  border-top: var(--cr-border);
+  background: var(--panel);
+}
+
+.browser-events-panel summary {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 34px;
+  padding: 7px 10px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.browser-events-panel summary::before {
+  color: var(--muted);
+  content: '▸';
+  transition: transform var(--cr-duration-fast) var(--cr-ease-standard);
+}
+
+.browser-events-panel[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.browser-events-panel summary span {
+  flex: none;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.browser-events-panel summary small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.browser-events {
+  display: grid;
+  gap: 2px;
+  max-height: 110px;
+  margin: 0;
+  padding: 8px 8px 8px 26px;
+  overflow: auto;
+  border-top: var(--cr-border);
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.react-flow__node-browser-stress .prototype-node__body {
+  display: grid;
+  grid-template-rows: auto auto minmax(0, 1fr);
+  overflow: auto;
+}
+
+.stress-toolbar {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+  padding: 8px;
+  border-bottom: var(--cr-border);
+  background: var(--panel);
+}
+
+.stress-toolbar label {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.stress-toolbar select,
+.stress-toolbar button {
+  padding: 6px 8px;
+  border: var(--cr-border);
+  border-radius: var(--cr-radius-control);
+  color: var(--text);
+  background: var(--bg);
+  font-size: 0.72rem;
+}
+
+.stress-guidance {
+  margin: 0;
+  padding: 8px 10px;
+  border-bottom: var(--cr-border);
+  color: var(--muted);
+  font-size: 0.72rem;
+  line-height: 1.4;
+}
+
+.stress-grid {
+  display: grid;
+  gap: 8px;
+  align-content: start;
+  justify-content: center;
+  min-width: 0;
+  padding: 8px;
+}
+
+.stress-guest {
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+  min-width: 0;
+  overflow: hidden;
+  border: var(--cr-border);
+  border-radius: var(--cr-radius-control);
+  background: var(--bg);
+}
+
+.stress-guest header {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-height: 34px;
+  padding: 6px 8px;
+  border-bottom: var(--cr-border);
+  font-size: 0.68rem;
+}
+
+.stress-guest header span,
+.stress-guest header small {
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.stress-guest header span {
+  text-align: center;
+}
+
+.stress-guest header small {
+  color: var(--accent);
+}
+
+.stress-guest__surface {
+  position: relative;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  background: var(--text);
+}
+
+.stress-guest__surface webview {
+  position: absolute;
+  top: 0;
+  left: 0;
+  display: flex;
+  width: 100%;
+  height: 100%;
+  max-width: none;
+  max-height: none;
+}
+
+.native-toolbar output {
+  margin-left: auto;
+  color: var(--muted);
+  font-size: 0.72rem;
+}
+
+.native-overlay-surface {
+  display: grid;
+  min-height: 0;
+  height: calc(100% - 47px);
+  place-content: center;
+  padding: 28px;
+  overflow: hidden;
+  border: 2px dashed var(--warning);
+  color: var(--muted);
+  background: repeating-linear-gradient(
+    -45deg,
+    var(--bg),
+    var(--bg) 12px,
+    var(--panel-2) 12px,
+    var(--panel-2) 24px
+  );
+  text-align: center;
+}
+
+.native-overlay-surface p {
+  margin: 0 0 8px;
+  color: var(--text);
+}

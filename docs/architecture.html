@@ -146,6 +146,7 @@
 <li>The global canvas is the authoritative spatial surface for Project containers, work-item groups, user-created groups, nodes, and edges.</li>
 <li>The activity sidebar is a derived overview and navigation projection. It summarizes running activity, lists projects and collapsible work items, and issues focus/jump commands into the global canvas.</li>
 <li>A shared Group container owns child bounds, nesting, movement, and common viewport actions.</li>
+<li>Project, Group, work-item, and Node container chrome and non-interactive surfaces preserve outer-canvas zoom-in/out; containers also keep targetable navigation gutters between children for outer-canvas pan and zoom. Only interactive renderer content may consume its own wheel or pinch input.</li>
 <li>The Project container specializes Group behavior with project identity, host/root metadata, activity, and project actions; it does not maintain a separate geometry implementation.</li>
 <li>Project creation is one command path invoked from either the sidebar or empty-canvas overlay. It selects a host and root folder before creating the Project record and its container.</li>
 <li>Project, Group, and Node containers expose the same <code>Fit</code> and <code>Full height</code> viewport commands.</li>
@@ -224,6 +225,7 @@
 <h2 id="architecture-rules">Architecture rules</h2>
 <ul>
 <li>The generic canvas owns container position, size, selection, nesting, connections, lifecycle, and viewport navigation.</li>
+<li>Container chrome and non-interactive surfaces never trap canvas zoom-in/out; groups preserve navigation gutters between children for outer-canvas pan and zoom, and interactive child content is the only gesture-routing exception.</li>
 <li>Group owns reusable containment geometry; Project specializes Group with project-specific metadata and actions.</li>
 <li>The activity sidebar reads shared records and activity state; it does not own a parallel navigation or persistence model.</li>
 <li>An entity renderer owns only the content and actions specific to its node type.</li>
