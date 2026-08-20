@@ -3,12 +3,15 @@ import {
   app,
   BrowserWindow,
   ipcMain,
+  shell,
   type IpcMainInvokeEvent
 } from 'electron'
 import { PrototypeCommandService } from './commandService'
+import { P3IntegrationService } from './integrationService'
 import { LedgerStore } from './ledgerStore'
 import { createConfiguredPaseoAdapter } from './paseoComposition'
 import { registerSnapshotPublication } from './snapshotPublication'
+import { SpadeGitHubAdapter } from './spadeGitHubAdapter'
 import {
   applyPrototypeCommand,
   createInitialLedger,
@@ -17,9 +20,11 @@ import {
 import {
   isPrototypeCommand,
   P3_COMMAND_CHANNEL,
+  P3_INTEGRATION_CHANNEL,
   P3_SNAPSHOT_CHANNEL,
   P3_SNAPSHOT_EVENT_CHANNEL
 } from '../shared/ipc'
+import { isP3IntegrationRequest } from '../shared/integration'
 import type { PrototypeLedger } from '../shared/model'
 
 function createSeedLedger(): PrototypeLedger {
@@ -57,7 +62,11 @@ function createSeedLedger(): PrototypeLedger {
   return ledger
 }
 
-function registerIpc(window: BrowserWindow, service: PrototypeCommandService): () => void {
+function registerIpc(
+  window: BrowserWindow,
+  service: PrototypeCommandService,
+  integrations: P3IntegrationService
+): () => void {
   const authorize = (event: IpcMainInvokeEvent): void => {
     if (event.sender !== window.webContents) throw new Error('Unauthorized P3 prototype IPC sender.')
   }
@@ -71,16 +80,27 @@ function registerIpc(window: BrowserWindow, service: PrototypeCommandService): (
     if (!isPrototypeCommand(value)) throw new Error('Invalid P3 prototype command.')
     return service.execute(value)
   })
+  ipcMain.handle(P3_INTEGRATION_CHANNEL, async (event, value: unknown) => {
+    authorize(event)
+    if (!isP3IntegrationRequest(value)) {
+      return {
+        ok: false,
+        error: { kind: 'invalid-request', message: 'Invalid P3 integration request.' }
+      }
+    }
+    return integrations.execute(value)
+  })
 
   return () => {
     ipcMain.removeHandler(P3_SNAPSHOT_CHANNEL)
     ipcMain.removeHandler(P3_COMMAND_CHANNEL)
+    ipcMain.removeHandler(P3_INTEGRATION_CHANNEL)
   }
 }
 
-function createWindow(service: PrototypeCommandService): void {
+function createWindow(service: PrototypeCommandService, integrations: P3IntegrationService): void {
   const window = new BrowserWindow({
-    title: 'SPADE · P3 generic work shell',
+    title: 'SPADE · P3 native GitHub work shell',
     width: 1440,
     height: 940,
     minWidth: 1040,
@@ -93,7 +113,7 @@ function createWindow(service: PrototypeCommandService): void {
       sandbox: true
     }
   })
-  const unregisterIpc = registerIpc(window, service)
+  const unregisterIpc = registerIpc(window, service, integrations)
   const unregisterSnapshots = registerSnapshotPublication(service, {
     isDestroyed: () => window.isDestroyed(),
     send: (snapshot) => window.webContents.send(P3_SNAPSHOT_EVENT_CHANNEL, snapshot)
@@ -121,7 +141,13 @@ void app.whenReady().then(async () => {
     createConfiguredPaseoAdapter(process.env)
   )
   await service.initialize(createSeedLedger())
-  createWindow(service)
+  const integrations = new P3IntegrationService(
+    service,
+    new SpadeGitHubAdapter(),
+    null,
+    (url) => shell.openExternal(url)
+  )
+  createWindow(service, integrations)
 })
 
 app.on('before-quit', (event) => {

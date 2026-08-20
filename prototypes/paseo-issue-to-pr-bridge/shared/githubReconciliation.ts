@@ -79,12 +79,40 @@ export function reconcileGitHubIssue(
     title: issue.title,
     position: { x: group.position.x + 36, y: group.position.y + 76 },
     resourceRef: reference,
+    paseo: null,
     issue
   }
   return {
     ledger: { ...next, nextSequence: sequence + 1, nodes: [...next.nodes, node] },
     affectedId: workItemId,
     nodeId
+  }
+}
+
+export function refreshGitHubPullRequest(
+  ledger: PrototypeLedger,
+  pullRequest: GitHubPullRequest
+): CommandResult {
+  const reference = pullRequestReference(pullRequest)
+  const existingNode = findResourceNode(ledger, reference)
+  if (!existingNode || existingNode.kind !== 'github-pull-request') {
+    throw new Error('GitHub pull request is not linked to a native node.')
+  }
+  return {
+    ledger: {
+      ...ledger,
+      nodes: ledger.nodes.map((node) =>
+        node.id === existingNode.id
+          ? {
+              ...existingNode,
+              title: pullRequest.title,
+              resourceRef: reference,
+              pullRequest
+            }
+          : node
+      )
+    },
+    affectedId: existingNode.id
   }
 }
 
@@ -129,8 +157,9 @@ export function reconcileGitHubPullRequest(
       workItemId: source.workItemId,
       kind: 'github-pull-request',
       title: pullRequest.title,
-      position: { x: source.position.x + 260, y: source.position.y },
+      position: { x: source.position.x, y: source.position.y + 140 },
       resourceRef: reference,
+      paseo: null,
       pullRequest
     }
     next = { ...next, nextSequence: sequence + 1, nodes: [...next.nodes, node] }

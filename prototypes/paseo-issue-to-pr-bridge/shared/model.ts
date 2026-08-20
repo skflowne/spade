@@ -536,7 +536,7 @@ export function migratePrototypeLedger(value: unknown): PrototypeLedger | null {
     nextSequence: Number(value.nextSequence),
     project: structuredClone(value.project) as ProjectRecord,
     groups: structuredClone(value.groups) as PrototypeGroup[],
-    nodes: (structuredClone(value.nodes) as Array<Omit<PrototypeNode, 'paseo'>>).map((node) => ({
+    nodes: (structuredClone(value.nodes) as Array<Omit<PlaceholderNode, 'paseo'>>).map((node) => ({
       ...node,
       paseo: null
     })),
