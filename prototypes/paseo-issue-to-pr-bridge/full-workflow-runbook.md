@@ -4,8 +4,8 @@ This is the evidence protocol for issue #20. It prepares the real `skflowne/spad
 
 ## Ownership and safety
 
-- `SpadePaseoAdapter` owns daemon access, agent ancestry, opaque workspaces, normalized timelines, checkout operations, and Paseo restart reconciliation. This run consumes the #18 handoff.
-- `SpadeGitHubAdapter` owns authenticated issue and pull-request reads. The generic checkout actions supplied by #19 own commit, push, and pull-request creation.
+- `SpadePaseoAdapter` owns daemon access, agent ancestry, opaque workspaces, normalized timelines, and Paseo restart reconciliation. This run consumes the #18 handoff.
+- `SpadeGitHubAdapter` owns authenticated issue and pull-request reads. The #19 handoff owns generic commit, push, and pull-request creation actions, including the small typed checkout methods it adds to `SpadePaseoAdapter`.
 - The P3 ledger owns durable SPADE IDs and external resource references. Do not edit it to manufacture a successful reconciliation.
 - Git and GitHub own fixture commits, refs, issue identity, and pull-request identity. Record exact values returned by those systems.
 - The unchanged `paseo-issue-to-pr` skill owns fixture implementation behavior. Do not add SPADE commands, stage metadata, or title/path/prompt/ordering classifiers to it.
@@ -22,7 +22,8 @@ Observed before the #18 and #19 handoffs on 2026-08-20:
 | SPADE base | `bb1ee5cf3326d62764bd20e9f66f2a5d52d2367f` | `git rev-parse HEAD origin/main` after fetch/reset |
 | Fixture base | Empty `main` at `199bced07fd3a626d795135bb144b25cbd262ca3` | local clone plus GitHub repository API |
 | Fixture issue | `skflowne/spade-fixture#1`, open | `gh issue view` |
-| GitHub authentication | Active account `skflowne`; HTTPS Git operations; token configured with `gist`, `read:org`, `repo`, and `workflow` scopes | redacted `gh auth status` |
+| GitHub CLI authentication | Active account `skflowne`; `gh` prefers HTTPS Git operations; token configured with `gist`, `read:org`, `repo`, and `workflow` scopes | redacted `gh auth status` |
+| Fixture Git transport | Effective remote is SSH, `git@github.com:skflowne/spade-fixture.git`; non-mutating remote read succeeded at the fixture base | `git remote get-url origin` and `git ls-remote origin refs/heads/main`; global Git configuration rewrites GitHub HTTPS URLs to SSH |
 | Installed Node / npm / Git / `gh` | Node `v24.18.0`; npm `12.0.0`; Git `2.53.0`; `gh` `2.96.0` | executable version commands |
 | Installed Paseo CLI / daemon | CLI `0.3.1`; reachable daemon `0.3.1`, started `2026-08-20T09:42:39.787Z` | `paseo --version` and `paseo status --json` |
 | Paseo restart safety | 52 listed agents: 3 running, 45 idle, 4 closed | summarized `paseo ls --json`; identities intentionally omitted |
@@ -86,6 +87,8 @@ Authentication checklist:
 - [ ] `gh auth status` identifies the intended account and sufficient scopes; only the account, protocol, and scope names are recorded.
 - [ ] `gh repo view skflowne/spade-fixture` succeeds.
 - [ ] `gh issue view 1 --repo skflowne/spade-fixture` succeeds.
+- [ ] `git -C /home/skflowne/projects/spade-fixture remote get-url origin` records the effective Git transport.
+- [ ] `git -C /home/skflowne/projects/spade-fixture ls-remote origin refs/heads/main` succeeds without mutation and returns the expected fixture base.
 - [ ] Paseo reports the intended local daemon as reachable.
 - [ ] No secret-bearing configuration or header appears in an artifact.
 
@@ -204,14 +207,14 @@ Record GitHub reads separately from Paseo checkout mutations so their ownership 
 
 Cleanup responsibility table:
 
-| Resource | Exact ID/path/URL | Created by | Evidence captured | Required final disposition | Disposition performed |
-|---|---|---|---|---|---|
-| Root/descendant agents | Not observed | Not observed | No | archive/delete only after handoff | No |
-| Paseo workspaces | Not observed | Not observed | No | archive/remove only after handoff | No |
-| Fixture checkout | `/home/skflowne/projects/spade-fixture` | #20 preparation | Baseline only | retain through review | No |
-| Fixture branch | Not observed | Not observed | No | retain while PR is open | No |
-| Fixture pull request | Not observed | Not observed | No | leave open; never merge in this run | No |
-| SPADE ledger | Not observed | SPADE P3 | No | retain through review | No |
+| Resource | Exact ID/path/URL | Created by | Evidence captured | Cleanup owner | Required final disposition | Disposition performed |
+|---|---|---|---|---|---|---|
+| Root/descendant agents | Not observed | Not observed | No | Issue #20 run operator after evidence handoff | archive/delete only after handoff | No |
+| Paseo workspaces | Not observed | Not observed | No | Issue #20 run operator after evidence handoff | archive/remove only after handoff | No |
+| Fixture checkout | `/home/skflowne/projects/spade-fixture` | #20 preparation | Baseline only | Issue #20 run operator after evidence handoff | retain through review | No |
+| Fixture branch | Not observed | Not observed | No | Issue #20 run operator after evidence handoff | retain while the PR is open | No |
+| Fixture pull request | Not observed | Not observed | No | Fixture repository owner after #20 review | leave open; never merge in this run | No |
+| SPADE ledger | Not observed | SPADE P3 | No | Issue #20 run operator after evidence handoff | retain through review | No |
 
 ### 10. Findings and documentation gate
 
