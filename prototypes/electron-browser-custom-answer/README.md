@@ -46,7 +46,7 @@ Environment: Electron 43 under Xvfb, with host, guest-webview, and native-view t
 |---|---|---|
 | GitHub guest | The persistent `<webview>` loaded issue 14 and emitted loading, navigation, DOM-ready, and focus events. | Pass |
 | Initial presentation | The canvas opened at scale `1`; the `620×720` browser node gave its live guest a crisp `618×497` CSS-pixel surface instead of shrinking the complete experiment to fit. | Pass |
-| CSS zoom | React Flow changed from scale `0.569286` to `0.683143`; the same live guest remained attached and rendered. | Pass |
+| CSS zoom | React Flow changed from scale `1` to `0.694444`; the same live guest remained attached while its backing viewport changed from `618×497` to `429×345` CSS pixels. An inverse guest transform kept those backing pixels aligned with the final screen size instead of bitmap-scaling the full-size page into a blurry result. | Pass |
 | CSS resize | The browser node changed from `620×720` to `1343×260`; the same guest remained attached and filled the `1326×180` minimum-height surface. | Pass |
 | CSS clipping and stacking | The guest stayed inside the rounded, overflow-hidden node body and the `DOM stacking probe` rendered above its content. | Pass |
 | CSS pan/window clipping | Moving the browser chrome to `translate(-328.735px, 1257.71px)` kept the guest attached while the window clipped the transformed node. | Pass |
@@ -77,7 +77,7 @@ Artifacts:
 
 ## Reproduction checklist
 
-1. Run `npm run prototype:p2`. Confirm the browser opens at scale 1 with a large, crisp guest surface, then use React Flow controls plus **Pan left/right** to transform the canvas.
+1. Run `npm run prototype:p2`. Confirm the browser opens at scale 1 with a large, crisp guest surface, then zoom out and confirm the guest reflows sharply at its displayed size. Use **Pan left/right** to transform the canvas.
 2. Resize both browser nodes from their border handles. Confirm the guest scales/clips with its node and the native status reports changing window bounds.
 3. Reparent the guest, drag it beyond the group's previous boundary, and confirm the group expands without detaching or constraining it. Drag browser bodies and chrome, focus each browser, press Tab, and scroll each page.
 4. Use **Request popup**, Back, the address field, and Reload. Confirm popup navigation remains in the same guest.
@@ -109,6 +109,7 @@ The docs-comparison failure is unrelated to the prototype runtime: all domain, c
 ## Residual risks and scope outcome
 
 - Electron still officially warns against `<webview>` stability. This bounded prototype did not run long-duration, crash-recovery, download, authentication-provider, or multi-guest stress tests.
+- Fractional canvas zoom resizes and inverse-scales the guest so its backing viewport matches its final on-screen pixels. This avoids blur but intentionally lets responsive pages reflow at the displayed size; sites that react poorly to frequent viewport resizes remain a risk.
 - Generated HTML is intentionally unsandboxed and same-origin. It can reach its parent and prototype preload APIs; message validation is lifecycle correctness, not security isolation.
 - `WebContentsView` synchronization uses continuous animation-frame bounds observation only for this comparison and is not a general overlay compositor.
 - The prototype uses a persistent local Electron partition. Clear its application data manually when a clean-session run is required.

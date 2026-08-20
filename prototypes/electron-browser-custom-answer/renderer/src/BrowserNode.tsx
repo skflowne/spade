@@ -1,4 +1,5 @@
 import { useCallback, useContext, useEffect, useState } from 'react'
+import { useViewport } from '@xyflow/react'
 import { GITHUB_ISSUE_URL } from '../../shared/constants'
 import { BrowserCanvasContext } from './PrototypeContext'
 import { PrototypeNodeFrame } from './PrototypeNodeFrame'
@@ -8,6 +9,7 @@ const sessionMarker = 'spade-p2-session-marker-v1'
 
 export function BrowserNode(): React.JSX.Element {
   const { parented, toggleParent } = useContext(BrowserCanvasContext)
+  const { zoom } = useViewport()
   const [guest, setGuest] = useState<PrototypeWebviewElement | null>(null)
   const [guestRevision, setGuestRevision] = useState(1)
   const [url, setUrl] = useState(GITHUB_ISSUE_URL)
@@ -137,12 +139,19 @@ export function BrowserNode(): React.JSX.Element {
         </button>
       </div>
       <div className="browser-surface">
+        {/* Match the guest backing viewport to its final screen size at fractional canvas zoom. */}
         <webview
           key={guestRevision}
           ref={(element) => setGuest(element as PrototypeWebviewElement | null)}
           src={GITHUB_ISSUE_URL}
           partition="persist:spade-p2-github"
           allowpopups={'' as unknown as boolean}
+          style={{
+            width: `${zoom * 100}%`,
+            height: `${zoom * 100}%`,
+            transform: `scale(${1 / zoom})`,
+            transformOrigin: 'top left'
+          }}
         />
         <div className="stacking-probe">DOM stacking probe</div>
       </div>
