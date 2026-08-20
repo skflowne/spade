@@ -17,8 +17,9 @@ export class PrototypeCommandService {
 
   async initialize(seed?: PrototypeLedger): Promise<PrototypeLedger> {
     const stored = await this.store.load()
-    this.ledger = stored ?? seed ?? createInitialLedger('project-p3', 'P3 prototype')
-    if (!stored) await this.store.save(this.ledger)
+    const initial = stored ?? seed ?? createInitialLedger('project-p3', 'P3 prototype')
+    if (!stored) await this.store.save(initial)
+    this.ledger = initial
     return this.snapshot()
   }
 

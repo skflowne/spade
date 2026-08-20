@@ -5,7 +5,10 @@ import { expect, test } from '@playwright/test'
 import { createInitialLedger } from '../../prototypes/paseo-issue-to-pr-bridge/shared/commands'
 import { PrototypeCommandService } from '../../prototypes/paseo-issue-to-pr-bridge/main/commandService'
 import { LedgerStore, nodeLedgerFileOperations } from '../../prototypes/paseo-issue-to-pr-bridge/main/ledgerStore'
-import type { PrototypeLedger } from '../../prototypes/paseo-issue-to-pr-bridge/shared/model'
+import {
+  isPrototypeLedger,
+  type PrototypeLedger
+} from '../../prototypes/paseo-issue-to-pr-bridge/shared/model'
 
 async function withTemporaryDirectory(run: (directory: string) => Promise<void>): Promise<void> {
   const directory = await mkdtemp(join(tmpdir(), 'spade-p3-ledger-'))
@@ -22,6 +25,7 @@ test('atomically replaces and reloads the exact prototype ledger without duplica
     const store = new LedgerStore(path)
     const ledger = {
       ...createInitialLedger('project-1', 'Prototype project'),
+      nextSequence: 3,
       nodes: [
         {
           id: 'node-1',
@@ -41,7 +45,7 @@ test('atomically replaces and reloads the exact prototype ledger without duplica
       ],
       edges: [
         {
-          id: 'edge-1',
+          id: 'edge-2',
           fromNodeId: 'node-1',
           toNodeId: 'node-1',
           relation: 'connected' as const
@@ -107,6 +111,67 @@ test('a failed atomic replace leaves the prior ledger readable and removes the t
   })
 })
 
+test('rejects duplicate identities and collision-prone sequence state', () => {
+  let ledger = createInitialLedger('project-1', 'Prototype project')
+  ledger = {
+    ...ledger,
+    nextSequence: 5,
+    groups: [
+      {
+        id: 'work-item-1',
+        kind: 'work-item',
+        projectId: 'project-1',
+        name: 'Issue 17',
+        position: { x: 100, y: 100 },
+        task: 'Build shell',
+        sourceRef: null,
+        status: 'active'
+      }
+    ],
+    nodes: [
+      {
+        id: 'node-2',
+        projectId: 'project-1',
+        groupId: 'work-item-1',
+        workItemId: 'work-item-1',
+        kind: 'agent',
+        title: 'Agent',
+        position: { x: 140, y: 180 },
+        resourceRef: { provider: 'placeholder', kind: 'agent', id: 'external-1', revision: null }
+      },
+      {
+        id: 'node-3',
+        projectId: 'project-1',
+        groupId: 'work-item-1',
+        workItemId: 'work-item-1',
+        kind: 'workspace',
+        title: 'Workspace',
+        position: { x: 380, y: 180 },
+        resourceRef: { provider: 'placeholder', kind: 'workspace', id: 'external-2', revision: null }
+      }
+    ],
+    edges: [{ id: 'edge-4', fromNodeId: 'node-2', toNodeId: 'node-3', relation: 'connected' }]
+  }
+  expect(isPrototypeLedger(ledger)).toBe(true)
+
+  const invalidLedgers: PrototypeLedger[] = [
+    { ...ledger, groups: [...ledger.groups, { ...ledger.groups[0] }] },
+    { ...ledger, nodes: [...ledger.nodes, { ...ledger.nodes[1], id: 'node-2' }] },
+    { ...ledger, edges: [...ledger.edges, { ...ledger.edges[0], id: 'edge-5' }] },
+    {
+      ...ledger,
+      nodes: [
+        ...ledger.nodes,
+        { ...ledger.nodes[1], id: 'node-5', resourceRef: { ...ledger.nodes[0].resourceRef } }
+      ],
+      nextSequence: 6
+    },
+    { ...ledger, edges: [...ledger.edges, { ...ledger.edges[0], id: 'edge-5' }], nextSequence: 6 },
+    { ...ledger, nextSequence: 4 }
+  ]
+  for (const invalid of invalidLedgers) expect(isPrototypeLedger(invalid)).toBe(false)
+})
+
 test('rejects malformed ledgers instead of exposing partial records', async () => {
   await withTemporaryDirectory(async (directory) => {
     const path = join(directory, 'ledger.json')
@@ -114,6 +179,20 @@ test('rejects malformed ledgers instead of exposing partial records', async () =
 
     await expect(new LedgerStore(path).load()).rejects.toThrow('Invalid P3 prototype ledger')
   })
+})
+
+test('failed initial persistence leaves the command service uninitialized', async () => {
+  const service = new PrototypeCommandService({
+    load: async () => null,
+    save: async () => {
+      throw new Error('injected initial save failure')
+    }
+  })
+
+  await expect(service.initialize(createInitialLedger('project-1', 'Prototype project'))).rejects.toThrow(
+    'injected initial save failure'
+  )
+  expect(() => service.snapshot()).toThrow('Prototype command service is not initialized.')
 })
 
 test('the command service exposes a mutation only after persistence succeeds', async () => {

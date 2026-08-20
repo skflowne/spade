@@ -140,7 +140,7 @@ function putPlaceholder(
     const updated = {
       ...existing,
       groupId: group.id,
-      workItemId: group.kind === 'work-item' ? group.id : null,
+      workItemId: group.kind === 'work-item' ? group.id : existing.workItemId,
       title: requiredText(command.title, 'Placeholder title'),
       resourceRef: command.resourceRef
     }

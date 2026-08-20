@@ -15,22 +15,21 @@ export type ProjectRecord = {
   name: string
 }
 
-export type Group = {
+export type GroupContainer = {
   id: string
-  kind: 'group'
   projectId: string
   name: string
   position: Point
 }
 
+export type Group = GroupContainer & {
+  kind: 'group'
+}
+
 export type WorkItemStatus = 'active' | 'blocked' | 'review' | 'done'
 
-export type WorkItem = {
-  id: string
+export type WorkItem = GroupContainer & {
   kind: 'work-item'
-  projectId: string
-  name: string
-  position: Point
   task: string
   sourceRef: ExternalResourceReference | null
   status: WorkItemStatus
@@ -154,18 +153,48 @@ export function isPrototypeLedger(value: unknown): value is PrototypeLedger {
   }
 
   const project = value.project
+  const nextSequence = Number(value.nextSequence)
   const groupById = new Map(value.groups.map((group) => [group.id, group]))
   const nodeIds = new Set(value.nodes.map((node) => node.id))
+  const allIds = [
+    ...value.groups.map(({ id }) => id),
+    ...value.nodes.map(({ id }) => id),
+    ...value.edges.map(({ id }) => id)
+  ]
+  const resourceKeys = value.nodes.map(({ resourceRef }) => resourceIdentity(resourceRef))
+  const edgeKeys = value.edges.map(
+    ({ fromNodeId, toNodeId, relation }) => `${fromNodeId}\u0000${toNodeId}\u0000${relation}`
+  )
+
   return (
+    hasUniqueValues(allIds) &&
+    hasUniqueValues(resourceKeys) &&
+    hasUniqueValues(edgeKeys) &&
+    nextSequence > maximumGeneratedSequence(allIds) &&
     value.groups.every((group) => group.projectId === project.id) &&
     value.nodes.every((node) => {
-      const group = node.groupId === null ? null : groupById.get(node.groupId)
+      const workItem = node.workItemId === null ? null : groupById.get(node.workItemId)
       return (
         node.projectId === project.id &&
-        (node.groupId === null || Boolean(group)) &&
-        (node.workItemId === null || (group?.kind === 'work-item' && group.id === node.workItemId))
+        (node.groupId === null || groupById.has(node.groupId)) &&
+        (node.workItemId === null || workItem?.kind === 'work-item')
       )
     }) &&
     value.edges.every((edge) => nodeIds.has(edge.fromNodeId) && nodeIds.has(edge.toNodeId))
   )
+}
+
+function resourceIdentity(reference: ExternalResourceReference): string {
+  return `${reference.provider}\u0000${reference.kind}\u0000${reference.id}`
+}
+
+function hasUniqueValues(values: readonly string[]): boolean {
+  return new Set(values).size === values.length
+}
+
+function maximumGeneratedSequence(ids: readonly string[]): number {
+  return ids.reduce((maximum, id) => {
+    const match = /^(?:group|work-item|node|edge)-(\d+)$/.exec(id)
+    return match ? Math.max(maximum, Number(match[1])) : maximum
+  }, 0)
 }

@@ -73,6 +73,28 @@ test('ordinary Group containment stays visual while WorkItem containment adds se
   expect(ledger.nodes[0].resourceRef).toEqual(agentRef)
 })
 
+test('moving a WorkItem member into an ordinary Group preserves semantic membership', () => {
+  let ledger = createInitialLedger('project-1', 'Prototype project')
+  ledger = apply(ledger, { type: 'create-work-item', name: 'Issue 17', task: 'Build shell' })
+  ledger = apply(ledger, { type: 'create-group', name: 'Review cluster' })
+  ledger = apply(ledger, {
+    type: 'attach-placeholder',
+    targetGroup: 'Issue 17',
+    nodeKind: 'agent',
+    title: 'Root agent',
+    resourceRef: agentRef
+  })
+  ledger = apply(ledger, {
+    type: 'attach-placeholder',
+    targetGroup: 'Review cluster',
+    nodeKind: 'agent',
+    title: 'Root agent',
+    resourceRef: agentRef
+  })
+
+  expect(ledger.nodes[0]).toMatchObject({ groupId: 'group-2', workItemId: 'work-item-1' })
+})
+
 test('placeholder reconciliation and provenance connections are idempotent', () => {
   let ledger = createInitialLedger('project-1', 'Prototype project')
   ledger = apply(ledger, { type: 'create-work-item', name: 'Issue 17', task: 'Build shell' })
