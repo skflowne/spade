@@ -167,14 +167,18 @@ function toFlowNodes(ledger: PrototypeLedger, focusedGroupId: string | null): P3
       }
     }
   })
-  const placeholders: PlaceholderNode[] = ledger.nodes.map((node) => ({
-    id: node.id,
-    type: 'placeholder',
-    position: node.position,
-    dragHandle: '.generic-node__chrome',
-    style: { width: 220, height: 116, zIndex: 2 },
-    data: { node }
-  }))
+  const placeholders: PlaceholderNode[] = ledger.nodes
+    .filter((node): node is Extract<PrototypeNode, { kind: 'agent' | 'workspace' }> =>
+      node.kind === 'agent' || node.kind === 'workspace'
+    )
+    .map((node) => ({
+      id: node.id,
+      type: 'placeholder',
+      position: node.position,
+      dragHandle: '.generic-node__chrome',
+      style: { width: 220, height: 116, zIndex: 2 },
+      data: { node }
+    }))
   return [...hulls, ...placeholders]
 }
 

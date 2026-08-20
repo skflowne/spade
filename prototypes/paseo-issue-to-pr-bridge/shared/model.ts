@@ -1,3 +1,11 @@
+import {
+  githubResourceId,
+  isGitHubIssue,
+  isGitHubPullRequest,
+  type GitHubIssue,
+  type GitHubPullRequest
+} from './github'
+
 export const PROTOTYPE_LEDGER_VERSION = 2 as const
 export const PASEO_TIMELINE_LIMIT = 40
 
@@ -9,6 +17,13 @@ export type ExternalResourceReference = {
   kind: string
   id: string
   revision: string | null
+}
+
+export function sameResourceIdentity(
+  left: ExternalResourceReference,
+  right: ExternalResourceReference
+): boolean {
+  return left.provider === right.provider && left.kind === right.kind && left.id === right.id
 }
 
 export type ProjectRecord = {
@@ -42,6 +57,7 @@ export type WorkItem = GroupContainer & {
 
 export type PrototypeGroup = Group | WorkItem
 export type PlaceholderKind = 'agent' | 'workspace'
+export type GitHubNodeKind = 'github-issue' | 'github-pull-request'
 export type PaseoResourceState = 'connected' | 'reconnecting' | 'stale' | 'missing' | 'error'
 export type PaseoConnectionState = 'connected' | 'reconnecting' | 'stale' | 'error'
 export type PaseoCapabilityState = 'available' | 'unavailable' | 'error'
@@ -149,24 +165,39 @@ export type PaseoNodeRuntime =
   | PaseoProviderSubagentRuntime
   | PaseoWorkspaceRuntime
 
-export type PrototypeNode = {
+type PrototypeNodeBase = {
   id: string
   projectId: string
   groupId: string | null
   workItemId: string | null
-  kind: PlaceholderKind
   title: string
   position: Point
   resourceRef: ExternalResourceReference
   paseo: PaseoNodeRuntime | null
 }
 
-export type ProvenanceRelation = 'spawned' | 'attached' | 'connected' | 'delegated'
+export type PlaceholderNode = PrototypeNodeBase & {
+  kind: PlaceholderKind
+}
+
+export type GitHubIssueNode = PrototypeNodeBase & {
+  kind: 'github-issue'
+  issue: GitHubIssue
+}
+
+export type GitHubPullRequestNode = PrototypeNodeBase & {
+  kind: 'github-pull-request'
+  pullRequest: GitHubPullRequest
+}
+
+export type PrototypeNode = PlaceholderNode | GitHubIssueNode | GitHubPullRequestNode
+
+export type ProvenanceRelation = 'spawned' | 'attached' | 'connected' | 'delegated' | 'derived'
 
 export function isProvenanceRelation(value: unknown): value is ProvenanceRelation {
   return (
     typeof value === 'string' &&
-    ['spawned', 'attached', 'connected', 'delegated'].includes(value)
+    ['spawned', 'attached', 'connected', 'delegated', 'derived'].includes(value)
   )
 }
 
@@ -345,17 +376,46 @@ function isPaseoResourceState(value: unknown): value is PaseoResourceState {
 }
 
 function isNode(value: unknown): value is PrototypeNode {
+  if (
+    !isRecord(value) ||
+    !hasString(value, 'id') ||
+    !hasString(value, 'projectId') ||
+    (value.groupId !== null && typeof value.groupId !== 'string') ||
+    (value.workItemId !== null && typeof value.workItemId !== 'string') ||
+    !hasString(value, 'title') ||
+    !isPoint(value.position) ||
+    !isResourceReference(value.resourceRef) ||
+    (value.paseo !== null && !isPaseoRuntime(value.paseo))
+  ) {
+    return false
+  }
+  if (value.kind === 'agent' || value.kind === 'workspace') return true
+  if (value.paseo !== null) return false
+  if (value.kind === 'github-issue' && isGitHubIssue(value.issue)) {
+    return matchesGitHubReference(value.resourceRef, 'issue', value.issue, value.issue.updatedAt)
+  }
+  if (value.kind === 'github-pull-request' && isGitHubPullRequest(value.pullRequest)) {
+    return matchesGitHubReference(
+      value.resourceRef,
+      'pull-request',
+      value.pullRequest,
+      value.pullRequest.latestRevision
+    )
+  }
+  return false
+}
+
+function matchesGitHubReference(
+  reference: ExternalResourceReference,
+  kind: 'issue' | 'pull-request',
+  resource: GitHubIssue | GitHubPullRequest,
+  revision: string
+): boolean {
   return (
-    isRecord(value) &&
-    hasString(value, 'id') &&
-    hasString(value, 'projectId') &&
-    (value.groupId === null || typeof value.groupId === 'string') &&
-    (value.workItemId === null || typeof value.workItemId === 'string') &&
-    (value.kind === 'agent' || value.kind === 'workspace') &&
-    hasString(value, 'title') &&
-    isPoint(value.position) &&
-    isResourceReference(value.resourceRef) &&
-    (value.paseo === null || isPaseoRuntime(value.paseo))
+    reference.provider === 'github' &&
+    reference.kind === kind &&
+    reference.id === githubResourceId(resource.repository, resource.number) &&
+    reference.revision === revision
   )
 }
 
