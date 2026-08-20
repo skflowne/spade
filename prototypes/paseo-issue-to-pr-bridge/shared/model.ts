@@ -61,12 +61,18 @@ export type PaseoCapability = {
   detail: string | null
 }
 
+export type PaseoWorkItemBinding = {
+  workItemId: string
+  rootAgentId: string
+}
+
 export type PaseoAdapterState = {
   connection: PaseoConnectionState
   daemonUrl: string | null
   lastRefreshAt: string | null
   error: string | null
   capabilities: PaseoCapability[]
+  bindings: PaseoWorkItemBinding[]
 }
 
 export type ConversationExpansionPreferences = {
@@ -208,7 +214,8 @@ export function createInitialPaseoState(): PaseoAdapterState {
         'unavailable',
         '@getpaseo/client 0.4.0 does not expose server version or feature metadata publicly.'
       )
-    ]
+    ],
+    bindings: []
   }
 }
 
@@ -373,8 +380,15 @@ function isPaseoAdapterState(value: unknown): value is PaseoAdapterState {
     Array.isArray(value.capabilities) &&
     value.capabilities.length === 8 &&
     value.capabilities.every(isCapability) &&
-    hasUniqueValues(value.capabilities.map(({ name }) => name))
+    hasUniqueValues(value.capabilities.map(({ name }) => name)) &&
+    Array.isArray(value.bindings) &&
+    value.bindings.every(isWorkItemBinding) &&
+    hasUniqueValues(value.bindings.map(({ workItemId }) => workItemId))
   )
+}
+
+function isWorkItemBinding(value: unknown): value is PaseoWorkItemBinding {
+  return isRecord(value) && hasString(value, 'workItemId') && hasString(value, 'rootAgentId')
 }
 
 function isCapability(value: unknown): value is PaseoCapability {
@@ -437,6 +451,7 @@ export function isPrototypeLedger(value: unknown): value is PrototypeLedger {
     hasUniqueValues(edgeKeys) &&
     nextSequence > maximumGeneratedSequence(allIds) &&
     value.groups.every((group) => group.projectId === project.id) &&
+    value.paseo.bindings.every(({ workItemId }) => groupById.get(workItemId)?.kind === 'work-item') &&
     value.nodes.every((node) => {
       const workItem = node.workItemId === null ? null : groupById.get(node.workItemId)
       return (

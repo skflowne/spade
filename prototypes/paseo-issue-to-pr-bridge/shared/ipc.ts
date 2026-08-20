@@ -52,6 +52,56 @@ export function isPrototypeCommand(value: unknown): value is PrototypeCommand {
         hasText(value.workItemId) &&
         isWorkItemStatus(value.status)
       )
+    case 'select-project-checkout':
+      return (
+        hasOnlyKeys(value, ['type', 'targetGroup', 'cwd']) &&
+        hasText(value.targetGroup) &&
+        hasText(value.cwd)
+      )
+    case 'create-workspace':
+      return (
+        hasOnlyKeys(value, ['type', 'targetGroup', 'cwd', 'title']) &&
+        hasText(value.targetGroup) &&
+        hasText(value.cwd) &&
+        (value.title === undefined || hasText(value.title))
+      )
+    case 'attach-workspace':
+      return (
+        hasOnlyKeys(value, ['type', 'targetGroup', 'workspaceId']) &&
+        hasText(value.targetGroup) &&
+        hasText(value.workspaceId)
+      )
+    case 'spawn-agent':
+      return (
+        hasOnlyKeys(value, [
+          'type',
+          'targetGroup',
+          'workspaceId',
+          'cwd',
+          'provider',
+          'model',
+          'prompt',
+          'title'
+        ]) &&
+        hasText(value.targetGroup) &&
+        (value.workspaceId === undefined || hasText(value.workspaceId)) &&
+        hasText(value.cwd) &&
+        hasText(value.provider) &&
+        hasText(value.model) &&
+        hasText(value.prompt) &&
+        (value.title === undefined || hasText(value.title))
+      )
+    case 'attach-agent':
+      return (
+        hasOnlyKeys(value, ['type', 'targetGroup', 'agentId']) &&
+        hasText(value.targetGroup) &&
+        hasText(value.agentId)
+      )
+    case 'refresh-paseo':
+      return (
+        hasOnlyKeys(value, ['type', 'workItemId']) &&
+        hasText(value.workItemId)
+      )
     default:
       return false
   }

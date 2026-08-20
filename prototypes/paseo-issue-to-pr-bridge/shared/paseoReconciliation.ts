@@ -102,7 +102,7 @@ export function reconcilePaseoWorkItem(
         ? normalizeTimelineEvents(timeline.entries, timeline.epoch)
         : existingTimeline(next, managedAgentReference(agent.id))
     }
-    const result = putPaseoNode(
+    const result = putPaseoResourceNode(
       next,
       workItemId,
       'agent',
@@ -137,7 +137,7 @@ export function reconcilePaseoWorkItem(
           status: 'missing'
         }
     const existing = findByReference(next, workspaceReference(workspaceId))
-    const result = putPaseoNode(
+    const result = putPaseoResourceNode(
       next,
       workItemId,
       'workspace',
@@ -165,7 +165,7 @@ export function reconcilePaseoWorkItem(
       subagent.id,
       subagent.updatedAt
     )
-    const result = putPaseoNode(
+    const result = putPaseoResourceNode(
       next,
       workItemId,
       'agent',
@@ -348,7 +348,7 @@ function markExistingPaseoResourcesMissing(
   }
 }
 
-function putPaseoNode(
+export function putPaseoResourceNode(
   ledger: PrototypeLedger,
   workItemId: string,
   kind: 'agent' | 'workspace',
