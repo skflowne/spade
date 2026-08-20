@@ -54,7 +54,7 @@ export type GitHubPullRequest = {
 }
 
 export function githubResourceId(repository: string, number: number): string {
-  return `${repository}#${number}`
+  return `${repository.toLowerCase()}#${number}`
 }
 
 export function isGitHubIssue(value: unknown): value is GitHubIssue {

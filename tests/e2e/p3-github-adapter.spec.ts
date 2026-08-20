@@ -101,7 +101,7 @@ test('targets one repository and parses structured issue output', async () => {
   }
   const adapter = new SpadeGitHubAdapter(runner)
 
-  await expect(adapter.getIssue('skflowne/spade-fixture', 1)).resolves.toEqual({
+  await expect(adapter.getIssue('SKFLOWNE/SPADE-FIXTURE', 1)).resolves.toEqual({
     repository: 'skflowne/spade-fixture',
     number: 1,
     title: 'Scaffold a Vue app',

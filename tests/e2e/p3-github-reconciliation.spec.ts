@@ -81,7 +81,10 @@ test('creates one WorkItem and native Issue node from exact GitHub identity', ()
 
 test('refreshes the existing Issue node and source WorkItem without duplicates', () => {
   const initial = createInitialLedger('project-1', 'Fixture project')
-  const created = reconcileGitHubIssue(initial, issue)
+  const created = reconcileGitHubIssue(initial, {
+    ...issue,
+    repository: 'SKFLOWNE/SPADE-FIXTURE'
+  })
   const refreshedIssue: GitHubIssue = {
     ...issue,
     title: 'Scaffold the Vue fixture',
@@ -120,7 +123,11 @@ test('reconciles one native PR with WorkItem membership and one derived edge', (
     resourceRef: { provider: 'paseo', kind: 'workspace', id: 'workspace-opaque-1', revision: null }
   })
 
-  const created = reconcileGitHubPullRequest(ledger, pullRequest, 'node-3')
+  const created = reconcileGitHubPullRequest(
+    ledger,
+    { ...pullRequest, repository: 'SKFLOWNE/SPADE-FIXTURE' },
+    'node-3'
+  )
   const refreshedPullRequest: GitHubPullRequest = {
     ...pullRequest,
     title: 'Build the fixture app',

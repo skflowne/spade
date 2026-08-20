@@ -327,7 +327,7 @@ function validateRepository(repository: string): string {
       'GitHub repository must use the owner/name format.'
     )
   }
-  return normalized
+  return normalized.toLowerCase()
 }
 
 function validateNumber(value: number, kind: string): number {
