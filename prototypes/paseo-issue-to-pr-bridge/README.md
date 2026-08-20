@@ -1,6 +1,6 @@
-# P3 Paseo issue-to-PR bridge
+# P3 Paseo and native GitHub work shell
 
-This directory is the isolated SPADE Prototype 3 shell and Paseo bridge. It keeps Group and WorkItem behavior workflow-agnostic while projecting exact Paseo agent, workspace, connection, capability, and normalized-conversation facts. It is not part of the production `src/` Electron entry.
+This directory is SPADE Prototype 3's isolated Electron shell. It keeps Group and WorkItem behavior workflow-agnostic while projecting exact Paseo agent, workspace, connection, capability, and normalized-conversation facts alongside native GitHub Issue/PullRequest entities and generic checkout actions. It is not part of the production `src/` Electron entry and does not redefine canonical product facts.
 
 ## Run
 
@@ -9,7 +9,11 @@ npm install
 npm run prototype:p3
 ```
 
-The executable creates one `SpadePaseoAdapter` and one public `@getpaseo/client` connection. Configuration:
+The executable creates one `SpadePaseoAdapter` and one public `@getpaseo/client` connection. The main process stores `p3-ledger.json` under Electron's user-data directory; automated checks use an isolated path.
+
+Native GitHub reads require `gh` on `PATH`, an authenticated GitHub account, and repository access for the selected `owner/name` target. Authentication credentials remain owned by `gh` and never cross into preload or renderer state.
+
+Configuration:
 
 | Variable | Meaning | Default |
 |---|---|---|
@@ -129,11 +133,88 @@ xvfb-run -a npm test
 git diff --check
 ```
 
+## Native GitHub boundary
+
+`SpadeGitHubAdapter` is the only owner of `gh` invocation. It uses argument arrays and structured JSON output, validates repository/resource identity, limits output, applies a timeout, and classifies authentication, repository, not-found, network, malformed-response, and command failures. PR detail combines `gh pr view` with paginated/slurped inline review comments while keeping reviews, conversation comments, and inline comments distinct.
+
+The renderer can request only validated operations through `P3PrototypeBridge.integrate`. Main-process `P3IntegrationService` fetches provider state, applies serialized ledger mutations, and returns typed success, failure, or partial-success results. `Open on GitHub` constructs a canonical GitHub URL in main rather than accepting an arbitrary renderer URL.
+
+Native entities retain exact references:
+
+- Issue: `github / issue / <lowercase-owner/repository>#<number>` with the issue update timestamp as revision.
+- Pull request: `github / pull-request / <lowercase-owner/repository>#<number>` with the head revision as revision.
+
+Refreshing either resource updates its existing node. Creating a WorkItem from an Issue records the Issue as its source and adds one native Issue node. A checkout-returned PR adds or refreshes one native PullRequest node and one idempotent `derived` edge from the selected workspace/agent surface.
+
+## GitHub reads versus checkout mutations
+
+Responsibilities intentionally remain separate:
+
+| Responsibility | Owner |
+|---|---|
+| Issue and PR reads, checks, reviews/comments, canonical GitHub URLs | `SpadeGitHubAdapter` using authenticated `gh` |
+| Serialized SPADE ledger mutation and publication | `PrototypeCommandService` |
+| GitHub-to-SPADE identity and node/edge reconciliation | `shared/githubReconciliation.ts` |
+| Selected-workspace checkout status, commit, push, PR creation/status contract | `SpadePaseoCheckoutAdapter` port in `main/spadePaseoCheckout.ts` |
+| Concrete daemon connection and checkout implementation | the single `SpadePaseoAdapter` owned by issue #18 |
+| Renderer capability surface | validated integration IPC plus sandboxed preload |
+
+The checkout port accepts only an opaque Paseo workspace ID. It does not accept a renderer-supplied cwd or infer a checkout from branch names. Returned checkout status must match the requested workspace identity, and the renderer keys status to the current workspace selection so stale responses cannot appear under another checkout.
+
+This branch deliberately injects no concrete checkout adapter because issue #18 has not merged. The UI therefore reports checkout actions as unavailable on this standalone branch. After integration, #18's existing single adapter must implement these methods; #19 must not create a second daemon connection or copy #18 reconciliation logic.
+
+## Workflow-agnostic shell invariants
+
+- WorkItem and ordinary Group records use the same hull projection and `GroupHull` renderer.
+- WorkItem adds source/task/status, semantic membership, and activity-sidebar projection without duplicating Group geometry.
+- Ordinary Group placement changes visual `groupId` only; WorkItem placement assigns semantic `workItemId`.
+- Names are lookup conveniences. Exact stable IDs and provider/kind/opaque-ID references own identity.
+- Native Issue, PullRequest, agent, and workspace nodes share `NodeFrame` chrome and Control Room tokens.
+- Edges communicate provenance only. `derived` records the PR's origin; it does not execute a workflow.
+- There are no workflow-stage types or title/path/branch/prompt/order classification rules.
+- The sandboxed renderer has no Node process, filesystem, `gh`, Paseo client, credentials, or arbitrary IPC access.
+
+## Typed owners
+
+| Boundary | Owner | Exported contract |
+|---|---|---|
+| Records and exact external identity | `shared/model.ts`, `shared/github.ts` | ledger/node records, GitHub DTOs, runtime predicates, canonical resource identity |
+| Generic Group/WorkItem mutations | `shared/commands.ts` | `PrototypeCommand`, `applyPrototypeCommand`, `resolveGroup` |
+| GitHub reconciliation | `shared/githubReconciliation.ts` | Issue/PR create-refresh and `derived` provenance |
+| Canvas/activity geometry | `shared/projection.ts` | shared hull and node-size projections |
+| Checkout action DTOs and selection binding | `shared/checkout.ts` | status/diff totals, mutation results, PR identity/status, stale-response guard |
+| Renderer bridge | `shared/ipc.ts`, `shared/integration.ts` | narrow channels, requests/results, runtime validation |
+| GitHub provider adapter | `main/spadeGitHubAdapter.ts` | structured `gh` reads and classified errors |
+| Checkout provider port | `main/spadePaseoCheckout.ts` | five small opaque-workspace methods for #18's adapter |
+| Integration orchestration | `main/integrationService.ts` | provider calls, partial PR state, durable reconciliation |
+| Persistence | `main/ledgerStore.ts`, `main/commandService.ts` | validated atomic replacement and serialized publication |
+
+## Direct validation record
+
+Environment: Electron 43 under Xvfb, Node 24.18.0, `gh` 2.96.0 authenticated as the current host user.
+
+| Check | Observation | Result |
+|---|---|---|
+| Live fixture Issue | `SpadeGitHubAdapter.getIssue('skflowne/spade-fixture', 1)` returned repository, number, title, OPEN state, body, URL, and update timestamp. | Pass |
+| Disposable fixture PR | Created `spade-fixture#2` on a disposable branch, read it through `SpadeGitHubAdapter.getPullRequest`, and observed exact base/head/revision plus empty checks/activity arrays. The PR was closed and its branch deleted immediately afterward. | Pass |
+| Native presentation | Electron rendered one Issue and one PR with shared chrome, WorkItem membership, `derived` provenance, labels/body, branches/revision, checks, review/comment activity, and GitHub escape hatches. | Pass |
+| Narrow IPC/sandbox | Runtime rejected malformed integration requests and renderer-supplied cwd/extra fields; renderer exposed only snapshot, generic command, integration, and subscription methods. | Pass |
+| Partial PR safety | Deterministic integration coverage retained checkout-returned PR identity when subsequent GitHub detail/reconciliation failed. | Pass |
+| Selected checkout | Deterministic coverage rejected mismatched adapter workspace status and dropped status from changed or superseded selections. | Pass |
+| Persistence/reconnect | Existing version-1 placeholder ledgers remain valid; repeated Issue/PR reconciliation creates no duplicate nodes or edges. | Pass |
+| Real Paseo mutations | No concrete `SpadePaseoAdapter` exists on this branch because #18 is unmerged. Real status/commit/push/create-PR/status execution remains an explicit integration prerequisite. | Blocked on #18 |
+
+Artifact: [`artifacts/p3-native-github-shell.png`](artifacts/p3-native-github-shell.png)
+
 ## Scope and residual limitations
 
-- This remains a prototype; it does not redefine canonical product direction or production architecture.
+- No embedded GitHub webview is used as the primary Issue/PR experience.
+- There is no GitHub App, OAuth flow, webhook listener, hosted authorization, merge action, issue mutation, or generic comment composer.
+- There is no file list/diff viewer, file node, editor, preview, or terminal.
+- Checkout actions are generic selected-workspace operations and contain no `paseo-issue-to-pr` stage names.
+- Concrete real checkout mutation validation must occur after #18's adapter is merged/rebased; this branch does not bypass Paseo with renderer or direct Git commands.
 - Provider-native live discovery and activated timeline streaming remain unavailable through the public 0.4.0 facade.
 - Server/feature version facts are validation evidence from the CLI status command, not runtime facts claimed by the adapter.
 - Node dragging remains presentation-only; no move command is persisted.
 - Edges communicate provenance and context only; they do not execute or schedule work.
-- Canonical docs are unchanged because this prototype validates proposed boundaries rather than selecting new product facts.
+- Canonical pages under `docs/` remain unchanged because this isolated prototype does not redefine current production facts.

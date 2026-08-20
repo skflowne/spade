@@ -347,6 +347,7 @@ test('renders persisted native GitHub Issue and PullRequest nodes with shared ch
     await expect(window.getByLabel('Repository')).toHaveValue('skflowne/spade-fixture')
     await expect(window.getByRole('button', { name: 'Refresh checkout' })).toBeVisible()
     await expect(window.getByRole('button', { name: 'Create/link PR' })).toBeVisible()
+    await window.screenshot({ path: test.info().outputPath('p3-native-github-shell.png') })
   } finally {
     await application.close()
     await rm(directory, { recursive: true, force: true })
