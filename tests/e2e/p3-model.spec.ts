@@ -181,7 +181,8 @@ test('WorkItem and ordinary Group use the same hull projection and only WorkItem
       kind: 'agent' as const,
       title: 'Agent',
       position: { x: 140, y: 180 },
-      resourceRef: agentRef
+      resourceRef: agentRef,
+      paseo: null
     }
   ]
   const workItemNodes = nodes.map((node) => ({ ...node, groupId: workItem.id, workItemId: workItem.id }))

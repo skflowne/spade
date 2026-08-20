@@ -1,4 +1,5 @@
 import {
+  createInitialPaseoState,
   PROTOTYPE_LEDGER_VERSION,
   type ExternalResourceReference,
   type PlaceholderKind,
@@ -44,7 +45,8 @@ export function createInitialLedger(projectId: string, projectName: string): Pro
     project: { id: requiredText(projectId, 'Project ID'), name: requiredText(projectName, 'Project name') },
     groups: [],
     nodes: [],
-    edges: []
+    edges: [],
+    paseo: createInitialPaseoState()
   }
 }
 
@@ -173,7 +175,8 @@ function putPlaceholder(
             x: group.position.x + 36 + (members % 2) * 244,
             y: group.position.y + 76 + Math.floor(members / 2) * 140
           },
-          resourceRef: command.resourceRef
+          resourceRef: command.resourceRef,
+          paseo: null
         }
       ]
     },
