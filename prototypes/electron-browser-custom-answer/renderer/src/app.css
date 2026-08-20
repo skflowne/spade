@@ -280,6 +280,12 @@ input {
   color: var(--muted);
 }
 
+.react-flow__node-browser .prototype-node__body {
+  display: grid;
+  grid-template-rows: auto auto auto minmax(180px, 1fr) auto;
+  overflow: auto;
+}
+
 .browser-toolbar,
 .browser-probes,
 .native-toolbar {
@@ -322,11 +328,9 @@ input {
 
 .browser-surface {
   position: relative;
-  height: 330px;
   min-height: 180px;
   overflow: hidden;
-  border-bottom: var(--cr-border);
-  resize: vertical;
+  background: var(--text);
 }
 
 .browser-surface webview {
@@ -347,6 +351,47 @@ input {
   pointer-events: none;
 }
 
+.browser-events-panel {
+  min-width: 0;
+  border-top: var(--cr-border);
+  background: var(--panel);
+}
+
+.browser-events-panel summary {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  min-height: 34px;
+  padding: 7px 10px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.browser-events-panel summary::before {
+  color: var(--muted);
+  content: '▸';
+  transition: transform var(--cr-duration-fast) var(--cr-ease-standard);
+}
+
+.browser-events-panel[open] summary::before {
+  transform: rotate(90deg);
+}
+
+.browser-events-panel summary span {
+  flex: none;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.browser-events-panel summary small {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 0.68rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .browser-events {
   display: grid;
   gap: 2px;
@@ -354,6 +399,7 @@ input {
   margin: 0;
   padding: 8px 8px 8px 26px;
   overflow: auto;
+  border-top: var(--cr-border);
   color: var(--muted);
   font-size: 0.7rem;
 }

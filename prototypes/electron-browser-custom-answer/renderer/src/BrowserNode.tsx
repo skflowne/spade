@@ -146,9 +146,15 @@ export function BrowserNode(): React.JSX.Element {
         />
         <div className="stacking-probe">DOM stacking probe</div>
       </div>
-      <ol className="browser-events" aria-label="Guest event log">
-        {events.map((event, index) => <li key={`${index}-${event}`}>{event}</li>)}
-      </ol>
+      <details className="browser-events-panel">
+        <summary>
+          <span>Guest events</span>
+          <small>{events.at(-1) ?? 'Waiting for guest activity'}</small>
+        </summary>
+        <ol className="browser-events" aria-label="Guest event log">
+          {events.map((event, index) => <li key={`${index}-${event}`}>{event}</li>)}
+        </ol>
+      </details>
     </PrototypeNodeFrame>
   )
 }

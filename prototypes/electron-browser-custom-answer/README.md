@@ -45,11 +45,12 @@ Environment: Electron 43 under Xvfb, with host, guest-webview, and native-view t
 | Check | Observation | Result |
 |---|---|---|
 | GitHub guest | The persistent `<webview>` loaded issue 14 and emitted loading, navigation, DOM-ready, and focus events. | Pass |
+| Initial presentation | The canvas opened at scale `1`; the `620×720` browser node gave its live guest a crisp `618×497` CSS-pixel surface instead of shrinking the complete experiment to fit. | Pass |
 | CSS zoom | React Flow changed from scale `0.569286` to `0.683143`; the same live guest remained attached and rendered. | Pass |
-| CSS resize | The browser node changed from `600×620` to `1080×620`; the guest filled the resized clipped body. | Pass |
+| CSS resize | The browser node changed from `620×720` to `1343×260`; the same guest remained attached and filled the `1326×180` minimum-height surface. | Pass |
 | CSS clipping and stacking | The guest stayed inside the rounded, overflow-hidden node body and the `DOM stacking probe` rendered above its content. | Pass |
 | CSS pan/window clipping | Moving the browser chrome to `translate(-328.735px, 1257.71px)` kept the guest attached while the window clipped the transformed node. | Pass |
-| Reparent | Reparenting changed the button to `Detach from group` and moved the browser to the group's absolute transform `translate(100px, 110px)`. Dragging beyond the previous boundary expanded the group instead of constraining the browser, while retaining one guest target and session. | Pass |
+| Reparent | Reparenting changed the button to `Detach from group` and moved the browser to the group's absolute transform `translate(780px, 110px)`. Dragging beyond the previous boundary expanded the group instead of constraining the browser, while retaining one guest target and session. | Pass |
 | Focus and keyboard | The host logged `guest focused`; after focus, a Tab key inside the guest focused GitHub's `Skip to content` link. | Pass |
 | Wheel | Guest `scrollY` changed from `0` to `500` without panning the outer canvas. | Pass |
 | Popup policy | `window.open` was intercepted in main, denied as a new window, and navigated the same guest from issue 14 to `electron/electron/issues`; only one guest target remained. | Pass |
@@ -76,7 +77,7 @@ Artifacts:
 
 ## Reproduction checklist
 
-1. Run `npm run prototype:p2` and use React Flow controls plus **Pan left/right** to transform the canvas.
+1. Run `npm run prototype:p2`. Confirm the browser opens at scale 1 with a large, crisp guest surface, then use React Flow controls plus **Pan left/right** to transform the canvas.
 2. Resize both browser nodes from their border handles. Confirm the guest scales/clips with its node and the native status reports changing window bounds.
 3. Reparent the guest, drag it beyond the group's previous boundary, and confirm the group expands without detaching or constraining it. Drag browser bodies and chrome, focus each browser, press Tab, and scroll each page.
 4. Use **Request popup**, Back, the address field, and Reload. Confirm popup navigation remains in the same guest.

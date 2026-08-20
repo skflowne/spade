@@ -38,14 +38,14 @@ const initialNodes: PrototypeFlowNode[] = [
   {
     id: 'browser-group',
     type: 'group',
-    position: { x: 40, y: 40 },
-    style: { width: 720, height: 720 },
+    position: { x: 720, y: 40 },
+    style: { width: 720, height: 820 },
     data: { label: 'Browser reparent target · native identity remains explicit' }
   },
   {
     id: 'rich-answer',
     type: 'rich-answer',
-    position: { x: 820, y: 40 },
+    position: { x: 40, y: 920 },
     dragHandle: '.prototype-node__chrome',
     style: { width: 620, height: 700 },
     data: {}
@@ -53,7 +53,7 @@ const initialNodes: PrototypeFlowNode[] = [
   {
     id: 'mock-conversation',
     type: 'conversation',
-    position: { x: 1500, y: 40 },
+    position: { x: 700, y: 920 },
     dragHandle: '.prototype-node__chrome',
     style: { width: 420, height: 700 },
     data: {}
@@ -61,15 +61,15 @@ const initialNodes: PrototypeFlowNode[] = [
   {
     id: 'github-browser',
     type: 'browser',
-    position: { x: 40, y: 820 },
+    position: { x: 40, y: 40 },
     dragHandle: '.prototype-node__chrome',
-    style: { width: 600, height: 620 },
+    style: { width: 620, height: 720 },
     data: {}
   },
   {
     id: 'native-overlay',
     type: 'native-overlay',
-    position: { x: 820, y: 820 },
+    position: { x: 1180, y: 920 },
     dragHandle: '.prototype-node__chrome',
     style: { width: 600, height: 620 },
     data: {}
@@ -147,7 +147,7 @@ export function App(): React.JSX.Element {
           parentId: undefined,
           extent: undefined,
           expandParent: undefined,
-          position: { x: 40, y: 820 }
+          position: { x: 40, y: 40 }
         }
       }
 
@@ -187,8 +187,7 @@ export function App(): React.JSX.Element {
               nodesConnectable={false}
               minZoom={0.25}
               maxZoom={1.6}
-              fitView
-              fitViewOptions={{ padding: 0.08 }}
+              defaultViewport={{ x: 0, y: 0, zoom: 1 }}
             >
               <Background />
               <Controls />
