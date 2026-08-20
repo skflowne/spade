@@ -16,7 +16,12 @@ Integrity checks:
 ```bash
 npm run prototype:p3:typecheck
 npm run prototype:p3:build
+npx playwright test tests/e2e/p3-model.spec.ts tests/e2e/p3-ledger.spec.ts
 xvfb-run -a npx playwright test tests/e2e/p3-shell.spec.ts
+npm run typecheck
+npm run lint
+xvfb-run -a npm test
+git diff --check
 ```
 
 ## What the shell proves
@@ -61,7 +66,7 @@ Environment: Electron 43 under Xvfb, exercised through Playwright's real Electro
 | Runtime IPC guard | Commands with extra keys, array-valued status, or array-valued relation were rejected without ledger mutation. | Pass |
 | Sandbox | Renderer reported `require` and `process` as unavailable and exposed only `execute`, `snapshot`, and `subscribe`. | Pass |
 | Reload | Relaunching Electron against the same temporary ledger restored exact records, references, node/edge counts, and status. | Pass |
-| Clean build prerequisite | Deleting prototype output before the test still rebuilt main, preload, and renderer entries through `npm test`. | Pass |
+| Clean build prerequisite | After deleting prototype output, the complete `npm test` gate rebuilt main, preload, and renderer entries before running the full suite. | Pass |
 
 Artifact: [`artifacts/p3-generic-shell.png`](artifacts/p3-generic-shell.png)
 
