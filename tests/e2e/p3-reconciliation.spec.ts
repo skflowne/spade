@@ -193,6 +193,25 @@ test('bounds normalized timelines and deduplicates sequenced and unsequenced rep
   expect(unsequenced).toHaveLength(2)
   expect(unsequenced[0].id).not.toBe(unsequenced[1].id)
   expect(unsequenced.every(({ initialExpanded }) => initialExpanded === false)).toBe(true)
+
+  const mixedEntries = Array.from({ length: PASEO_TIMELINE_LIMIT + 5 }, (_, index) => ({
+    timestamp: `2026-08-20T12:00:${String(index).padStart(2, '0')}Z`,
+    ...(index % 2 === 0 ? { seqStart: 100 - index, seqEnd: 100 - index } : {}),
+    item: { type: 'assistant_message', text: `Mixed ${index}` }
+  }))
+  const mixedReversed = normalizeTimelineEvents([...mixedEntries].reverse(), 'epoch-mixed')
+  const mixedShuffled = normalizeTimelineEvents(
+    [...mixedEntries].sort((left, right) => {
+      const leftIndex = Number(String((left.item as { text: string }).text).split(' ')[1])
+      const rightIndex = Number(String((right.item as { text: string }).text).split(' ')[1])
+      return (leftIndex % 7) - (rightIndex % 7)
+    }),
+    'epoch-mixed'
+  )
+  expect(mixedShuffled.map(({ id }) => id)).toEqual(mixedReversed.map(({ id }) => id))
+  expect(mixedReversed.map(({ timestamp }) => timestamp)).toEqual(
+    mixedEntries.slice(-PASEO_TIMELINE_LIMIT).map(({ timestamp }) => timestamp)
+  )
 })
 
 test('exposes all supported and unavailable Paseo capability states explicitly', () => {

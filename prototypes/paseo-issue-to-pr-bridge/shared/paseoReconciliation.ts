@@ -220,17 +220,12 @@ function compareTimelineEvents(
   left: NormalizedConversationEvent,
   right: NormalizedConversationEvent
 ): number {
-  if (
-    left.epoch === right.epoch &&
-    left.sequenceStart !== null &&
-    right.sequenceStart !== null &&
-    left.sequenceStart !== right.sequenceStart
-  ) {
-    return left.sequenceStart - right.sequenceStart
-  }
-
   const timestampOrder = left.timestamp.localeCompare(right.timestamp)
   if (timestampOrder !== 0) return timestampOrder
+
+  const leftSequence = left.sequenceStart ?? Number.MAX_SAFE_INTEGER
+  const rightSequence = right.sequenceStart ?? Number.MAX_SAFE_INTEGER
+  if (leftSequence !== rightSequence) return leftSequence - rightSequence
   return left.id.localeCompare(right.id)
 }
 
