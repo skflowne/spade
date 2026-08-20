@@ -170,8 +170,8 @@ function putPlaceholder(
           kind: command.nodeKind,
           title: requiredText(command.title, 'Placeholder title'),
           position: {
-            x: group.position.x + 36 + members * 244,
-            y: group.position.y + 76
+            x: group.position.x + 36 + (members % 2) * 244,
+            y: group.position.y + 76 + Math.floor(members / 2) * 140
           },
           resourceRef: command.resourceRef
         }

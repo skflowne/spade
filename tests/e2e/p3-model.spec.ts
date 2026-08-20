@@ -134,6 +134,27 @@ test('placeholder reconciliation and provenance connections are idempotent', () 
   expect(ledger.edges).toHaveLength(1)
 })
 
+test('placeholder placement wraps before neighboring Group hulls overlap', () => {
+  let ledger = createInitialLedger('project-1', 'Prototype project')
+  ledger = apply(ledger, { type: 'create-work-item', name: 'Issue 17', task: 'Build shell' })
+  ledger = apply(ledger, { type: 'create-group', name: 'Neighbor' })
+  for (let index = 1; index <= 3; index += 1) {
+    ledger = apply(ledger, {
+      type: 'spawn-placeholder',
+      targetGroup: 'Issue 17',
+      nodeKind: 'agent',
+      title: `Agent ${index}`,
+      resourceRef: { provider: 'placeholder', kind: 'agent', id: `agent-${index}`, revision: null }
+    })
+  }
+
+  const workItemHull = projectGroupHull(ledger.groups[0], ledger.nodes)
+  const neighborHull = projectGroupHull(ledger.groups[1], ledger.nodes)
+  expect(workItemHull.geometry.position.x + workItemHull.geometry.size.width).toBeLessThanOrEqual(
+    neighborHull.geometry.position.x
+  )
+})
+
 test('WorkItem and ordinary Group use the same hull projection and only WorkItems reach the sidebar', () => {
   const group: Group = {
     id: 'group-1',

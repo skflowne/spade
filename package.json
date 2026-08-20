@@ -11,10 +11,13 @@
     "prototype:p2": "electron-vite --config prototypes/electron-browser-custom-answer/electron.vite.config.ts --entry prototypes/electron-browser-custom-answer/out/main/index.js",
     "prototype:p2:build": "electron-vite build --config prototypes/electron-browser-custom-answer/electron.vite.config.ts",
     "prototype:p2:typecheck": "tsc --noEmit -p prototypes/electron-browser-custom-answer/tsconfig.node.json && tsc --noEmit -p prototypes/electron-browser-custom-answer/tsconfig.web.json",
+    "prototype:p3": "electron-vite --config prototypes/paseo-issue-to-pr-bridge/electron.vite.config.ts --entry prototypes/paseo-issue-to-pr-bridge/out/main/index.js",
+    "prototype:p3:build": "electron-vite build --config prototypes/paseo-issue-to-pr-bridge/electron.vite.config.ts",
+    "prototype:p3:typecheck": "tsc --noEmit -p prototypes/paseo-issue-to-pr-bridge/tsconfig.node.json && tsc --noEmit -p prototypes/paseo-issue-to-pr-bridge/tsconfig.web.json",
     "docs:compare": "node scripts/docs-compare.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "eslint .",
-    "test": "npm run build && playwright test"
+    "test": "npm run build && npm run prototype:p3:build && playwright test"
   },
   "engines": {
     "node": ">=22.12.0"
