@@ -1,26 +1,46 @@
 import { writeFile } from 'node:fs/promises'
+import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 import { SpadePaseoAdapter } from './SpadePaseoAdapter'
 import { PASEO_TIMELINE_LIMIT } from '../shared/model'
 import type { PaseoAuthoritativeSnapshot } from '../shared/paseoReconciliation'
 
 const POLL_INTERVAL_MS = 500
 
-async function run(): Promise<void> {
-  const url = requiredEnvironment('SPADE_P3_PASEO_URL')
-  const cwd = requiredEnvironment('SPADE_P3_VALIDATION_CWD')
-  const provider = requiredEnvironment('SPADE_P3_VALIDATION_PROVIDER')
-  const model = requiredEnvironment('SPADE_P3_VALIDATION_MODEL')
-  const timeoutMs = Number(process.env.SPADE_P3_VALIDATION_TIMEOUT_MS ?? 180_000)
-  const outputPath = process.env.SPADE_P3_VALIDATION_OUTPUT
+type ValidationAdapter = Pick<
+  SpadePaseoAdapter,
+  | 'connect'
+  | 'openProjectCheckout'
+  | 'spawnAgent'
+  | 'attachAgent'
+  | 'fetchAuthoritative'
+  | 'archiveAgent'
+  | 'close'
+>
+
+type ValidationAdapterFactory = (url: string) => ValidationAdapter
+
+export async function runPaseoValidation(
+  environment: NodeJS.ProcessEnv = process.env,
+  createAdapter: ValidationAdapterFactory = (url) => new SpadePaseoAdapter({ url, pollIntervalMs: 0 })
+): Promise<Record<string, unknown>> {
+  const url = requiredEnvironment(environment, 'SPADE_P3_PASEO_URL')
+  const cwd = requiredEnvironment(environment, 'SPADE_P3_VALIDATION_CWD')
+  const provider = requiredEnvironment(environment, 'SPADE_P3_VALIDATION_PROVIDER')
+  const model = requiredEnvironment(environment, 'SPADE_P3_VALIDATION_MODEL')
+  const rootPrompt = requiredEnvironment(environment, 'SPADE_P3_VALIDATION_ROOT_PROMPT')
+  const childPrompt = requiredEnvironment(environment, 'SPADE_P3_VALIDATION_CHILD_PROMPT')
+  const timeoutMs = Number(environment.SPADE_P3_VALIDATION_TIMEOUT_MS ?? 180_000)
+  const outputPath = environment.SPADE_P3_VALIDATION_OUTPUT
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
     throw new Error('SPADE_P3_VALIDATION_TIMEOUT_MS must be a positive number.')
   }
 
-  const adapter = new SpadePaseoAdapter({ url, pollIntervalMs: 0 })
+  const adapter = createAdapter(url)
   const createdAgentIds: string[] = []
   const archivedAgents: Array<{ id: string; archivedAt: string }> = []
+  const failures: unknown[] = []
   let evidence: Record<string, unknown> | null = null
-  let failure: unknown = null
 
   try {
     await adapter.connect()
@@ -30,7 +50,7 @@ async function run(): Promise<void> {
       cwd,
       provider,
       model,
-      prompt: 'Reply exactly SPADE_ROOT_OK. Do not use tools or modify files.',
+      prompt: rootPrompt,
       title: 'SPADE 0.4 validation root'
     })
     createdAgentIds.push(root.id)
@@ -40,7 +60,7 @@ async function run(): Promise<void> {
       provider,
       model,
       parentAgentId: root.id,
-      prompt: 'Reply exactly SPADE_CHILD_OK. Do not use tools or modify files.',
+      prompt: childPrompt,
       title: 'SPADE 0.4 validation child'
     })
     createdAgentIds.push(child.id)
@@ -75,27 +95,41 @@ async function run(): Promise<void> {
       authoritativeRefreshAt: first.refreshedAt
     }
   } catch (error) {
-    failure = error
+    failures.push(error)
   } finally {
     for (const id of [...createdAgentIds].reverse()) {
       try {
         archivedAgents.push({ id, archivedAt: await adapter.archiveAgent(id) })
       } catch (error) {
-        archivedAgents.push({ id, archivedAt: `archive failed: ${errorMessage(error)}` })
+        failures.push(new Error(`Failed to archive validation agent ${id}: ${errorMessage(error)}`, {
+          cause: error
+        }))
       }
     }
-    await adapter.close().catch(() => undefined)
+    try {
+      await adapter.close()
+    } catch (error) {
+      failures.push(new Error(`Failed to close the Paseo validation client: ${errorMessage(error)}`, {
+        cause: error
+      }))
+    }
   }
 
-  if (failure) throw failure
+  if (failures.length === 1) throw failures[0]
+  if (failures.length > 1) {
+    throw new AggregateError(failures, 'Paseo validation failed with multiple errors.')
+  }
+  if (!evidence) throw new Error('Paseo validation completed without evidence.')
+
   const result = { ...evidence, archivedAgents }
   const serialized = `${JSON.stringify(result, null, 2)}\n`
   if (outputPath) await writeFile(outputPath, serialized, 'utf8')
   process.stdout.write(serialized)
+  return result
 }
 
 async function waitForTerminalAgent(
-  adapter: SpadePaseoAdapter,
+  adapter: ValidationAdapter,
   agentId: string,
   timeoutMs: number
 ) {
@@ -155,8 +189,8 @@ function sortedWorkspaceIds(snapshot: PaseoAuthoritativeSnapshot): string[] {
   return snapshot.workspacePages.flat().map(({ id }) => id).sort()
 }
 
-function requiredEnvironment(name: string): string {
-  const value = process.env[name]?.trim()
+function requiredEnvironment(environment: NodeJS.ProcessEnv, name: string): string {
+  const value = environment[name]?.trim()
   if (!value) throw new Error(`${name} is required.`)
   return value
 }
@@ -169,7 +203,10 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
 
-void run().catch((error: unknown) => {
-  process.stderr.write(`${errorMessage(error)}\n`)
-  process.exitCode = 1
-})
+const entryPath = process.argv[1]
+if (entryPath && import.meta.url === pathToFileURL(resolve(entryPath)).href) {
+  void runPaseoValidation().catch((error: unknown) => {
+    process.stderr.write(`${errorMessage(error)}\n`)
+    process.exitCode = 1
+  })
+}

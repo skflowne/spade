@@ -14,6 +14,7 @@ import {
   SpadePaseoAdapter,
   type PaseoAdapterNotification
 } from '../../prototypes/paseo-issue-to-pr-bridge/main/SpadePaseoAdapter'
+import { runPaseoValidation } from '../../prototypes/paseo-issue-to-pr-bridge/main/validatePaseo'
 import type {
   PaseoAgentSnapshot,
   PaseoAuthoritativeSnapshot,
@@ -92,6 +93,113 @@ function publicWorkspace(snapshot: PaseoWorkspaceSnapshot): Record<string, unkno
     githubRuntime: null
   }
 }
+
+const validationEnvironment: NodeJS.ProcessEnv = {
+  SPADE_P3_PASEO_URL: 'ws://127.0.0.1:17677/ws',
+  SPADE_P3_VALIDATION_CWD: '/opaque/checkout',
+  SPADE_P3_VALIDATION_PROVIDER: 'codex',
+  SPADE_P3_VALIDATION_MODEL: 'model-1',
+  SPADE_P3_VALIDATION_ROOT_PROMPT: 'Caller root prompt',
+  SPADE_P3_VALIDATION_CHILD_PROMPT: 'Caller child prompt'
+}
+
+type ValidationFixtureOptions = {
+  fetchError?: string
+  archiveFailures?: ReadonlySet<string>
+  closeError?: string
+}
+
+function createValidationFixture(options: ValidationFixtureOptions = {}) {
+  const root = agent('validation-root', null, 'validation-workspace')
+  const child = agent('validation-child', root.id, 'validation-workspace')
+  const calls = {
+    prompts: [] as string[],
+    archivedAgentIds: [] as string[],
+    close: 0
+  }
+  const adapter = {
+    connect: async () => undefined,
+    openProjectCheckout: async () => workspace('validation-workspace'),
+    spawnAgent: async (input: Parameters<SpadePaseoAdapter['spawnAgent']>[0]) => {
+      calls.prompts.push(input.prompt)
+      return input.parentAgentId ? child : root
+    },
+    attachAgent: async (id: string) => [root, child].find((candidate) => candidate.id === id) ?? null,
+    fetchAuthoritative: async (): Promise<PaseoAuthoritativeSnapshot> => {
+      if (options.fetchError) throw new Error(options.fetchError)
+      return {
+        rootAgentId: root.id,
+        agentPages: [[root, child]],
+        workspacePages: [[workspace('validation-workspace')]],
+        providerSubagents: [],
+        timelines: [
+          { agentId: root.id, epoch: 'epoch-1', entries: [] },
+          { agentId: child.id, epoch: 'epoch-1', entries: [] }
+        ],
+        refreshedAt: '2026-08-20T10:01:00Z'
+      }
+    },
+    archiveAgent: async (id: string) => {
+      calls.archivedAgentIds.push(id)
+      if (options.archiveFailures?.has(id)) throw new Error(`archive ${id}`)
+      return '2026-08-20T10:02:00Z'
+    },
+    close: async () => {
+      calls.close += 1
+      if (options.closeError) throw new Error(options.closeError)
+    }
+  }
+  return { adapter, calls }
+}
+
+test('forwards caller-selected validation prompts and completes reverse cleanup', async () => {
+  const fixture = createValidationFixture()
+
+  await runPaseoValidation(validationEnvironment, () => fixture.adapter)
+
+  expect(fixture.calls.prompts).toEqual(['Caller root prompt', 'Caller child prompt'])
+  expect(fixture.calls.archivedAgentIds).toEqual(['validation-child', 'validation-root'])
+  expect(fixture.calls.close).toBe(1)
+})
+
+test('fails validation when archive or client-close cleanup fails', async () => {
+  const archiveFixture = createValidationFixture({
+    archiveFailures: new Set(['validation-child'])
+  })
+  await expect(runPaseoValidation(validationEnvironment, () => archiveFixture.adapter)).rejects.toThrow(
+    'Failed to archive validation agent validation-child'
+  )
+  expect(archiveFixture.calls.archivedAgentIds).toEqual(['validation-child', 'validation-root'])
+  expect(archiveFixture.calls.close).toBe(1)
+
+  const closeFixture = createValidationFixture({ closeError: 'close failed' })
+  await expect(runPaseoValidation(validationEnvironment, () => closeFixture.adapter)).rejects.toThrow(
+    'Failed to close the Paseo validation client: close failed'
+  )
+  expect(closeFixture.calls.archivedAgentIds).toEqual(['validation-child', 'validation-root'])
+  expect(closeFixture.calls.close).toBe(1)
+})
+
+test('preserves primary and cleanup failures while attempting every cleanup action', async () => {
+  const fixture = createValidationFixture({
+    fetchError: 'authoritative validation failed',
+    archiveFailures: new Set(['validation-child']),
+    closeError: 'close failed'
+  })
+
+  const failure = await runPaseoValidation(validationEnvironment, () => fixture.adapter).catch(
+    (error: unknown) => error
+  )
+
+  expect(failure).toBeInstanceOf(AggregateError)
+  expect((failure as AggregateError).errors.map((error) => String(error))).toEqual([
+    'Error: authoritative validation failed',
+    'Error: Failed to archive validation agent validation-child: archive validation-child',
+    'Error: Failed to close the Paseo validation client: close failed'
+  ])
+  expect(fixture.calls.archivedAgentIds).toEqual(['validation-child', 'validation-root'])
+  expect(fixture.calls.close).toBe(1)
+})
 
 test('uses one public client while exhausting pages and refetching exact opaque references', async () => {
   const calls = {

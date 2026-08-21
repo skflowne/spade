@@ -39,7 +39,7 @@ External identity is always `provider + kind + opaque ID`. Titles, cwd segments,
 |---|---|---|
 | Agents | Available | `agents.list`, `agents.create`, `agents.ref().refresh`, `agents.ref().archive`, local `agents.subscribe` |
 | Workspaces | Available | `workspaces.list`, `workspaces.open`, `workspaces.create`, `workspaces.ref().refresh`, local `workspaces.subscribe` |
-| Providers | Available | `providers.waitForReady`, local `providers.subscribe`; validation discovery used public `listAvailable` and `listModels` |
+| Providers | Available | `providers.waitForReady`, local `providers.subscribe` |
 | Timeline fetch | Available | `agents.ref(id).timeline.refetch` with projected tail and limit 40 |
 | Agent/workspace subscriptions | Available | Public local update listeners plus list subscription IDs; callbacks trigger serialized authoritative refreshes |
 | Provider-native subagent discovery | Unavailable | Provider-subagent RPCs exist only on unsupported internal client exports |
@@ -86,6 +86,8 @@ SPADE_P3_PASEO_URL=ws://127.0.0.1:17677/ws \
 SPADE_P3_VALIDATION_CWD="$PWD" \
 SPADE_P3_VALIDATION_PROVIDER=codex \
 SPADE_P3_VALIDATION_MODEL=gpt-5.6-luna \
+SPADE_P3_VALIDATION_ROOT_PROMPT='Reply exactly SPADE_ROOT_OK. Do not use tools or modify files.' \
+SPADE_P3_VALIDATION_CHILD_PROMPT='Reply exactly SPADE_CHILD_OK. Do not use tools or modify files.' \
 SPADE_P3_VALIDATION_OUTPUT=/tmp/spade18-paseo-validation.json \
 npm run prototype:p3:validate:paseo
 ```
@@ -98,7 +100,7 @@ Validation record from 2026-08-21:
 | CLI and daemon | `@getpaseo/cli` 0.4.0 and isolated daemon 0.4.0 |
 | Isolation | Home `/tmp/spade-paseo-0.4.0-Tn5Skk`, `127.0.0.1:17677`, relay/MCP/web UI disabled |
 | Existing sessions | Active home `/home/skflowne/.paseo` remained running at `127.0.0.1:6768` on CLI/daemon 0.3.1 with PID 1349 |
-| Provider/model | Public discovery reported `codex/gpt-5.6-luna`; both validation agents completed `idle` |
+| Provider/model | Caller selected `codex/gpt-5.6-luna`; both validation agents completed `idle` |
 | Workspace | `wks_8bcc691d2259c589` shared exactly by root and child |
 | Root | `c1df22ff-bcfc-4b41-b79b-d262901b172a` |
 | Child | `f1f1f5b6-14a8-4f8d-b514-af98d0b69053` with exact parent `c1df22ff-bcfc-4b41-b79b-d262901b172a` |
@@ -106,7 +108,7 @@ Validation record from 2026-08-21:
 | Repeated refetch | Stable root, agent, workspace, and timeline-agent identities |
 | Cleanup | Child archived at `2026-08-21T00:33:54.655Z`; root archived at `2026-08-21T00:33:54.891Z`; isolated daemon stopped gracefully |
 
-The validation prompts only requested exact short replies and prohibited tools/file changes. The adapter opened the existing checkout, created root and explicit child through public SDK calls, fetched two authoritative snapshots, verified exact parent/workspace identities and bounds, archived both agents, and closed its single client. No current Paseo process was stopped or upgraded.
+`SPADE_P3_VALIDATION_ROOT_PROMPT` and `SPADE_P3_VALIDATION_CHILD_PROMPT` are required caller inputs and are passed unchanged to their respective agents. The recorded prompts requested exact short replies and prohibited tools/file changes. The adapter opened the existing checkout, created root and explicit child through public SDK calls, fetched two authoritative snapshots, verified exact parent/workspace identities and bounds, archived both agents, and closed its single client. Validation exits with failure if any agent cannot be archived or if the client cannot close; every reverse-order archive and client close is still attempted. No current Paseo process was stopped or upgraded.
 
 Raw local evidence was captured at `/tmp/spade18-paseo-validation.log`, `/tmp/spade18-paseo-validation.json`, and `/tmp/spade18-daemon-evidence.log` during the run.
 
