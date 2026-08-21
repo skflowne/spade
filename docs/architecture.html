@@ -146,12 +146,24 @@
 <li>The global canvas is the authoritative spatial surface for Project containers, work-item groups, user-created groups, nodes, and edges.</li>
 <li>The activity sidebar is a derived overview and navigation projection. It summarizes running activity, lists projects and collapsible work items, and issues focus/jump commands into the global canvas.</li>
 <li>A shared Group container owns child bounds, nesting, movement, and common viewport actions.</li>
-<li>Project, Group, work-item, and Node container chrome and non-interactive surfaces preserve outer-canvas zoom-in/out; containers also keep targetable navigation gutters between children for outer-canvas pan and zoom. Only interactive renderer content may consume its own wheel or pinch input.</li>
+<li>A WorkItem specializes Group hull geometry with status, explicit semantic membership, source/task context, and activity-sidebar presence. An ordinary Group remains visual containment only.</li>
+<li>Project, Group, WorkItem, and Node container chrome and non-interactive surfaces preserve outer-canvas zoom-in/out; containers also keep targetable navigation gutters between children for outer-canvas pan and zoom. Only interactive renderer content may consume its own wheel or pinch input.</li>
 <li>The Project container specializes Group behavior with project identity, host/root metadata, activity, and project actions; it does not maintain a separate geometry implementation.</li>
 <li>Project creation is one command path invoked from either the sidebar or empty-canvas overlay. It selects a host and root folder before creating the Project record and its container.</li>
 <li>Project, Group, and Node containers expose the same <code>Fit</code> and <code>Full height</code> viewport commands.</li>
 </ul>
-<p>User-created groups organize related projects spatially without becoming a second project-membership model. Project and work-item identifiers remain authoritative regardless of nesting or position.</p>
+<p>User-created groups organize related projects spatially without becoming a second project-membership model. Project and WorkItem identifiers remain authoritative regardless of nesting or position.</p>
+
+<h2 id="p3-proven-prototype-boundaries">P3-proven prototype boundaries</h2>
+<p>The production application described above still has no external integrations or persistence. The isolated P3 shell proved the following boundaries for planned production work:</p>
+<ul>
+<li>Typed renderer requests cross a sandboxed preload into one serialized main-process command/publication owner; renderers do not receive credentials, filesystem access, GitHub commands, or a Paseo client.</li>
+<li>SPADE persists its own ledger and exact external references as <code>provider + kind + opaque ID</code>. Paseo remains authoritative for managed agents, workspaces, parent relations, checkout state, and bounded timeline data; GitHub remains authoritative for Issue/PullRequest state.</li>
+<li>One confined Paseo adapter owns one daemon connection and isolates internal client use. Native GitHub reads use a separate adapter/reconciliation owner, while selected-workspace commit, push, and pull-request operations remain Paseo checkout mutations.</li>
+<li>GitHub Issue and PullRequest data reconcile into native SPADE entities with provenance and <code>Open on GitHub</code>; connections describe origin and do not execute the workflow.</li>
+<li>A WorkItem can bind one explicit managed root and relate opaque managed descendants through durable parent IDs without classifying titles, prompts, branches, paths, skill names, or ordering.</li>
+</ul>
+<p>P3 did not prove complete integration. Exact-agent refresh failed for an unresolved reason, provider-native child discovery was unavailable, bounded timeline epochs/ranges changed after Paseo restart, and one workspace was visually covered by the PullRequest node. These remain provisional gaps rather than production invariants or reasons to add skill-specific stages.</p>
 
 <h2 id="entity-integration-boundary">Entity and integration boundary</h2>
 <p>Canvas behavior stays generic. A node type is registered through an entity definition, which currently provides its metadata and creation adapter. The plan extends this boundary with entity-specific renderers, actions, and production integrations.</p>
@@ -226,7 +238,7 @@
 <ul>
 <li>The generic canvas owns container position, size, selection, nesting, connections, lifecycle, and viewport navigation.</li>
 <li>Container chrome and non-interactive surfaces never trap canvas zoom-in/out; groups preserve navigation gutters between children for outer-canvas pan and zoom, and interactive child content is the only gesture-routing exception.</li>
-<li>Group owns reusable containment geometry; Project specializes Group with project-specific metadata and actions.</li>
+<li>Group owns reusable containment geometry; Project and WorkItem specialize it with their own semantic records and actions, while ordinary Groups remain visual hulls.</li>
 <li>The activity sidebar reads shared records and activity state; it does not own a parallel navigation or persistence model.</li>
 <li>An entity renderer owns only the content and actions specific to its node type.</li>
 <li>Shared records are the common contract across application areas.</li>

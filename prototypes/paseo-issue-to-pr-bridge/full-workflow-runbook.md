@@ -2,6 +2,14 @@
 
 This is the evidence protocol for issue #20. It prepares the real `skflowne/spade-fixture#1` run without implementing or bypassing the Paseo adapter owned by #18 or the GitHub and checkout surfaces owned by #19. Record a result only after observing it; use `Not run`, `Not observed`, or `Blocked` instead of predicting behavior.
 
+## Completed run
+
+The unchanged workflow ran on 2026-08-21 and created open, unmerged fixture PR <https://github.com/skflowne/spade-fixture/pull/7>. The complete authored record and artifact inventory are in [`artifacts/p3-full-workflow/run-record.md`](artifacts/p3-full-workflow/run-record.md); raw observations are preserved at commit `8f1c3b8`.
+
+The run proved stable opaque SPADE, managed-agent, workspace, parent/workspace, and GitHub identities across restarts without duplicates. It did not prove complete integrated descendant presentation, provider-native discovery, or stable bounded timeline epochs/ranges across Paseo restart. Exact-agent reconciliation failed for an unresolved reason. The final canvas also placed workspace `node-13` beneath PullRequest `node-14`, preserving identity but obscuring presentation. Fixture workflow/scope acceptance remains unresolved because a published CodeGraph-artifact removal finding was not applied before the later clear handoff.
+
+This completed-run summary does not replace the protocol below. Its ownership, safety, evidence, cleanup, documentation, and validation rules remain the reusable authority for interpreting or repeating the run.
+
 ## Ownership and safety
 
 - `SpadePaseoAdapter` owns daemon access, agent ancestry, opaque workspaces, normalized timelines, and Paseo restart reconciliation. This run consumes the #18 handoff.

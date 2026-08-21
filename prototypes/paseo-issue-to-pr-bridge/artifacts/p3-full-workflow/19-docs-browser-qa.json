@@ -1,0 +1,60 @@
+{
+  "verifiedAt": "2026-08-21T05:31:38+02:00",
+  "tool": "native agent_browser",
+  "engine": "chrome",
+  "viewport": {
+    "width": 1280,
+    "height": 577
+  },
+  "pages": [
+    {
+      "path": "docs/plan.html",
+      "url": "http://127.0.0.1:41820/plan.html#14-github-scope",
+      "title": "SPADE Plan — SPADE documentation",
+      "result": "pass",
+      "visibleText": [
+        "GitHub Issues and PullRequests are native SPADE entities.",
+        "Open on GitHub",
+        "A WorkItem is the semantic Group specialization",
+        "do not establish SPADE knowledge"
+      ],
+      "navigationSelector": ".docs-nav",
+      "consoleMessages": [],
+      "pageErrors": [],
+      "screenshot": {
+        "dimensions": "1280x577",
+        "sha256": "609157b04f141165372f4f02bfe7bbcd107c273faae30f83d06c1a41d16b7e35"
+      }
+    },
+    {
+      "path": "docs/architecture.html",
+      "url": "http://127.0.0.1:41820/architecture.html#p3-proven-prototype-boundaries",
+      "title": "Architecture — SPADE documentation",
+      "result": "pass",
+      "visibleText": [
+        "P3-proven prototype boundaries",
+        "The production application described above still has no external integrations or persistence.",
+        "Open on GitHub",
+        "These remain provisional gaps rather than production invariants"
+      ],
+      "navigationSelector": ".docs-nav",
+      "consoleMessages": [],
+      "pageErrors": [],
+      "screenshot": {
+        "dimensions": "1280x577",
+        "sha256": "1cc85fccc208da6a09cbad819814f4632906c130f77e50104e5a6fdd891807ed"
+      }
+    }
+  ],
+  "navigation": {
+    "result": "pass",
+    "steps": [
+      "Architecture navigation link Plan opened /plan.html and exposed SPADE Plan.",
+      "Plan navigation link Architecture returned to /architecture.html."
+    ]
+  },
+  "layout": {
+    "result": "pass",
+    "observation": "Both pages rendered the shared documentation sidebar and readable article content without overlap in the captured viewport."
+  }
+}

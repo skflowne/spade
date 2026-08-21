@@ -230,6 +230,28 @@ Environment: Electron 43 under Xvfb, Node 24.18.0, `gh` 2.96.0 authenticated as 
 
 Artifact: [`artifacts/p3-native-github-shell.png`](artifacts/p3-native-github-shell.png)
 
+## Full fixture workflow findings (issue #20)
+
+The unchanged `/skill:paseo-issue-to-pr` run against `skflowne/spade-fixture#1` is recorded in [`artifacts/p3-full-workflow/run-record.md`](artifacts/p3-full-workflow/run-record.md). The raw workflow evidence is preserved at commit `8f1c3b8`; later authored-record corrections do not alter the fixture head or raw timelines.
+
+### Observed answers
+
+| Question | Evidence-backed answer |
+|---|---|
+| Is explicit parent-agent identity sufficient? | Paseo exposed five managed agents: one root and four descendants with the root's exact durable parent ID. Those facts are sufficient to relate the managed tree externally to one WorkItem without stage inference. Integrated SPADE presentation remains unresolved because exact-root refresh repeatedly returned `Agent not found` before descendant reconciliation. |
+| Which resources cannot be related durably? | Provider-native descendants remain unresolved because P3 exposes that capability as unavailable. Managed agent/workspace relations were durable in Paseo, but the integrated failure prevented descendant agent nodes and delegated edges. |
+| Are multiple opaque workspaces understandable? | All five exact workspace identities, branches, and referencing agents were preserved without role/lanes. The final canvas was not fully understandable: workspace `node-13` and PullRequest `node-14` shared one position, hiding the fifth workspace behind the PR. The identity survived; the presentation did not. |
+| Which Paseo operations required internal APIs? | One confined `DaemonClient` boundary handled connection, readiness, agent/workspace reads, subscriptions, timeline tails, and checkout RPCs. The run supports requesting stable public connection/readiness, exact-agent reconciliation diagnostics, provider-native identity, normalized restart-stable timeline semantics, selected-workspace checkout, and typed PR-status APIs. The exact-agent failure's root cause is unresolved; both supported `fetchAgent` call shapes normalize compatibly. |
+| What future SPADE command contract is needed? | Keep typed commands separate: create a WorkItem with task/source/status, then spawn or attach an agent into an explicit stable WorkItem ID with caller-selected workspace/cwd/provider/model/prompt. Persist the returned opaque agent/workspace identities before refresh and bind one root to one WorkItem. Do not let prompts, titles, branches, skill names, paths, or ordering choose membership or role. |
+| Is native GitHub presentation sufficient? | The native Issue/PR entities exposed source content, open state, URLs, head/base/revision, checks, reviews/comments, provenance, and `Open on GitHub`. They also made the contradictory published review history visible. PR #7 has valid application/build/render evidence, but workflow/scope acceptance is unresolved because the published CodeGraph-artifact removal finding remains unfixed. |
+| What survived restart? | SPADE node/resource/edge IDs, five managed agent IDs, five workspace IDs, parent/workspace mappings, and GitHub identities survived both restarts without duplicates. After Paseo restart, bounded timeline epochs/ranges changed and lifecycle state temporarily changed from `idle` to `closed`; unbounded conversation preservation was not tested. |
+
+### Selected direction and provisional gaps
+
+Observed facts select native GitHub Issue and PullRequest entities with an `Open on GitHub` escape hatch, and a WorkItem Group specialization whose explicit semantic membership can contain many opaque agents/workspaces. Ordinary Groups remain visual hulls. SPADE does not understand or require `paseo-issue-to-pr` stages.
+
+The exact-agent reconciliation failure, provider-native discovery, bounded timeline identity across daemon restart, complete managed-descendant presentation, canvas collision avoidance, and fixture workflow/scope result remain unresolved prototype findings—not production guarantees.
+
 ## Scope and residual limitations
 
 - No embedded GitHub webview is used as the primary Issue/PR experience.
@@ -241,4 +263,4 @@ Artifact: [`artifacts/p3-native-github-shell.png`](artifacts/p3-native-github-sh
 - Server/feature version facts are validation evidence from the CLI status command, not runtime facts claimed by the adapter.
 - Node dragging remains presentation-only; no move command is persisted.
 - Edges communicate provenance and context only; they do not execute or schedule work.
-- Canonical pages under `docs/` remain unchanged because this isolated prototype does not redefine current production facts.
+- The production application remains unchanged. Canonical plan and architecture pages record selected direction and P3-proven prototype boundaries; the foundation continues to describe production truth.

@@ -1,0 +1,314 @@
+SPADE issue #20 post-documentation final checks
+started_at=2026-08-21T05:32:24+02:00
+base=7fa22d8089f510117b31b93ebaa087a313c1bd47
+head_before_m3=9be104fa7973791067c432dc3f5e00da0a66f7de
+
+
+$ npm run prototype:p3:typecheck
+npm notice run spade@0.1.0 prototype:p3:typecheck
+npm notice run tsc --noEmit -p prototypes/paseo-issue-to-pr-bridge/tsconfig.node.json && tsc --noEmit -p prototypes/paseo-issue-to-pr-bridge/tsconfig.web.json
+[exit 0]
+
+$ npm run prototype:p3:build
+npm notice run spade@0.1.0 prototype:p3:build
+npm notice run electron-vite build --config prototypes/paseo-issue-to-pr-bridge/electron.vite.config.ts
+vite v7.3.6 building ssr environment for production...
+transforming...
+✓ 19 modules transformed.
+rendering chunks...
+prototypes/paseo-issue-to-pr-bridge/out/main/chunks/validationSupport-DzS5hkUY.js   0.89 kB
+prototypes/paseo-issue-to-pr-bridge/out/main/validateCheckout.js                    4.81 kB
+prototypes/paseo-issue-to-pr-bridge/out/main/validatePaseo.js                       6.85 kB
+prototypes/paseo-issue-to-pr-bridge/out/main/chunks/SpadePaseoAdapter-Dhy18pxz.js  34.95 kB
+prototypes/paseo-issue-to-pr-bridge/out/main/index.js                              68.34 kB
+✓ built in 233ms
+vite v7.3.6 building ssr environment for production...
+transforming...
+✓ 4 modules transformed.
+rendering chunks...
+prototypes/paseo-issue-to-pr-bridge/out/preload/index.js  0.82 kB
+✓ built in 37ms
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 191 modules transformed.
+rendering chunks...
+../out/renderer/index.html                   0.55 kB
+../out/renderer/assets/index-DCS8DOVF.css   31.84 kB
+../out/renderer/assets/index-CMqOTvj0.js   958.02 kB
+✓ built in 1.19s
+[exit 0]
+
+$ npm run typecheck
+npm notice run spade@0.1.0 typecheck
+npm notice run tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json
+[exit 0]
+
+$ npm run lint
+npm notice run spade@0.1.0 lint
+npm notice run eslint .
+[exit 0]
+
+$ xvfb-run -a npm test
+npm notice run spade@0.1.0 test
+npm notice run npm run build && npm run prototype:p3:build && playwright test
+npm notice run spade@0.1.0 build
+npm notice run electron-vite build
+vite v7.3.6 building ssr environment for production...
+transforming...
+✓ 2 modules transformed.
+rendering chunks...
+out/main/index.js  1.08 kB
+✓ built in 48ms
+vite v7.3.6 building ssr environment for production...
+transforming...
+✓ 1 modules transformed.
+Generated an empty chunk: "index".
+rendering chunks...
+out/preload/index.mjs  0.00 kB
+✓ built in 7ms
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 194 modules transformed.
+rendering chunks...
+../../out/renderer/index.html                   0.59 kB
+../../out/renderer/assets/index-DmdieDIg.css   22.54 kB
+../../out/renderer/assets/index-Dij7do69.js   919.92 kB
+✓ built in 1.64s
+npm notice run spade@0.1.0 prototype:p3:build
+npm notice run electron-vite build --config prototypes/paseo-issue-to-pr-bridge/electron.vite.config.ts
+vite v7.3.6 building ssr environment for production...
+transforming...
+✓ 19 modules transformed.
+rendering chunks...
+prototypes/paseo-issue-to-pr-bridge/out/main/chunks/validationSupport-DzS5hkUY.js   0.89 kB
+prototypes/paseo-issue-to-pr-bridge/out/main/validateCheckout.js                    4.81 kB
+prototypes/paseo-issue-to-pr-bridge/out/main/validatePaseo.js                       6.85 kB
+prototypes/paseo-issue-to-pr-bridge/out/main/chunks/SpadePaseoAdapter-Dhy18pxz.js  34.95 kB
+prototypes/paseo-issue-to-pr-bridge/out/main/index.js                              68.34 kB
+✓ built in 217ms
+vite v7.3.6 building ssr environment for production...
+transforming...
+✓ 4 modules transformed.
+rendering chunks...
+prototypes/paseo-issue-to-pr-bridge/out/preload/index.js  0.82 kB
+✓ built in 23ms
+vite v7.3.6 building client environment for production...
+transforming...
+✓ 191 modules transformed.
+rendering chunks...
+../out/renderer/index.html                   0.55 kB
+../out/renderer/assets/index-DCS8DOVF.css   31.84 kB
+../out/renderer/assets/index-CMqOTvj0.js   958.02 kB
+✓ built in 1.02s
+
+Running 70 tests using 1 worker
+
+  ✓   1 tests/e2e/canvas-node-state.spec.ts:23:1 › applies React Flow position changes to the canonical canvas node (5ms)
+  ✓   2 tests/e2e/core-commands.spec.ts:45:1 › registers and resolves entity definitions by type (2ms)
+  ✓   3 tests/e2e/core-commands.spec.ts:60:1 › createNode uses its registered definition and deterministic mock adapter (4ms)
+  ✓   4 tests/e2e/core-commands.spec.ts:89:1 › spawnConnectedNode creates a registered node and an edge from its source (4ms)
+  ✓   5 tests/e2e/core-commands.spec.ts:119:1 › connectNodes links existing nodes and rejects a missing endpoint (2ms)
+  ✓   6 tests/e2e/docs-compare.spec.ts:5:1 › comparison highlights added and removed documentation blocks (710ms)
+  ✓   7 tests/e2e/p3-github-adapter.spec.ts:96:1 › targets one repository and parses structured issue output (2ms)
+  ✓   8 tests/e2e/p3-github-adapter.spec.ts:125:1 › keeps PR checks, reviews, conversation comments, and inline review comments distinct (1ms)
+  ✓   9 tests/e2e/p3-github-adapter.spec.ts:153:1 › builds separate structured PR detail and inline-review-comment commands (6ms)
+  ✓  10 tests/e2e/p3-github-adapter.spec.ts:178:1 › rejects invalid repositories and malformed or partial responses before use (7ms)
+  ✓  11 tests/e2e/p3-github-adapter.spec.ts:197:1 › rejects response identities that differ from the requested GitHub resource (2ms)
+  ✓  12 tests/e2e/p3-github-adapter.spec.ts:215:1 › rejects unknown check states instead of silently categorizing them (1ms)
+  ✓  13 tests/e2e/p3-github-adapter.spec.ts:233:1 › classifies auth, repository, network, missing-resource, and generic command failures (6ms)
+  ✓  14 tests/e2e/p3-github-adapter.spec.ts:250:1 › aborts a command at the configured timeout (7ms)
+  ✓  15 tests/e2e/p3-github-reconciliation.spec.ts:55:1 › creates one WorkItem and native Issue node from exact GitHub identity (3ms)
+  ✓  16 tests/e2e/p3-github-reconciliation.spec.ts:83:1 › refreshes the existing Issue node and source WorkItem without duplicates (2ms)
+  ✓  17 tests/e2e/p3-github-reconciliation.spec.ts:114:1 › reconciles one native PR with WorkItem membership and one derived edge (3ms)
+  ✓  18 tests/e2e/p3-github-reconciliation.spec.ts:172:1 › rejects PR reconciliation from a node that is not an agent or workspace (2ms)
+  ✓  19 tests/e2e/p3-github-reconciliation.spec.ts:185:1 › keeps the current Paseo ledger valid while accepting native GitHub nodes (2ms)
+  ✓  20 tests/e2e/p3-integration-service.spec.ts:115:1 › loads a native issue and creates its WorkItem through the serialized service (4ms)
+  ✓  21 tests/e2e/p3-integration-service.spec.ts:141:1 › passes only the selected opaque workspace ID to generic checkout methods (1ms)
+  ✓  22 tests/e2e/p3-integration-service.spec.ts:180:1 › rejects checkout status returned for a different opaque workspace (1ms)
+  ✓  23 tests/e2e/p3-integration-service.spec.ts:200:1 › binds checkout status to its selection and drops stale race responses (1ms)
+  ✓  24 tests/e2e/p3-integration-service.spec.ts:207:1 › creates and refreshes one PR node from checkout-returned identity (2ms)
+  ✓  25 tests/e2e/p3-integration-service.spec.ts:246:1 › reports a created PR identity when native GitHub refresh fails (1ms)
+  ✓  26 tests/e2e/p3-integration-service.spec.ts:282:1 › renders explicit unavailable, missing-workspace, and GitHub auth result kinds (1ms)
+  ✓  27 tests/e2e/p3-integration-service.spec.ts:326:1 › opens only a constructed canonical GitHub resource URL (1ms)
+  ✓  28 tests/e2e/p3-integration-service.spec.ts:348:1 › rejects malformed integration requests and extra renderer-controlled fields (1ms)
+  ✓  29 tests/e2e/p3-ledger.spec.ts:22:1 › atomically replaces and reloads the exact prototype ledger without duplication (10ms)
+  ✓  30 tests/e2e/p3-ledger.spec.ts:67:1 › a failed temporary write leaves the prior ledger readable (4ms)
+  ✓  31 tests/e2e/p3-ledger.spec.ts:88:1 › a failed atomic replace leaves the prior ledger readable and removes the temporary file (5ms)
+  ✓  32 tests/e2e/p3-ledger.spec.ts:115:1 › rejects duplicate identities and collision-prone sequence state (3ms)
+  ✓  33 tests/e2e/p3-ledger.spec.ts:220:1 › rejects duplicate opaque roots across WorkItem bindings (1ms)
+  ✓  34 tests/e2e/p3-ledger.spec.ts:264:1 › migrates a valid version 1 ledger without changing stable identities (8ms)
+  ✓  35 tests/e2e/p3-ledger.spec.ts:312:1 › rejects malformed ledgers instead of exposing partial records (2ms)
+  ✓  36 tests/e2e/p3-ledger.spec.ts:321:1 › failed initial persistence leaves the command service uninitialized (3ms)
+  ✓  37 tests/e2e/p3-ledger.spec.ts:335:1 › the command service serializes concurrent mutation and persistence sequences (1ms)
+  ✓  38 tests/e2e/p3-ledger.spec.ts:370:1 › the command service exposes a mutation only after persistence succeeds (1ms)
+  ✓  39 tests/e2e/p3-model.spec.ts:26:1 › resolves groups by stable ID or one unique case-insensitive name (2ms)
+  ✓  40 tests/e2e/p3-model.spec.ts:36:1 › rejects ambiguous names and requires the caller to use a stable ID (1ms)
+  ✓  41 tests/e2e/p3-model.spec.ts:47:1 › ordinary Group containment stays visual while WorkItem containment adds semantic membership (1ms)
+  ✓  42 tests/e2e/p3-model.spec.ts:76:1 › moving a WorkItem member into an ordinary Group preserves semantic membership (0ms)
+  ✓  43 tests/e2e/p3-model.spec.ts:98:1 › placeholder reconciliation and provenance connections are idempotent (1ms)
+  ✓  44 tests/e2e/p3-model.spec.ts:137:1 › placeholder placement wraps before neighboring Group hulls overlap (1ms)
+  ✓  45 tests/e2e/p3-model.spec.ts:158:1 › WorkItem and ordinary Group use the same hull projection and only WorkItems reach the sidebar (1ms)
+{
+  "clientVersion": "0.4.0",
+  "daemonUrl": "ws://127.0.0.1:17677/ws",
+  "provider": "codex",
+  "model": "model-1",
+  "workspaceId": "validation-workspace",
+  "rootAgentId": "validation-root",
+  "childAgentId": "validation-child",
+  "childParentAgentId": "validation-root",
+  "rootStatus": "idle",
+  "childStatus": "idle",
+  "agentIds": [
+    "validation-child",
+    "validation-root"
+  ],
+  "workspaceIds": [
+    "validation-workspace"
+  ],
+  "timelineEntryCounts": {
+    "validation-root": 0,
+    "validation-child": 0
+  },
+  "repeatedRefetchStable": true,
+  "authoritativeRefreshAt": "2026-08-20T10:01:00Z",
+  "archivedAgents": [
+    {
+      "id": "validation-child",
+      "archivedAt": "2026-08-20T10:02:00Z"
+    },
+    {
+      "id": "validation-root",
+      "archivedAt": "2026-08-20T10:02:00Z"
+    }
+  ]
+}
+  ✓  46 tests/e2e/p3-paseo-adapter.spec.ts:157:1 › forwards caller-selected validation prompts and completes reverse cleanup (1ms)
+  ✓  47 tests/e2e/p3-paseo-adapter.spec.ts:167:1 › fails validation when archive or client-close cleanup fails (4ms)
+  ✓  48 tests/e2e/p3-paseo-adapter.spec.ts:185:1 › preserves primary and cleanup failures while attempting every cleanup action (1ms)
+{
+  "clientVersion": "0.4.0",
+  "daemonUrl": "ws://127.0.0.1:17677/ws",
+  "repository": "skflowne/spade-fixture",
+  "workspaceId": "checkout-validation",
+  "branch": "spade-19-validation",
+  "baseBranch": "main",
+  "beforeCommit": {
+    "headRevision": "revision-before",
+    "changedFiles": 1,
+    "additions": 1,
+    "deletions": 0
+  },
+  "commitRevision": "revision-after",
+  "afterCommit": {
+    "headRevision": "revision-after",
+    "changedFiles": 0
+  },
+  "push": {
+    "remote": "origin",
+    "branch": "spade-19-validation"
+  },
+  "pullRequest": {
+    "repository": "skflowne/spade-fixture",
+    "number": 9,
+    "url": "https://github.com/skflowne/spade-fixture/pull/9"
+  },
+  "pullRequestState": "OPEN"
+}
+  ✓  49 tests/e2e/p3-paseo-adapter.spec.ts:206:1 › validates the disposable checkout sequence through one adapter (1ms)
+  ✓  50 tests/e2e/p3-paseo-adapter.spec.ts:291:1 › uses one daemon driver while exhausting pages and refetching exact opaque references (7ms)
+  ✓  51 tests/e2e/p3-paseo-adapter.spec.ts:428:1 › waits for a matching provider update before spawning through the daemon driver (1ms)
+  ✓  52 tests/e2e/p3-paseo-adapter.spec.ts:472:1 › maps checkout operations through the same opaque-workspace daemon driver (3ms)
+  ✓  53 tests/e2e/p3-paseo-adapter.spec.ts:638:1 › preserves base-branch HEAD for status and successful commits (1ms)
+  ✓  54 tests/e2e/p3-paseo-adapter.spec.ts:705:1 › classifies missing workspaces and daemon checkout failures (1ms)
+  ✓  55 tests/e2e/p3-paseo-adapter.spec.ts:746:1 › rejects mismatched pull-request identities and unknown states from the daemon (1ms)
+  ✓  56 tests/e2e/p3-paseo-adapter.spec.ts:862:1 › serializes root binding, restart refetch, missing preservation, and coalesced refresh triggers (8ms)
+  ✓  57 tests/e2e/p3-paseo-adapter.spec.ts:927:1 › buffers initialization activity and refreshes again after the authoritative snapshot (2ms)
+  ✓  58 tests/e2e/p3-paseo-adapter.spec.ts:956:1 › persists a spawned opaque identity before refresh and keeps command failures local (4ms)
+  ✓  59 tests/e2e/p3-paseo-adapter.spec.ts:1006:1 › composes the concrete adapter from the configured daemon URL (1ms)
+  ✓  60 tests/e2e/p3-paseo-adapter.spec.ts:1015:1 › forwards command and adapter snapshots once through one disposable publication path (2ms)
+  ✓  61 tests/e2e/p3-paseo-adapter.spec.ts:1043:1 › transfers one opaque root binding between WorkItems without leaving a duplicate owner (2ms)
+  ✓  62 tests/e2e/p3-reconciliation.spec.ts:97:1 › recursively reconciles paginated descendants, exact parent edges, and shared workspaces (3ms)
+  ✓  63 tests/e2e/p3-reconciliation.spec.ts:135:1 › preserves durable mappings and marks missing descendants and workspaces (1ms)
+  ✓  64 tests/e2e/p3-reconciliation.spec.ts:155:1 › bounds normalized timelines and deduplicates sequenced and unsequenced replays (9ms)
+  ✓  65 tests/e2e/p3-reconciliation.spec.ts:217:1 › exposes all supported and unavailable Paseo capability states explicitly (6ms)
+  ✓  66 tests/e2e/p3-shell.spec.ts:45:1 › runs the generic P3 shell through narrow IPC and restores the exact ledger (2.0s)
+  ✓  67 tests/e2e/p3-shell.spec.ts:188:1 › renders live Paseo resource states and bounded conversation expansion defaults (666ms)
+  ✓  68 tests/e2e/p3-shell.spec.ts:297:1 › renders persisted native GitHub Issue and PullRequest nodes with shared chrome (655ms)
+  ✓  69 tests/e2e/p3-shell.spec.ts:393:1 › rejects malformed renderer commands at runtime (474ms)
+  ✓  70 tests/e2e/startup.spec.ts:4:1 › renders generic nodes and drags them only from the full header (687ms)
+
+  70 passed (7.1s)
+[exit 0]
+
+$ git diff --check
+[exit 0]
+
+$ git diff --quiet 7fa22d8 -- docs/foundation.html
+[exit 0] foundation unchanged
+
+$ JSON/browser artifact validation
+docs_browser_pages=2
+docs_browser_console_messages=0
+docs_browser_page_errors=0
+docs_browser_navigation=pass
+docs_browser_layout=pass
+[exit 0]
+
+$ immutable commit identities
+7450e8842f218532f9ccd21c426a316b03cf020c M1: prepare full fixture evidence run
+f0b2a1f5fbd3e728c632be86893f0fc9645cd7b8
+ffaf607aa90a1cb7456b76eb3b4ee2ddc6adb3a3 fix: clarify workflow evidence ownership
+e7737fdc0cf72926faf564384e2cc992ab1ba332
+8f1c3b85311e88fa76cf507bc785d1358efa4edb M2: record full fixture workflow evidence
+aeeda784e7bc87b79fe45b42f7f4f5130596bf34
+
+$ fixture PR state
+{"headRefOid":"32a9778e25e849ff5ff3d332ae86053b4ea6e3fb","mergedAt":null,"state":"OPEN","url":"https://github.com/skflowne/spade-fixture/pull/7"}
+
+$ masked credential evidence allowlist
+prototypes/paseo-issue-to-pr-bridge/artifacts/p3-full-workflow/00-environment.txt:67:  - Token: gho_************************************
+prototypes/paseo-issue-to-pr-bridge/artifacts/p3-full-workflow/run-record.md:22:`npm ci` installed 298 packages with zero vulnerabilities. npm 12 did not run Electron's downloader because of the repository script allowlist; the exact installed package's `install.js` was invoked directly, yielding Electron `v43.4.0`. Authentication was the existing `skflowne` GitHub account. The artifact records account, protocol, and scope names only; the masked `gho_************************************` authentication output was explicitly allowlisted as non-secret evidence, and usable token material is absent.
+masked_gho_match_count=2 (allowlisted masked gh auth output and authored explanation only)
+usable_token_pattern=absent
+
+completed_at=2026-08-21T05:32:58+02:00
+
+$ authored conclusion assertions
+native github direction=true
+open on github=true
+workitem specialization=true
+ordinary groups visual=true
+p3 boundaries=true
+production caveat=true
+no stage understanding=true
+root cause unresolved=true
+fixture unresolved=true
+runbook protocol retained=true
+[exit 0]
+
+$ numbered artifact uniqueness before staging
+19-docs-browser-qa.json
+20-final-checks.txt
+artifact19_count=1
+artifact20_count=1
+
+$ docs server cleanup
+docs_server_stopped=true
+
+$ tracked numbered artifacts
+prototypes/paseo-issue-to-pr-bridge/artifacts/p3-full-workflow/19-docs-browser-qa.json
+prototypes/paseo-issue-to-pr-bridge/artifacts/p3-full-workflow/20-final-checks.txt
+
+$ git diff --cached --check
+[exit 0]
+
+$ final staged paths
+M	docs/architecture.html
+M	docs/plan.html
+M	prototypes/paseo-issue-to-pr-bridge/README.md
+A	prototypes/paseo-issue-to-pr-bridge/artifacts/p3-full-workflow/19-docs-browser-qa.json
+A	prototypes/paseo-issue-to-pr-bridge/artifacts/p3-full-workflow/20-final-checks.txt
+M	prototypes/paseo-issue-to-pr-bridge/full-workflow-runbook.md
+
+finalized_at=2026-08-21T05:33:24+02:00
