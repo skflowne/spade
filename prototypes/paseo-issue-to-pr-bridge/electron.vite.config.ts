@@ -8,7 +8,12 @@ export default defineConfig({
   main: {
     build: {
       outDir: resolve(prototypeRoot, 'out/main'),
-      rollupOptions: { input: { index: resolve(prototypeRoot, 'main/index.ts') } }
+      rollupOptions: {
+        input: {
+          index: resolve(prototypeRoot, 'main/index.ts'),
+          validatePaseo: resolve(prototypeRoot, 'main/validatePaseo.ts')
+        }
+      }
     },
     plugins: [externalizeDepsPlugin()]
   },

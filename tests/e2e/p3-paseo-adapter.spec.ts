@@ -99,6 +99,7 @@ test('uses one public client while exhausting pages and refetching exact opaque 
     agentLists: [] as unknown[],
     workspaceLists: [] as unknown[],
     agentRefreshes: [] as string[],
+    agentArchives: [] as string[],
     workspaceRefreshes: [] as string[],
     timelines: [] as string[],
     providerReadyCwds: [] as string[],
@@ -139,6 +140,10 @@ test('uses one public client while exhausting pages and refetching exact opaque 
           calls.agentRefreshes.push(id)
           const snapshot = [...agents, createdAgent].find((candidate) => candidate.id === id)
           return snapshot ? { agent: publicAgent(snapshot), project: null } : null
+        },
+        archive: async () => {
+          calls.agentArchives.push(id)
+          return { archivedAt: '2026-08-20T10:02:00Z' }
         },
         timeline: {
           refetch: async () => {
@@ -241,6 +246,7 @@ test('uses one public client while exhausting pages and refetching exact opaque 
     title: 'Caller title'
   })).toMatchObject({ id: 'created', workspaceId: 'workspace-a' })
   expect((await adapter.attachAgent('created'))?.id).toBe('created')
+  expect(await adapter.archiveAgent('created')).toBe('2026-08-20T10:02:00Z')
   const snapshot = await adapter.fetchAuthoritative('root', {
     agentIds: ['child'],
     workspaceIds: ['workspace-b']
@@ -253,6 +259,7 @@ test('uses one public client while exhausting pages and refetching exact opaque 
   expect(calls.agentLists).toHaveLength(2)
   expect(calls.workspaceLists).toHaveLength(2)
   expect(calls.agentRefreshes).toEqual(['created', 'root', 'child'])
+  expect(calls.agentArchives).toEqual(['created'])
   expect(calls.workspaceRefreshes).toEqual(['workspace-b', 'workspace-a', 'workspace-b'])
   expect(calls.providerReadyCwds).toEqual(['/opaque/workspace-a'])
   expect(calls.spawnOptions).toEqual([{

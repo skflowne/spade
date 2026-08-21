@@ -158,6 +158,10 @@ export class SpadePaseoAdapter {
     return result ? toAgentSnapshot(result.agent) : null
   }
 
+  async archiveAgent(agentId: string): Promise<string> {
+    return (await this.client.agents.ref(agentId).archive()).archivedAt
+  }
+
   async fetchAuthoritative(
     rootAgentId: string,
     references: PaseoSnapshotReferences

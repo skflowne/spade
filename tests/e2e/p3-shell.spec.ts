@@ -270,6 +270,7 @@ test('renders live Paseo resource states and bounded conversation expansion defa
     }))
     await expect(readEvent).toHaveAttribute('open', '')
     await expect(window.getByRole('heading', { name: 'Paseo bridge' })).toBeVisible()
+    await window.screenshot({ path: test.info().outputPath('p3-paseo-live.png') })
   } finally {
     await application.close()
     await rm(directory, { recursive: true, force: true })
