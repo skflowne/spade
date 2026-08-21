@@ -1,0 +1,197 @@
+[User] <skill name="explore" location="/home/skflowne/.agents/skills/explore/SKILL.md">
+References are relative to /home/skflowne/.agents/skills/explore.
+
+# Explore
+
+Use scout agents to cover broad exploration quickly without flooding the parent context. The parent owns decomposition, synthesis, and conclusions; scouts only retrieve focused evidence.
+
+## 1. Size the exploration
+
+Estimate breadth, coupling, uncertainty, and how independently the area can be divided. Keep delegation proportional:
+
+- **Small, localized lookup:** inspect directly; do not create fanout merely because this skill was invoked.
+- **Medium exploration:** use 1-2 scouts for distinct questions or areas.
+- **Large exploration:** use 3-4 scouts with non-overlapping slices.
+- **Very large, heterogeneous exploration:** start with at most 5 scouts. Add another targeted pass only for a concrete evidence gap.
+
+Prefer fewer well-scoped scouts over a large overlapping swarm. Parallelize independent discovery, not duplicate searches.
+
+## 2. Choose economical models
+
+Inspect the available agents and live model mapping before launching when the harness supports it. Use the configured `scout` agent and prefer a fast, low- or medium-capability model:
+
+- Use a low-capability model for file discovery, symbol location, pattern inventory, and other bounded retrieval.
+- Use a medium-capability model for call-flow tracing, cross-module relationships, convention comparison, or moderately ambiguous questions.
+- Use a high-capability model only when the exploration itself requires difficult semantic judgment and a lower tier is unlikely to succeed.
+
+Keep the scout's default model when it already fits. Do not use an expensive model merely because the parent uses one. Escalate only the failed or contradictory slice, not the entire fanout.
+
+## 3. Partition by useful boundaries
+
+Give each scout one clear, read-only slice, such as:
+
+- one subsystem or directory
+- one runtime path or data flow
+- tests and verification conventions
+- configuration, integration points, or public contracts
+- callers, dependencies, risks, or likely change surface
+
+Include only the goal, scope, known entry points, and questions needed for that slice. Use fresh context when possible; do not copy the full parent conversation. Tell scouts not to edit files or spawn sub-agents.
+
+## 4. Enforce compressed scout output
+
+Every scout prompt must require **only decision-relevant findings**. Use this output contract, adjusted downward for simpler slices:
+
+```text
+Return only the key information the parent needs.
+- Maximum 5-8 bullets and roughly 300-500 words.
+- Cite exact file paths and line ranges for every code claim.
+- Include only: important entry points, relationships/data flow, constraints or risks, and unresolved evidence gaps.
+- Do not narrate your search process, repeat the task, dump large code blocks, provide generic advice, or list irrelevant files.
+- If nothing relevant exists, say so in one sentence.
+- Do not edit files or spawn sub-agents.
+```
+
+Disable verbose progress and unnecessary saved output where supported. Give parallel scouts unique scopes and, if artifacts are needed, unique output paths.
+
+Example shape:
+
+```typescript
+subagent({
+  tasks: [
+    { agent: "scout", model: "<economical-low-or-medium-model>", task: "Map the request-entry flow for <target>. <compressed output contract>", output: false, progress: false },
+    { agent: "scout", model: "<economical-low-or-medium-model>", task: "Find tests and validation conventions for <target>. <compressed output contract>", output: false, progress: false },
+    { agent: "scout", model: "<economical-low-or-medium-model>", task: "Trace dependencies and likely change surface for <target>. <compressed output contract>", output: false, progress: false }
+  ],
+  context: "fresh",
+  concurrency: 3,
+  async: true
+})
+```
+
+Omit the explicit `model` override when the configured scout model is already suitable. Adjust task count, concurrency, and output limits to the exploration rather than copying the example mechanically.
+
+## 5. Synthesize without importing noise
+
+After scouts return:
+
+1. Deduplicate overlapping findings.
+2. Resolve contradictions from cited source; launch one narrow follow-up only if necessary.
+3. Personally inspect the few load-bearing files or sources before relying on decisive claims.
+4. Produce one compact map of the relevant area, key evidence, remaining uncertainty, and recommended next inspection or action.
+5. Do not paste raw scout reports into the answer or working context.
+
+Stop when the user's questions are covered with enough evidence to act. Exploration is not a reason to inventory the entire repository.
+</skill>
+
+Read-only discovery for https://github.com/skflowne/spade-fixture/issues/1 in repository skflowne/spade-fixture at committed base 199bced07fd3a626d795135bb144b25cbd262ca3. Collect the issue verbatim, discussion and linked work, relevant implementation and tests, and related branches, worktrees, commits, and PRs. Record evidence only; do not rewrite intent or acceptance criteria and do not modify repository files. Return a compact discovery handoff with source links, exact base SHA, existing-work adoption recommendation, and any live-writer or scope-conflict evidence. Paseo has already created the dedicated worktree and branch. Use this workspace; do not create a nested worktree.
+[Thought] **Listing configured agents**
+[Subagent]
+[Thought] **Planning parallel repo and git status scouting**
+[Shell] pwd && git rev-parse HEAD && git status --short --branch && printf '\nWORKTREES\n' && git worktree list --porcelain && printf '\nREMOTES\n' && git remote -v && printf '\nCODEGRAPH\n' && if [ -d .co...
+[Shell] gh issue view 1 --repo skflowne/spade-fixture --json number,title,body,author,assignees,labels,state,stateReason,url,comments,closedAt,createdAt,updatedAt,milestone,projectItems
+[Shell] gh pr list --repo skflowne/spade-fixture --state all --limit 100 --json number,title,state,url,headRefName,headRefOid,baseRefName,author,body,createdAt,updatedAt,closedAt,mergedAt,isDraft && printf...
+[Thought] **Planning scout roles for code tracking**
+[Subagent]
+[Thought] **Planning GitHub API usage for timeline and refs**
+[Shell] find . -maxdepth 3 -type f -not -path './.git/*' -print | sort && printf '\nTRACKED\n' && git ls-tree -r --name-only 199bced07fd3a626d795135bb144b25cbd262ca3
+[Shell] gh api -H 'Accept: application/vnd.github+json' repos/skflowne/spade-fixture/issues/1/timeline --paginate
+[Shell] printf '%s\n' 'REMOTE HEADS/TAGS' && git ls-remote --heads --tags origin && printf '%s\n' 'PULL REFS' && git ls-remote origin 'refs/pull/*/head' 'refs/pull/*/merge'
+[Shell] printf '%s\n' 'COMMIT' && git show --stat --format=fuller 199bced07fd3a626d795135bb144b25cbd262ca3 && printf '%s\n' 'REFLOGS' && git reflog --all --date=iso --format='%H %gd %gs' -30
+[Thought] **Assessing cleanup of tool-generated artifacts**
+
+**Planning retrieval of PR and issue comments**
+[Shell] for n in 2 3 4 5 6; do echo "=== PR $n ==="; gh pr view "$n" --repo skflowne/spade-fixture --json number,title,state,url,body,headRefName,headRefOid,baseRefName,commits,files,comments,reviews; done
+[Shell] gh issue view 16 --repo skflowne/spade --json number,title,body,state,url,comments,createdAt,updatedAt && printf '\n=== ISSUE 20 ===\n' && gh issue view 20 --repo skflowne/spade --json number,title...
+[Shell] gh api repos/skflowne/spade-fixture/branches --paginate && printf '\nTAGS\n' && gh api repos/skflowne/spade-fixture/tags --paginate && printf '\nRELEASES\n' && gh api repos/skflowne/spade-fixture/r...
+[Thought] **Checking main worktree status for live changes**
+[Shell] printf '%s\n' 'CURRENT WORKTREE STATUS' && git status --short --branch && printf '%s\n' 'MAIN WORKTREE STATUS' && git -C /home/skflowne/projects/spade-fixture status --short --branch && printf '%s\...
+[Shell] for sha in 3989ad886fb1335d9ba53fcd1d0218ad6341920a d01349e0e85d47ed30f455247ffa9ecda8c643aa 284357619517c9cca3c266de40144fb01a175ca0 cbb55134bb8377c92776d76fda42ae71aeaee96e e1dbd2b6a7ec3f369cc554...
+[Shell] gh search prs --repo skflowne/spade-fixture '"Scaffold a Vue 3 TypeScript application"' --state open --json number,title,url,state,updatedAt || true; gh search issues --repo skflowne/spade-fixture ...
+[Thought] **Confirming exact issue references**
+[Subagent Wait]
+[Thought] **Reviewing test completion status**
+[Subagent]
+Background task completed: **parallel:scout+scout**
+
+scout:
+- **Critical — no implementation surface exists:** `HEAD 199bced07fd3a626d795135bb144b25cbd262ca3` contains only an empty root tree; `git ls-tree -r HEAD` returns no files. There is therefore no Vue entry point, package manifest, README, lockfile, test suite, or CI configuration to extend.
+- **Issue scope is fully greenfield:** GitHub issue #1 requires a Vue 3 + TypeScript + Vite root scaffold, replacement presentation headed “SPADE workflow fixture,” explanatory copy, committed npm lockfile, and README development/build commands ([issue #1](https://github.com/skflowne/spade-fixture/issues/1)).
+- **Acceptance constraints:** The issue explicitly requires clean-checkout `npm install`, successful `npm run build`, and rendering the required heading/copy; it prohibits router, state library, backend, and unrelated features ([issue #1](https://github.com/skflowne/spade-fixture/issues/1)).
+- **History/CI gap:** The repository has exactly one commit, `199bced` (“Initialize fixture repository”), and no committed tests or CI files. No existing conventions, build scripts, dependency versions, or test patterns can be inferred.
+- **Branch/worktree state:** `origin/main`, local `main`, and this discovery branch all point to `199bced`; a separate main worktree exists at `/home/skflowne/projects/spade-fixture`. The current worktree has only untracked `.pi-subagents/artifacts/*` harness files; no tracked modifications or staged files were found.
+- **Implementation risk:** Because the baseline is empty, the complete change surface is the repository root. The main unresolved choice is the generated Vue/Vite scaffold version/template; preserve the issue’s bounded scope and add validation for install, build, and rendered text.
+
+scout:
+- **Issue #1 remains OPEN**, created/updated 2026-08-20, with no assignee, labels, milestone, comments, or implementation PR: https://github.com/skflowne/spade-fixture/issues/1. Scope is bounded Vue 3 + TypeScript + Vite scaffold, required presentation, lockfile, README commands, and `npm install`/`npm run build`.
+- **Local and remote Git state are pristine for tracked files.** `main`, `origin/main`, and discovery branch `paseo/issue-1-discovery-a557b80a` all point to `199bced07fd3a626d795135bb144b25cbd262ca3` (`Initialize fixture repository`). `git ls-remote origin` reports only `refs/heads/main`.
+- **Worktrees:** `/home/skflowne/projects/spade-fixture` is the `main` worktree at `199bced`; `/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-discovery-a557b80a` is the discovery worktree on its dedicated branch at the same SHA. The discovery checkout has only untracked `.pi-subagents/` artifacts; no tracked or staged changes. The main worktree should be treated as a possible live-writer location, although no conflicting tracked diff was observed.
+- **No PR is linked to issue #1.** All repository PRs are closed disposable SPADE issue-19 validations (#2–#6), each based on `main` at `199bced`; their head refs/SHAs are recorded remotely only as `refs/pull/*/head` (e.g. #6 `e1dbd2b6a7ec3f369cc5540277b630f7725fc84a`). PR URLs: https://github.com/skflowne/spade-fixture/pulls.
+- **Issue timeline contains two cross-references**, both to the parent SPADE repository: SPADE #16 (prototype native GitHub-to-Paseo workflow) and SPADE #20 (full fixture issue-to-PR validation), respectively https://github.com/skflowne/spade/issues/16 and https://github.com/skflowne/spade/issues/20. SPADE #20 explicitly depends on #19 and requires running the unchanged skill against fixture #1.
+- **Evidence gaps:** issue #1 has no discussion or review history; no issue-specific branch, commit, PR, or GitHub check exists. GitHub API history only exposes the two cross-references; external SPADE implementation/workspace state is not inferable from this repository.
+
+Session file: /home/skflowne/.pi/agent/sessions/--tmp-spade20-paseo-0.4-home-worktrees-1irtwnun-issue-1-discovery-a557b80a--/2026-08-21T02-29-46-081Z_01a02227-25e1-7b54-a2ac-7a94477cbc7b/4118edc1/run-1/session.jsonl
+[Thought] **Removing .pi-subagents artifacts**
+[Shell] rm -rf .pi-subagents && git status --short --branch && git -C /home/skflowne/projects/spade-fixture status --short --branch
+[Thought] **Compiling exact issue details with source links**
+[User] Return the requested compact final discovery handoff now.
+# Discovery handoff — `spade-fixture#1`
+
+**Issue:** [Scaffold a Vue 3 TypeScript application](https://github.com/skflowne/spade-fixture/issues/1)
+**Exact committed base:** [`199bced07fd3a626d795135bb144b25cbd262ca3`](https://github.com/skflowne/spade-fixture/commit/199bced07fd3a626d795135bb144b25cbd262ca3)
+**State:** Open; no assignees, labels, milestone, comments, or reviews.
+
+## Issue text — verbatim
+
+> ## Goal
+>
+> Create a minimal Vue 3 application that provides a fast, bounded implementation target for SPADE's real issue-to-PR workflow prototype.
+>
+> ## Requirements
+>
+> - Scaffold a Vue 3 application with TypeScript and Vite in the repository root.
+> - Replace the starter presentation with a simple page headed `SPADE workflow fixture` and a short sentence explaining that the repository exercises an agent issue-to-PR workflow.
+> - Keep the implementation limited to the scaffold and this presentation; add no router, state library, backend, or unrelated features.
+> - Commit the generated npm lockfile.
+> - Document the development and production-build commands in the README.
+>
+> ## Acceptance criteria
+>
+> - `npm install` succeeds from a clean checkout.
+> - `npm run build` succeeds.
+> - The application renders the required heading and explanatory copy.
+
+## Existing implementation and tests
+
+- Base commit has an **empty committed tree**: no source files, `package.json`, lockfile, README, tests, or CI.
+- Repository history contains only the base commit, “Initialize fixture repository.”
+- No project conventions or dependency versions exist to preserve.
+- The implementation surface is therefore a greenfield root-level Vue/Vite scaffold.
+- No existing automated test framework is available. Required validation is clean installation, production build, and rendered-copy verification.
+
+## Discussion and linked work
+
+Issue #1 has **no comments**. Its timeline contains two cross-references:
+
+- [SPADE #16 — Prototype native GitHub-to-Paseo workflow](https://github.com/skflowne/spade/issues/16): names this issue as the bounded real task. Its discussion consists of four child links, [#17](https://github.com/skflowne/spade/issues/17), [#18](https://github.com/skflowne/spade/issues/18), [#19](https://github.com/skflowne/spade/issues/19), and [#20](https://github.com/skflowne/spade/issues/20).
+- [SPADE #20 — Run and record the full fixture issue-to-PR workflow](https://github.com/skflowne/spade/issues/20): explicitly requires running the unchanged workflow against `spade-fixture#1`, producing a real PR or recording an external blocker, and preserving evidence for restart/reconciliation validation. It depends on SPADE #19 and has no comments.
+
+## Existing branches, commits, PRs, and worktrees
+
+- Remote has only `main`, at the exact base SHA; no tags or releases.
+- No issue-specific implementation branch, commit, PR, or check exists.
+- Closed PRs [#2–#6](https://github.com/skflowne/spade-fixture/pulls) are explicitly disposable SPADE #19 adapter/checkout validations:
+  - PR #2 adds only `.spade-19-verification.txt`.
+  - PRs #3–#6 each add only two disposable lines to `README.md`.
+  - All branch directly from the base, were closed without merge, and have no comments or reviews.
+- Worktrees:
+  - `/home/skflowne/projects/spade-fixture` — `main`, clean, base SHA.
+  - Current dedicated worktree — `paseo/issue-1-discovery-a557b80a`, clean, base SHA.
+- No lock files, staged changes, tracked modifications, or other live-writer evidence were found. No scope conflict is currently visible.
+
+## Existing-work adoption recommendation
+
+**Adopt none of the prior PR work.** PRs #2–#6 are unrelated disposable validation artifacts and contain no Vue scaffold or reusable implementation. Implement directly from the exact empty base on the already-created dedicated branch, keeping the change strictly within issue #1’s stated scope.
+[Thought] **Documenting issue and source details**
+
+**Finalizing issue verbatim inclusion**

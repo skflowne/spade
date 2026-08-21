@@ -1,0 +1,208 @@
+{
+  "capturedAt": "2026-08-21T03:00:27.518Z",
+  "source": "@getpaseo/cli 0.4.0 connection using daemon public agent/workspace/timeline RPCs; read-only diagnostic, not SPADE reconciliation input",
+  "providerNativeDiscovery": {
+    "state": "unavailable-in-integrated-prototype",
+    "rows": null,
+    "note": "No provider-native query was issued; absence is not inferred."
+  },
+  "agents": [
+    {
+      "id": "fe107baf-4b33-4442-9040-9183efa738da",
+      "parentAgentId": null,
+      "workspaceId": "wks_dede527f1d2385de",
+      "provider": "pi",
+      "model": "openai-codex/gpt-5.6-sol",
+      "status": "idle",
+      "cwd": "/home/skflowne/projects/spade-fixture",
+      "createdAt": "2026-08-21T02:29:01.737Z",
+      "updatedAt": "2026-08-21T02:54:48.041Z",
+      "timelineTail": {
+        "limit": 40,
+        "epoch": "621cad44-d8f4-4283-8ac2-c2dd9b7b3153",
+        "error": null,
+        "entryCount": 40,
+        "first": {
+          "timestamp": "2026-08-21T02:42:41.160Z",
+          "seqStart": 127,
+          "seqEnd": 127,
+          "kind": "reasoning"
+        },
+        "last": {
+          "timestamp": "2026-08-21T02:54:47.918Z",
+          "seqStart": 210,
+          "seqEnd": 218,
+          "kind": "assistant_message"
+        }
+      }
+    },
+    {
+      "id": "cc7f3107-330c-489b-a538-ca9257e5b768",
+      "parentAgentId": "fe107baf-4b33-4442-9040-9183efa738da",
+      "workspaceId": "wks_2f5fe20b3713f228",
+      "provider": "pi",
+      "model": "openai-codex/gpt-5.6-sol",
+      "status": "idle",
+      "cwd": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/pr-7-review-r2-a557b80a",
+      "createdAt": "2026-08-21T02:48:55.335Z",
+      "updatedAt": "2026-08-21T02:52:38.351Z",
+      "timelineTail": {
+        "limit": 40,
+        "epoch": "d2494686-3df5-49c5-b13a-c97070b199c6",
+        "error": null,
+        "entryCount": 41,
+        "first": {
+          "timestamp": "2026-08-21T02:49:07.268Z",
+          "seqStart": 4,
+          "seqEnd": 13,
+          "kind": "tool_call"
+        },
+        "last": {
+          "timestamp": "2026-08-21T02:52:38.283Z",
+          "seqStart": 106,
+          "seqEnd": 110,
+          "kind": "assistant_message"
+        }
+      }
+    },
+    {
+      "id": "aa1f78f1-c5a2-466f-b01f-26bfb10ae93b",
+      "parentAgentId": "fe107baf-4b33-4442-9040-9183efa738da",
+      "workspaceId": "wks_f27cf54214571eef",
+      "provider": "pi",
+      "model": "openai-codex/gpt-5.6-sol",
+      "status": "idle",
+      "cwd": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/pr-7-review-r1-a557b80a",
+      "createdAt": "2026-08-21T02:42:38.169Z",
+      "updatedAt": "2026-08-21T02:47:46.925Z",
+      "timelineTail": {
+        "limit": 40,
+        "epoch": "71c5936b-27fd-418f-bc59-372bb282195b",
+        "error": null,
+        "entryCount": 36,
+        "first": {
+          "timestamp": "2026-08-21T02:42:38.791Z",
+          "seqStart": 1,
+          "seqEnd": 1,
+          "kind": "user_message"
+        },
+        "last": {
+          "timestamp": "2026-08-21T02:47:46.860Z",
+          "seqStart": 97,
+          "seqEnd": 103,
+          "kind": "assistant_message"
+        }
+      }
+    },
+    {
+      "id": "838484d7-8180-4595-b071-ddc92b5743a7",
+      "parentAgentId": "fe107baf-4b33-4442-9040-9183efa738da",
+      "workspaceId": "wks_7055e4e4aa6c4080",
+      "provider": "pi",
+      "model": "openai-codex/gpt-5.6-sol",
+      "status": "idle",
+      "cwd": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-implementation-a557b80a",
+      "createdAt": "2026-08-21T02:32:48.770Z",
+      "updatedAt": "2026-08-21T02:41:24.271Z",
+      "timelineTail": {
+        "limit": 40,
+        "epoch": "a8e5073c-0a68-4fad-bec2-1a31de3eb859",
+        "error": null,
+        "entryCount": 40,
+        "first": {
+          "timestamp": "2026-08-21T02:35:51.576Z",
+          "seqStart": 99,
+          "seqEnd": 99,
+          "kind": "tool_call"
+        },
+        "last": {
+          "timestamp": "2026-08-21T02:41:24.049Z",
+          "seqStart": 158,
+          "seqEnd": 222,
+          "kind": "assistant_message"
+        }
+      }
+    },
+    {
+      "id": "d5124f66-52d8-4714-90e2-9f0646271483",
+      "parentAgentId": "fe107baf-4b33-4442-9040-9183efa738da",
+      "workspaceId": "wks_bc966044af2bfedd",
+      "provider": "pi",
+      "model": "openai-codex/gpt-5.6-sol",
+      "status": "idle",
+      "cwd": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-discovery-a557b80a",
+      "createdAt": "2026-08-21T02:29:46.590Z",
+      "updatedAt": "2026-08-21T02:32:03.826Z",
+      "timelineTail": {
+        "limit": 40,
+        "epoch": "e4bb864c-b2d4-4bbb-a2ff-9a1a1f146bb1",
+        "error": null,
+        "entryCount": 34,
+        "first": {
+          "timestamp": "2026-08-21T02:29:47.200Z",
+          "seqStart": 1,
+          "seqEnd": 1,
+          "kind": "user_message"
+        },
+        "last": {
+          "timestamp": "2026-08-21T02:32:03.810Z",
+          "seqStart": 77,
+          "seqEnd": 249,
+          "kind": "assistant_message"
+        }
+      }
+    }
+  ],
+  "workspaces": [
+    {
+      "id": "wks_2f5fe20b3713f228",
+      "projectId": "prj_fb81b9fbfd71fd8d",
+      "name": "feature/issue-1-vue-scaffold-2",
+      "workspaceDirectory": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/pr-7-review-r2-a557b80a",
+      "branch": "feature/issue-1-vue-scaffold-2",
+      "status": "attention",
+      "activityAt": null,
+      "statusEnteredAt": "2026-08-21T02:49:12.761Z"
+    },
+    {
+      "id": "wks_7055e4e4aa6c4080",
+      "projectId": "prj_fb81b9fbfd71fd8d",
+      "name": "feature/issue-1-vue-scaffold",
+      "workspaceDirectory": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-implementation-a557b80a",
+      "branch": "feature/issue-1-vue-scaffold",
+      "status": "attention",
+      "activityAt": null,
+      "statusEnteredAt": "2026-08-21T02:34:01.356Z"
+    },
+    {
+      "id": "wks_bc966044af2bfedd",
+      "projectId": "prj_fb81b9fbfd71fd8d",
+      "name": "paseo/issue-1-discovery-a557b80a",
+      "workspaceDirectory": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-discovery-a557b80a",
+      "branch": "paseo/issue-1-discovery-a557b80a",
+      "status": "attention",
+      "activityAt": null,
+      "statusEnteredAt": "2026-08-21T02:31:22.320Z"
+    },
+    {
+      "id": "wks_dede527f1d2385de",
+      "projectId": "prj_fb81b9fbfd71fd8d",
+      "name": "main",
+      "workspaceDirectory": "/home/skflowne/projects/spade-fixture",
+      "branch": "main",
+      "status": "attention",
+      "activityAt": null,
+      "statusEnteredAt": "2026-08-21T02:54:48.038Z"
+    },
+    {
+      "id": "wks_f27cf54214571eef",
+      "projectId": "prj_fb81b9fbfd71fd8d",
+      "name": "feature/issue-1-vue-scaffold-1",
+      "workspaceDirectory": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/pr-7-review-r1-a557b80a",
+      "branch": "feature/issue-1-vue-scaffold-1",
+      "status": "attention",
+      "activityAt": null,
+      "statusEnteredAt": "2026-08-21T02:42:56.913Z"
+    }
+  ]
+}

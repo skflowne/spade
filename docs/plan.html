@@ -30,7 +30,7 @@
         <p>Product direction, proposed capabilities, prototypes, and open decisions.</p>
       </header>
       <article class="docs-content">
-<p><em>Last updated: 2026-08-17</em></p>
+<p><em>Last updated: 2026-08-21</em></p>
 <h2 id="1-product-vision">1. Product vision</h2>
 <p>SPADE (Spatial Agent Development Environment) is a desktop, graph/canvas-based development environment built around a spatial representation of agent work.</p>
 <p>The canvas is a <strong>mind map of ongoing work</strong>, not an executable dataflow engine. Nodes represent live resources and durable artifacts: agent conversations, terminals, workspaces, diffs, browsers, files, whiteboards, and later task boards. Directed connections record where work came from, what it references, and how it branched over time.</p>
@@ -66,7 +66,7 @@
 <li>One global canvas contains auto-sized project containers; the sidebar is an activity overview and jump surface, not a project switcher.</li>
 <li>Issues and ad-hoc tasks become logical work items grouped automatically inside their project container.</li>
 <li>Projects that belong together can be arranged spatially inside higher-level group containers without merging their identities.</li>
-<li>A logical work item may contain many Paseo workspaces, branches, and agents created by implementation, review, and fix stages.</li>
+<li>A logical work item may contain many Paseo workspaces, branches, and agents, related by explicit opaque identities rather than inferred workflow stages.</li>
 <li>A workspace remains the concrete checkout/worktree/cwd execution fact; it is visible on nodes but is not the primary manual grouping unit.</li>
 </ul>
 </li>
@@ -296,7 +296,7 @@
 <p>When no projects exist, the global canvas remains visible and shows an <code>Open project…</code> action as a canvas overlay. The same action remains available at the top of the activity sidebar after projects exist.</p>
 <p>Project creation first selects the execution host, then a root folder on that host. SPADE derives a proposed name and Git metadata when available, allows confirmation, creates the Project record and Project container, and jumps to it.</p>
 <h3 id="4-5-logical-work-item">4.5 Logical work item</h3>
-<p>A work item is the automatic organizational unit for an issue, request, investigation, or ad-hoc objective.</p>
+<p>A WorkItem is the semantic Group specialization for an issue, request, investigation, or ad-hoc objective. It reuses Group hull geometry while adding explicit membership, source/task, status, and activity-sidebar presence. An ordinary Group remains a visual hull only: spatial containment does not assign work-item membership or status.</p>
 <pre><code class="language-ts">type WorkItem = {
   version: DomainRecordVersion;
   id: string;
@@ -310,14 +310,14 @@
   createdAt: string;
 };
 </code></pre>
-<p>Membership is explicit through <code>node.workItemId</code>, but assignment is automatic:</p>
+<p>Membership is explicit through <code>node.workItemId</code>, with automatic propagation only from durable facts:</p>
 <ul>
-<li>A node spawned from a work-item node inherits its <code>projectId</code> and <code>workItemId</code>.</li>
-<li>A newly created implementation/review/fix workspace is assigned to the same work item.</li>
-<li>Subagents inherit the parent agent's work item.</li>
+<li>A node spawned from a WorkItem member inherits its <code>projectId</code> and <code>workItemId</code>.</li>
+<li>An agent or workspace created or attached through a WorkItem command receives that exact stable WorkItem ID.</li>
+<li>A managed descendant with an explicit durable parent relation inherits the root agent's WorkItem.</li>
 <li>A user may reassign membership, but normal workflows should not require manual grouping.</li>
 </ul>
-<p>The canvas draws a background hull or auto-sized group around all visible nodes sharing a work item. Moving a node does not silently change membership. Completed operational stages may collapse automatically while remaining inspectable.</p>
+<p>The canvas draws an auto-sized WorkItem hull around semantic members and projects the same record into the activity sidebar. Moving a node does not silently change membership. Titles, prompts, branches, paths, skill names, and creation order never determine membership or a workflow role.</p>
 <h3 id="4-6-connections">4.6 Connections</h3>
 <pre><code class="language-ts">type CanvasEdge = {
   version: DomainRecordVersion;
@@ -572,15 +572,11 @@ const defaultConversationExpansion = {
 <h3 id="7-4-browser">7.4 Browser</h3>
 <p>Browser sources:</p>
 <ol>
-<li>Normal remote pages such as GitHub issues and PRs.</li>
+<li>Normal remote pages, including GitHub escape-hatch destinations.</li>
 <li>Local application/dev-server pages.</li>
 <li>SPADE/agent-generated artifacts.</li>
 </ol>
-<p>Default behavior when created for a GitHub project:</p>
-<ul>
-<li>Open the repository Issues page.</li>
-<li>Diff/PR surfaces can open a connected browser at the relevant issue or PR.</li>
-</ul>
+<p>GitHub issues and pull requests use native SPADE entities as their primary presentation. Each retains <code>Open on GitHub</code>; repository and diff surfaces may also open a connected browser for the canonical remote URL.</p>
 <p>Remote pages and generated artifacts are different trust/rendering modes and should not share the same privilege model.</p>
 <h4 id="browser-rendering-architecture-to-prototype">Browser rendering architecture to prototype</h4>
 <ul>
@@ -623,38 +619,20 @@ const defaultConversationExpansion = {
 <p>Do not implement it as arbitrary whiteboard shapes if agents need reliable structured reads/writes.</p>
 <h2 id="8-workspace-and-git-workflow">8. Workspace and Git workflow</h2>
 <h3 id="8-1-recommended-creation-flow">8.1 Recommended creation flow</h3>
-<p>The reliable ordering is likely:</p>
+<p>P3 selects this workflow-agnostic contract:</p>
 <ol>
-<li>User selects a project or work item in the activity sidebar and SPADE jumps to its container on the global canvas. If the project does not exist, the user opens it by selecting a host and root folder.</li>
-<li>User opens an issue in a project-scoped browser node, or creates an ad-hoc objective.</li>
-<li><code>Implement</code> creates a logical work item and assigns the source node as its root.</li>
-<li>SPADE asks for or infers base branch/ref and workspace mode.</li>
-<li>SPADE asks Paseo to create the first worktree/workspace deterministically.</li>
-<li>SPADE launches the integrator agent inside that workspace/cwd with issue context.</li>
-<li>Agent and default diff nodes inherit the work item automatically.</li>
-<li>Reviewers, fixers, and subagents created later inherit the same work item even when they use separate Paseo workspaces.</li>
-<li>The canvas auto-sizes the logical work background and collapses retired stages; the user does not move nodes back into manual groups.</li>
+<li>User selects a Project or WorkItem in the activity sidebar and SPADE jumps to its container. A missing Project is opened from an explicit host and root folder.</li>
+<li>User opens a native GitHub Issue entity, or creates an ad-hoc objective.</li>
+<li>A typed command creates a WorkItem with explicit task, source, and status.</li>
+<li>A separate typed command creates or attaches a workspace and spawns or attaches a root agent into that exact WorkItem ID with caller-selected cwd, provider, model, and prompt.</li>
+<li>SPADE persists returned opaque agent/workspace identities and the root binding before fallible authoritative refresh.</li>
+<li>Managed descendants join the same WorkItem only through explicit durable parent identity; additional workspaces remain opaque facts.</li>
+<li>The WorkItem hull and activity-sidebar row project semantic membership without requiring manual canvas grouping.</li>
 </ol>
-<p>This is safer and easier to reconcile than asking an unconstrained agent shell to create a worktree and then trying to discover it afterward. The UI may still describe the operation naturally as “agent handles this issue in a new worktree.”</p>
-<p>This remains a prototype hypothesis until Paseo's exact workspace/agent API behavior is exercised.</p>
+<p>This contract does not require SPADE to understand <code>paseo-issue-to-pr</code> or any implementation/review/fix stages. The P3 run exercised root creation but left complete descendant presentation unresolved because exact-agent reconciliation failed.</p>
 <h3 id="8-2-paseo-workflow-skill-behavior">8.2 Paseo workflow skill behavior</h3>
-<p>The current <code>paseo-issue-to-pr</code> skill intentionally creates operationally isolated workspaces:</p>
-<ul>
-<li>One issue/integrator worktree</li>
-<li>A separate read-only review worktree for each review round</li>
-<li>One temporary fixer worktree per worthwhile independent resolution chunk</li>
-</ul>
-<p>This behavior comes from the skill's safety/review workflow, not a requirement of Paseo itself. Eliminating those workspaces blindly would weaken isolation between the sole writer, reviewers, and fixers.</p>
-<p>The ADE-oriented update should organize rather than merely suppress them:</p>
-<ul>
-<li>Propagate one SPADE <code>workItemId</code> through the whole workflow.</li>
-<li>Record role metadata such as integrator, review round, and fix chunk.</li>
-<li>Link stage agents/workspaces through provenance edges.</li>
-<li>Collapse or hide retired review/fix stages by default.</li>
-<li>Archive temporary Paseo workspaces when the skill's lifecycle permits it.</li>
-<li>Expose branch, cwd, base, status, and diff facts on demand.</li>
-</ul>
-<p>A later skill redesign may reduce workspace count where isolation has no value, but the first integration should preserve semantics and remove visual/manual organization cost.</p>
+<p>The unchanged bounded workflow produced one managed root, four managed descendants, and five opaque workspaces. Every descendant exposed the root's explicit durable parent ID, and every agent referenced one exact workspace. SPADE must preserve those facts without deriving roles or stages from titles, branches, paths, prompts, skill names, or ordering.</p>
+<p>P3 did not establish a complete tree in the integrated UI: exact-root refresh failed for an unresolved reason, provider-native discovery was unavailable, and four descendant workspaces required the existing generic attach action for presentation. Future SDK work should expose stable exact-agent reconciliation diagnostics and provider-native child identities; it should not add skill-specific stage metadata as a prerequisite for grouping.</p>
 <h3 id="8-3-diff-semantics">8.3 Diff semantics</h3>
 <p>At creation, retain:</p>
 <ul>
@@ -665,9 +643,9 @@ const defaultConversationExpansion = {
 </ul>
 <p>The Changes node should clearly state what comparison it is showing. A prototype must decide whether the default comparison tracks the moving base branch, the creation-time base revision, or Git merge-base semantics. Do not hide this in the branch name.</p>
 <h3 id="8-4-logical-grouping-and-workspace-presentation">8.4 Logical grouping and workspace presentation</h3>
-<p>The colored work-item container represents the <strong>logical work item</strong>, not each operational workspace. Its bounds are derived from member nodes and update automatically, so routine work never requires manual containment maintenance.</p>
-<p>Project containers and work-item containers specialize the shared Group container. A Project container automatically fits its work-item groups and project-scoped nodes. A work-item container automatically fits nodes carrying its <code>workItemId</code>. Group movement changes spatial presentation, not semantic membership.</p>
-<p>The global canvas also permits user-created Group containers around projects that belong together—for example, a product and its supporting services. These groups are spatial organization only; each nested Project container retains its independent host, root, work items, and activity.</p>
+<p>The colored WorkItem container represents the <strong>logical work item</strong>, not each operational workspace. It specializes shared Group hull geometry with status, explicit semantic membership, source/task context, and activity-sidebar presence.</p>
+<p>A Project container automatically fits its WorkItems and project-scoped nodes. A WorkItem automatically fits nodes carrying its <code>workItemId</code>. Ordinary user-created Groups remain visual hulls: their movement and containment do not rewrite Project or WorkItem identity.</p>
+<p>P3 preserved five opaque workspace identities without semantic lanes, but its final canvas placed one workspace beneath the PullRequest node. Collision-free layout for many factual resources remains a presentation requirement, not evidence for adding workflow-stage types.</p>
 <p>Workspace identity remains visible through node badges, a workspace inspector, and optional nested accents. Selecting a workspace badge can highlight every node using that checkout and expose branch, cwd, base ref, dirty state, role, and lifecycle.</p>
 <h2 id="9-context-passed-to-agents">9. Context passed to agents</h2>
 <p>Connections do not automatically inject unlimited content. SPADE builds an explicit, bounded context projection.</p>
@@ -803,21 +781,19 @@ const defaultConversationExpansion = {
 </code></pre>
 <p>Do not spread direct protocol calls through entity renderers.</p>
 <h3 id="known-technical-risk">Known technical risk</h3>
-<p>The public Paseo SDK v0.4 facade currently covers agents, workspaces, providers and config. Terminal, Git/forge, browser and filesystem features require lower-level/internal APIs. SPADE should isolate these and preferably upstream the missing stable SDK methods.</p>
+<p>The public Paseo SDK v0.4 facade covers agents, workspaces, providers and config, but the P3 prototype required one confined internal <code>DaemonClient</code> boundary to share a connection with checkout RPCs. The full run also exposed unresolved exact-agent reconciliation, unavailable provider-native discovery, and changing bounded timeline epochs/ranges after daemon restart. SPADE should keep these dependencies isolated and request stable public connection/readiness, exact-agent diagnostics, provider-native identity, normalized timeline, selected-workspace checkout, and typed PR-status APIs.</p>
 <h3 id="plugin-boundary">Plugin boundary</h3>
 <p>Paseo's plugin system may be useful for daemon-side SPADE RPCs later, but a complete React Flow shell does not fit naturally as a Paseo sidebar plugin. SPADE remains a separate frontend.</p>
 <h2 id="14-github-scope">14. GitHub scope</h2>
 <h3 id="initial-github-functionality">Initial GitHub functionality</h3>
-<p>Use Paseo's existing local Git/forge behavior and the user's <code>gh</code> authentication for:</p>
+<p>GitHub Issues and PullRequests are native SPADE entities. Their provider adapter reads structured issue/PR state, checks, reviews/comments, exact external identity, and canonical URLs through the user's authenticated <code>gh</code> session. Each native entity retains <code>Open on GitHub</code>.</p>
+<p>Keep these reads separate from selected-workspace Git/forge mutations:</p>
 <ul>
-<li>Repository/workspace setup</li>
-<li>Branch/worktree operations</li>
-<li>Changes and diff status</li>
-<li>Commit and push</li>
-<li>PR creation/status/checks/merge operations</li>
-<li>Related issue/PR URLs</li>
+<li>Paseo owns workspace status, diff, commit, push, pull-request creation, and pull-request status operations.</li>
+<li>SPADE owns typed commands, serialized ledger mutation, exact GitHub-to-node reconciliation, presentation, and provenance edges.</li>
+<li>The renderer receives neither credentials nor arbitrary GitHub, filesystem, terminal, or daemon access.</li>
 </ul>
-<p>This does not initially require a dedicated SPADE GitHub App.</p>
+<p>This initial direction does not require a dedicated SPADE GitHub App.</p>
 <h3 id="later-github-app-functionality">Later GitHub App functionality</h3>
 <p>Add a GitHub App when SPADE needs:</p>
 <ul>
@@ -1049,29 +1025,22 @@ const defaultConversationExpansion = {
 <li>Rich HTML can collect user feedback and create a deterministic follow-up message.</li>
 </ul>
 <h3 id="p3-real-paseo-issue-to-pr-bridge">P3 — Real Paseo issue-to-PR bridge</h3>
-<p>On one local Git repository:</p>
-<ol>
-<li>Open the project from a selected host/root folder, then use the activity sidebar to jump to its Project container and open Issues in a browser node.</li>
-<li>Create one work item from an issue.</li>
-<li>Create/attach the integrator Paseo worktree and agent.</li>
-<li>Show normalized conversation events and configured panel expansion.</li>
-<li>Reconcile additional review/fix workspaces into the same work item, using either a reduced test workflow or one bounded real workflow run.</li>
-<li>Create one subagent and reconcile it into a collapsed delegated node.</li>
-<li>Update diff stats and open a file editor from a changed file.</li>
-<li>Commit/open PR from the diff node.</li>
-<li>Open the resulting PR in a connected browser node.</li>
-<li>Restart SPADE/Paseo and verify identity reconciliation.</li>
-</ol>
-<p>Pass criteria:</p>
+<p>The bounded real run used the native Issue surface and generic WorkItem/root-agent commands to launch the unchanged <code>paseo-issue-to-pr</code> prompt. It created open fixture PR #7 and rendered a native PullRequest entity without adding stage metadata or changing the skill.</p>
+<p>Proven facts:</p>
 <ul>
-<li>Every SPADE workspace maps to the correct Paseo workspace/cwd and role.</li>
-<li>Many workspaces remain one understandable logical work item.</li>
-<li>Diff state comes from each checkout, not inferred branch naming.</li>
-<li>Reconnect preserves opaque workspace/agent identities.</li>
-<li>Subagents appear once with the correct parent relation.</li>
-<li>All direct Paseo protocol usage remains inside the adapter.</li>
-<li>Findings are recorded for an ADE-aware update to <code>paseo-issue-to-pr</code>; do not modify the skill before the observed mapping is understood.</li>
+<li>Five managed agent IDs, five opaque workspace IDs, all explicit managed parent/workspace mappings, SPADE node/resource/edge IDs, and GitHub identities survived SPADE and Paseo restarts without duplicates.</li>
+<li>Native Issue/PullRequest surfaces exposed task source, PR state, head/base/revision, checks, reviews/comments, provenance, and <code>Open on GitHub</code>.</li>
+<li>One confined Paseo adapter/internal-client boundary and separate GitHub read/reconciliation boundary were sufficient for the exercised operations.</li>
 </ul>
+<p>Unresolved findings:</p>
+<ul>
+<li>Integrated exact-agent refresh failed for an unknown reason, so four managed descendant agent nodes and delegated edges were not presented.</li>
+<li>Provider-native child discovery was unavailable; complete-tree coverage was not proved.</li>
+<li>Paseo restart preserved agent/workspace identity but changed bounded timeline epochs/ranges and transient lifecycle state.</li>
+<li>One workspace remained in the ledger but was visually covered by the PullRequest node.</li>
+<li>Fixture PR #7 has valid build/render evidence, but workflow/scope acceptance is unresolved because a published artifact-removal finding remains unfixed.</li>
+</ul>
+<p>These results select workflow-agnostic explicit identity and native GitHub entities. They do not establish SPADE knowledge of <code>paseo-issue-to-pr</code> stages.</p>
 <h3 id="p4-editor-lsp-and-external-ide-handoff">P4 — Editor/LSP and external IDE handoff</h3>
 <p>Validate two initial languages in a real worktree:</p>
 <ul>
@@ -1107,7 +1076,7 @@ const defaultConversationExpansion = {
 <li>Which connected nodes are included automatically as agent context versus requiring explicit selection?</li>
 <li>How should non-resumable provider-native subagents be represented?</li>
 <li>What is the acceptable active-node budget for terminal/editor/browser renderers?</li>
-<li>After P3, which <code>paseo-issue-to-pr</code> workspaces remain semantically necessary and what metadata must the skill emit?</li>
+<li>What causes the P3 exact-agent reconciliation failure despite compatible client call shapes?</li>
 <li>If whiteboards become useful, is a tldraw production license and its value-based commercial pricing acceptable?</li>
 </ol>
 <h2 id="22-principal-risks">22. Principal risks</h2>

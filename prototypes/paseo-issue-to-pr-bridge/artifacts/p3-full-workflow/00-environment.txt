@@ -1,0 +1,92 @@
+SPADE issue #20 full workflow environment
+Captured: 2026-08-21T05:09:21+02:00
+
+== SPADE refs ==
+7fa22d8089f510117b31b93ebaa087a313c1bd47
+ffaf607aa90a1cb7456b76eb3b4ee2ddc6adb3a3
+ffaf607 (HEAD -> spade-20-full-fixture) fix: clarify workflow evidence ownership
+7450e88 M1: prepare full fixture evidence run
+7fa22d8 (origin/main, origin/HEAD) [SPADE-19] Add native GitHub and checkout surfaces (#22)
+27c3053 [SPADE-18] Integrate Paseo 0.4 agents, workspaces, and timeline reconciliation (#23)
+## spade-20-full-fixture
+
+== Lockfile-exact install ==
+npm warn install-scripts .npmrc allow-scripts setting is being ignored because package.json declares its own allowScripts field
+
+added 298 packages, and audited 299 packages in 6s
+
+45 packages are looking for funding
+  run `npm fund` for details
+
+found 0 vulnerabilities
+
+== npm 12 script allowlist intervention ==
+Electron package postinstall was omitted by the repository allowScripts policy; running its installed exact-version downloader directly.
+electron_binary=v43.4.0
+
+== Installed versions ==
+node=v24.18.0
+npm=12.0.0
+git=git version 2.53.0
+gh=gh version 2.96.0 (2026-07-02)
+paseo_cli=0.4.0
+paseo_daemon=0.4.0 (daemon bootstrap logs)
+paseo_client=0.4.0
+electron=43.4.0
+pi=0.84.2
+codex=codex-cli 0.144.6
+
+== Installed SPADE package graph ==
+spade@0.1.0 /home/skflowne/.paseo/worktrees/10i7tcr5/spade-20-full-fixture
+├── @eslint/js@10.0.1
+├── @getpaseo/client@0.4.0
+├── @playwright/test@1.62.1
+├── @swc/core@1.16.0
+├── @types/node@24.13.3
+├── @types/react-dom@19.2.4
+├── @types/react@19.2.18
+├── @vitejs/plugin-react@5.2.0
+├── @xyflow/react@12.11.3
+├── electron-vite@5.0.0
+├── electron@43.4.0
+├── eslint@10.8.1
+├── marked@18.0.9
+├── mermaid@11.16.1
+├── react-dom@19.2.8
+├── react@19.2.8
+├── typescript-eslint@8.67.0
+├── typescript@6.0.3
+└── vite@7.3.6
+
+
+== GitHub authentication (redacted by gh) ==
+github.com
+  ✓ Logged in to github.com account skflowne (/home/skflowne/.config/gh/hosts.yml)
+  - Active account: true
+  - Git operations protocol: https
+  - Token: gho_************************************
+  - Token scopes: 'gist', 'read:org', 'repo', 'workflow'
+{"id":1980370,"login":"skflowne"}
+
+== Effective fixture Git transport ==
+origin	git@github.com:skflowne/spade-fixture.git (fetch)
+origin	git@github.com:skflowne/spade-fixture.git (push)
+paseo-pr-7	git@github.com:skflowne/spade-fixture.git (fetch)
+paseo-pr-7	git@github.com:skflowne/spade-fixture.git (push)
+32a9778e25e849ff5ff3d332ae86053b4ea6e3fb	refs/heads/feature/issue-1-vue-scaffold
+199bced07fd3a626d795135bb144b25cbd262ca3	refs/heads/main
+
+== Isolated runtime identities ==
+spade_restart stop_at=2026-08-21T05:01:32+02:00 old_pid=673583 start_at=2026-08-21T05:01:33+02:00 new_pid=822392 ledger_sha_before=35e2d974a382b0f27b5eddcf5b6f0f89ba6002980e5b295a8530e4b1463b800e ledger_sha_after_launch=e09156a7f25cf2b1b328a873153e1a45b22b1e8f73dd5c68867aa63a955886ec
+paseo_stop_at=2026-08-21T05:03:12+02:00 old_launcher=660907 old_supervisor=660970 old_daemon=661049 listener_17680=stopped
+paseo_restart_at=2026-08-21T05:03:39+02:00 new_launcher=830514 new_supervisor=830584 new_daemon=830621 port=17680 home=/tmp/spade20-paseo-0.4-home
+isolated_home=/tmp/spade20-paseo-0.4-home retained
+spade_ledger=/tmp/spade20-p3-ledger.json retained sha256=e09156a7f25cf2b1b328a873153e1a45b22b1e8f73dd5c68867aa63a955886ec
+daemon_first_boot_log_version=0.4.0
+daemon_restart_log_version=0.4.0
+
+== Fixture resource state ==
+{"number":1,"state":"OPEN","title":"Scaffold a Vue 3 TypeScript application","updatedAt":"2026-08-20T12:03:05Z","url":"https://github.com/skflowne/spade-fixture/issues/1"}
+{"baseRefName":"main","headRefName":"feature/issue-1-vue-scaffold","headRefOid":"32a9778e25e849ff5ff3d332ae86053b4ea6e3fb","isDraft":false,"mergeStateStatus":"CLEAN","number":7,"state":"OPEN","title":"Scaffold Vue 3 TypeScript application","url":"https://github.com/skflowne/spade-fixture/pull/7"}
+
+Environment capture completed: 2026-08-21T05:09:46+02:00

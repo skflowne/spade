@@ -1,0 +1,80 @@
+[User] Read-only publication preflight for PR https://github.com/skflowne/spade-fixture/pull/7 at exact expected head 32a9778e25e849ff5ff3d332ae86053b4ea6e3fb, round 1 of 4. Do not perform substantive review and do not modify files or GitHub. Run gh auth status, gh api user, and an authenticated PR-head read. Verify the workspace HEAD equals the expected fetched PR head, the worktree is clean, and its canonical path is unique and separate from every writer workspace. Return only: authentication success/failure with account, exact PR head read, canonical workspace path, clean status, collision result, and whether reviewer-publish mode is available. Paseo has already created this dedicated review worktree. Use it; do not create a nested worktree.
+[Thought] **Planning git workspace inspection**
+
+**Verifying HEAD against GitHub API**
+[Shell] set -u printf '%s\n' '=== GH_AUTH_STATUS ===' gh auth status 2>&1; auth_status=$? printf '%s\n' '=== GH_API_USER ===' gh api user --jq '{login: .login, id: .id}' 2>&1; user_status=$? printf '%s\n' ...
+Authentication: SUCCESS — account `skflowne`
+Exact PR head read: `32a9778e25e849ff5ff3d332ae86053b4ea6e3fb`
+Canonical workspace path: `/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/pr-7-review-r1-a557b80a`
+Clean status: CLEAN
+Collision result: NONE — unique and separate from writer workspaces
+Reviewer-publish mode available: YES
+[Thought] **Planning canonical unique path resolution**
+[User] <skill name="drift-review-duo" location="/home/skflowne/.agents/skills/drift-review-duo/SKILL.md">
+References are relative to /home/skflowne/.agents/skills/drift-review-duo.
+
+# Drift Review Duo
+
+Read and apply the canonical [PR review](../pr-review/SKILL.md) and shared [drift-review contract](../pr-review/references/drift-review.md). This skill owns only the two-expert topology and synthesis.
+
+## Panel
+
+Complete the shared setup, then spawn exactly two fresh, independent, read-only reviewers in parallel. Each prompt begins `/skill:pr-review` and contains only target refs, original intent and acceptance criteria, repository profile, raw validation evidence, its focus below, and an instruction to report to the parent rather than publish:
+
+- **Correctness:** behavior, edge cases, regressions, and implementation versus intent. Exclude architecture, duplication, and conventions.
+- **Drift:** apply the five shared drift lenses one at a time in table order—reuse and duplication; deletion and bypass; scope, seam, and state ownership; test usefulness; conventions and docs. Include the complete `Required checks` cell for all five rows in this reviewer's prompt so its fresh context contains the actual searches and history checks. Exclude ordinary correctness bugs and style preferences.
+
+Keep outputs isolated under the shared contract until both finish.
+
+## Synthesis and handoff
+
+Adjudicate both reports under the canonical and drift contracts; do not launch a third broad review. Deduplicate overlapping behavior and structural findings into one root-cause cluster, verify decisive claims from source, classify every survivor, and drop anything that fails canonical evidence or scenario requirements.
+
+Apply the shared handoff using canonical agent-sized resolution chunks. Keep dropped candidates and separate expert verdicts internal unless a verified deferred risk materially changes the user's next action.
+</skill>
+
+Review PR https://github.com/skflowne/spade-fixture/pull/7 at exact base 199bced07fd3a626d795135bb144b25cbd262ca3 and exact reviewed headRefOid 32a9778e25e849ff5ff3d332ae86053b4ea6e3fb. Original intent and acceptance criteria: scaffold Vue 3 with TypeScript and Vite at repository root; replace starter presentation with a page headed 'SPADE workflow fixture' and a short sentence explaining that the repository exercises an agent issue-to-PR workflow; keep scope to scaffold and presentation with no router, state library, backend, or unrelated features; commit npm lockfile; document development and production-build commands; clean-checkout npm install succeeds; npm run build succeeds; required heading and explanatory copy render. Repository profile: exact base had an empty committed tree and no conventions, tests, or CI; issue scope is the outer boundary. Validation evidence: clean-equivalent npm install passed with 0 vulnerabilities; npm run build passed with Vite 8.2.2; native browser production preview rendered the exact required heading and sentence; git diff --check passed; Portolan tests, architecture, and maintainability reviewers were clear. Round heading: ## Automated drift review — Round 1/4. Publication mode: reviewer-publish. Recovery artifact path: /tmp/spade-fixture-paseo/issue-1-20260821T022934Z-a557b80a/reviews/round-1-20260821T024228Z-4fdf9a8e/review.json. Publishing is preauthorized. Keep dropped candidates internal. Before publication, atomically write JSON at the recovery artifact path containing PR number 7, exact reviewed headRefOid, round 1, event COMMENT, the complete body, and body SHA-256. After the required round heading, use the canonical concise output, including exactly 'No findings.' when clear. Publish exactly one review against the exact head. Return only the verified permalink on child publication success or 'PUBLISH_RECOVERY_REQUIRED <artifact-path> <error-category>' otherwise. Do not modify repository files.
+[Thought] **Planning parallel subagents usage**
+[Read] /home/skflowne/.agents/skills/pr-review/SKILL.md
+[Read] /home/skflowne/.agents/skills/pr-review/references/drift-review.md
+[Read] /home/skflowne/.agents/skills/drift-review-duo/SKILL.md
+[Subagent]
+[Thought] **Reviewing GitHub PR skill details**
+[Read] /home/skflowne/.agents/skills/github-pr-review/SKILL.md
+[Thought] **Planning PR context collection**
+
+**Designing read-only PR data retrieval**
+[Shell] set -euo pipefail printf '%s\n' '=== HEAD ===' git rev-parse HEAD printf '%s\n' '=== STATUS ===' git status --porcelain=v1 printf '%s\n' '=== PR ===' gh pr view 7 --repo skflowne/spade-fixture --js...
+[Thought] **Planning parallel agents for scope inspection**
+
+**Confirming read-only acceptance checks**
+[Subagent]
+[Thought] **Retrying agent spawn with omit acceptance**
+[Subagent]
+[Thought] **Reevaluating reviewer spawning strategy**
+[Subagent]
+[Thought] **Testing retry logic with two successes**
+[Subagent]
+[Thought] **Assessing scope-drift severity**
+
+**Planning review publication validation**
+[Read] /tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/pr-7-review-r1-a557b80a/.codegraph-evals/20260821T023509Z-issue-1-vue-scaffold.md
+[Read] /home/skflowne/.agents/skills/github-pr-review/scripts/post-pr-review.mjs
+[Shell] gh api repos/skflowne/spade-fixture/pulls/7 --jq '{head: .head.sha, state: .state}' && gh api repos/skflowne/spade-fixture/pulls/7/reviews --jq 'map({id, user: .user.login, state, body, html_url, c...
+[Thought] **Removing untracked .pi-subagents artifacts**
+
+**Designing atomic JSON artifact creation and verification**
+
+**Implementing cleanup before publish verification**
+[Shell] set -euo pipefail if [ -d .pi-subagents ]; then rm -rf -- .pi-subagents; fi test -z "$(git status --porcelain=v1)" printf 'head=%s\n' "$(git rev-parse HEAD)" printf 'status=clean\n'
+[Thought] **Documenting minor scope-drift finding**
+
+**Planning atomic artifact validation**
+[Shell] set -euo pipefail artifact='/tmp/spade-fixture-paseo/issue-1-20260821T022934Z-a557b80a/reviews/round-1-20260821T024228Z-4fdf9a8e/review.json' body='## Automated drift review — Round 1/4 ## Findings...
+[Thought] **Designing Node script for GitHub API calls**
+
+**Implementing review existence check before POST**
+[Shell] node -e 'const fs=require("node:fs"),cp=require("node:child_process"),crypto=require("node:crypto"); const path=process.argv[1]; const d=JSON.parse(fs.readFileSync(path,"utf8")); const gh=(args,inp...
+[Thought] **Verifying permalink and commit details**
+[Shell] node -e 'const fs=require("node:fs"),cp=require("node:child_process"),crypto=require("node:crypto"); const d=JSON.parse(fs.readFileSync(process.argv[1],"utf8")); const r=JSON.parse(cp.execFileSync(...
+https://github.com/skflowne/spade-fixture/pull/7#pullrequestreview-4989275980

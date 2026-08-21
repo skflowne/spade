@@ -1,0 +1,264 @@
+[
+  {
+    "command": [
+      "wait",
+      "--load",
+      "load"
+    ],
+    "error": null,
+    "result": {
+      "lifecycle": {
+        "effectiveLaunch": {
+          "browserLaunched": true,
+          "engine": "chrome",
+          "launchHash": 6847324482101410000
+        },
+        "launched": false,
+        "relaunchedBrowser": false,
+        "restartedBackground": false,
+        "restoreStatus": "missing",
+        "reused": true,
+        "saveStatus": "not_attempted"
+      },
+      "state": "load"
+    },
+    "success": true
+  },
+  {
+    "command": [
+      "wait",
+      "--fn",
+      "(() => {\n  const expected = \"SPADE workflow fixture\".replace(/\\s+/g, \" \").trim();\n  if (!expected) return false;\n  const root = document.body || document.documentElement;\n  if (!root) return false;\n  const skipTags = new Set([\"SCRIPT\", \"STYLE\", \"NOSCRIPT\", \"SVG\"]);\n  const normalize = (value) => String(value ?? \"\").replace(/\\s+/g, \" \").trim();\n  const isVisibleElement = (element) => {\n    if (!(element instanceof HTMLElement)) return false;\n    if (skipTags.has(element.tagName)) return false;\n    const style = window.getComputedStyle(element);\n    if (style.display === \"none\" || style.visibility === \"hidden\" || Number(style.opacity) === 0) return false;\n    return element.getClientRects().length > 0;\n  };\n  const hasVisibleAncestors = (node) => {\n    for (let element = node.parentElement; element; element = element.parentElement) {\n      if (!isVisibleElement(element)) return false;\n      if (element === root) break;\n    }\n    return true;\n  };\n  const textWalker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);\n  let visitedText = 0;\n  for (let node = textWalker.nextNode(); node && visitedText < 6000; node = textWalker.nextNode(), visitedText += 1) {\n    if (!hasVisibleAncestors(node)) continue;\n    if (normalize(node.nodeValue).includes(expected)) return true;\n  }\n  const elementWalker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);\n  let visitedElements = 0;\n  for (let node = elementWalker.nextNode(); node && visitedElements < 3000; node = elementWalker.nextNode(), visitedElements += 1) {\n    const element = node;\n    if (!isVisibleElement(element) || !(\"value\" in element)) continue;\n    if (normalize(element.value).includes(expected)) return true;\n  }\n  return false;\n})()",
+      "--timeout",
+      "5000"
+    ],
+    "error": null,
+    "result": {
+      "lifecycle": {
+        "effectiveLaunch": {
+          "browserLaunched": true,
+          "engine": "chrome",
+          "launchHash": 6847324482101410000
+        },
+        "launched": false,
+        "relaunchedBrowser": false,
+        "restartedBackground": false,
+        "restoreStatus": "missing",
+        "reused": true,
+        "saveStatus": "not_attempted"
+      },
+      "result": true
+    },
+    "success": true
+  },
+  {
+    "command": [
+      "wait",
+      "--fn",
+      "(() => {\n  const expected = \"This repository exercises an agent issue-to-PR workflow.\".replace(/\\s+/g, \" \").trim();\n  if (!expected) return false;\n  const root = document.body || document.documentElement;\n  if (!root) return false;\n  const skipTags = new Set([\"SCRIPT\", \"STYLE\", \"NOSCRIPT\", \"SVG\"]);\n  const normalize = (value) => String(value ?? \"\").replace(/\\s+/g, \" \").trim();\n  const isVisibleElement = (element) => {\n    if (!(element instanceof HTMLElement)) return false;\n    if (skipTags.has(element.tagName)) return false;\n    const style = window.getComputedStyle(element);\n    if (style.display === \"none\" || style.visibility === \"hidden\" || Number(style.opacity) === 0) return false;\n    return element.getClientRects().length > 0;\n  };\n  const hasVisibleAncestors = (node) => {\n    for (let element = node.parentElement; element; element = element.parentElement) {\n      if (!isVisibleElement(element)) return false;\n      if (element === root) break;\n    }\n    return true;\n  };\n  const textWalker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);\n  let visitedText = 0;\n  for (let node = textWalker.nextNode(); node && visitedText < 6000; node = textWalker.nextNode(), visitedText += 1) {\n    if (!hasVisibleAncestors(node)) continue;\n    if (normalize(node.nodeValue).includes(expected)) return true;\n  }\n  const elementWalker = document.createTreeWalker(root, NodeFilter.SHOW_ELEMENT);\n  let visitedElements = 0;\n  for (let node = elementWalker.nextNode(); node && visitedElements < 3000; node = elementWalker.nextNode(), visitedElements += 1) {\n    const element = node;\n    if (!isVisibleElement(element) || !(\"value\" in element)) continue;\n    if (normalize(element.value).includes(expected)) return true;\n  }\n  return false;\n})()",
+      "--timeout",
+      "5000"
+    ],
+    "error": null,
+    "result": {
+      "lifecycle": {
+        "effectiveLaunch": {
+          "browserLaunched": true,
+          "engine": "chrome",
+          "launchHash": 6847324482101410000
+        },
+        "launched": false,
+        "relaunchedBrowser": false,
+        "restartedBackground": false,
+        "restoreStatus": "missing",
+        "reused": true,
+        "saveStatus": "not_attempted"
+      },
+      "result": true
+    },
+    "success": true
+  },
+  {
+    "command": [
+      "network",
+      "requests"
+    ],
+    "error": null,
+    "result": {
+      "lifecycle": {
+        "effectiveLaunch": {
+          "browserLaunched": true,
+          "engine": "chrome",
+          "launchHash": 6847324482101410000
+        },
+        "launched": false,
+        "relaunchedBrowser": false,
+        "restartedBackground": false,
+        "restoreStatus": "missing",
+        "reused": true,
+        "saveStatus": "not_attempted"
+      },
+      "requests": [
+        {
+          "headers": {
+            "Accept-Language": "en-US,en;q=0.9",
+            "Upgrade-Insecure-Requests": "1",
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+            "sec-ch-ua": "\"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Linux\""
+          },
+          "method": "GET",
+          "mimeType": "text/html",
+          "requestId": "CDA4EE8DB7A5CEE01FB17CB8986112AE",
+          "resourceType": "Document",
+          "responseHeaders": {
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Type": "text/html",
+            "Date": "Fri, 21 Aug 2026 03:06:08 GMT",
+            "Etag": "W/\"196-As7DQ/+w1l8J/dGep2C1dpaREpU\"",
+            "Keep-Alive": "timeout=5",
+            "Transfer-Encoding": "chunked",
+            "Vary": "Origin"
+          },
+          "status": 200,
+          "timestamp": 1787281568986,
+          "url": "http://127.0.0.1:41731/"
+        },
+        {
+          "headers": {
+            "Accept-Language": "en-US,en;q=0.9",
+            "Origin": "http://127.0.0.1:41731/",
+            "Referer": "http://127.0.0.1:41731/",
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+            "sec-ch-ua": "\"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Linux\""
+          },
+          "method": "GET",
+          "mimeType": "text/javascript",
+          "requestId": "842061.2",
+          "resourceType": "Script",
+          "responseHeaders": {
+            "Access-Control-Allow-Origin": "http://127.0.0.1:41731/",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Encoding": "gzip",
+            "Content-Type": "text/javascript",
+            "Date": "Fri, 21 Aug 2026 03:06:08 GMT",
+            "ETag": "W/\"59561-1787281562443\"",
+            "Keep-Alive": "timeout=5",
+            "Last-Modified": "Fri, 21 Aug 2026 03:06:02 GMT",
+            "Transfer-Encoding": "chunked",
+            "Vary": "Origin"
+          },
+          "status": 200,
+          "timestamp": 1787281568986,
+          "url": "http://127.0.0.1:41731/assets/index-dXVJrDdK.js"
+        },
+        {
+          "headers": {
+            "Accept-Language": "en-US,en;q=0.9",
+            "Origin": "http://127.0.0.1:41731/",
+            "Referer": "http://127.0.0.1:41731/",
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+            "sec-ch-ua": "\"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Linux\""
+          },
+          "method": "GET",
+          "mimeType": "text/css",
+          "requestId": "842061.3",
+          "resourceType": "Stylesheet",
+          "responseHeaders": {
+            "Access-Control-Allow-Origin": "http://127.0.0.1:41731/",
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "Content-Length": "492",
+            "Content-Type": "text/css",
+            "Date": "Fri, 21 Aug 2026 03:06:08 GMT",
+            "ETag": "W/\"492-1787281562446\"",
+            "Keep-Alive": "timeout=5",
+            "Last-Modified": "Fri, 21 Aug 2026 03:06:02 GMT",
+            "Vary": "Origin"
+          },
+          "status": 200,
+          "timestamp": 1787281568986,
+          "url": "http://127.0.0.1:41731/assets/index-b4v5cqX0.css"
+        },
+        {
+          "headers": {
+            "Accept-Language": "en-US,en;q=0.9",
+            "Referer": "http://127.0.0.1:41731/",
+            "User-Agent": "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/149.0.0.0 Safari/537.36",
+            "sec-ch-ua": "\"Chromium\";v=\"149\", \"Not)A;Brand\";v=\"24\"",
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": "\"Linux\""
+          },
+          "method": "GET",
+          "mimeType": "text/plain",
+          "requestId": "842061.6",
+          "resourceType": "Other",
+          "responseHeaders": {
+            "Connection": "keep-alive",
+            "Date": "Fri, 21 Aug 2026 03:06:08 GMT",
+            "Keep-Alive": "timeout=5",
+            "Transfer-Encoding": "chunked",
+            "Vary": "Origin"
+          },
+          "status": 404,
+          "timestamp": 1787281568986,
+          "url": "http://127.0.0.1:41731/favicon.ico"
+        }
+      ]
+    },
+    "success": true
+  },
+  {
+    "command": [
+      "console"
+    ],
+    "error": null,
+    "result": {
+      "lifecycle": {
+        "effectiveLaunch": {
+          "browserLaunched": true,
+          "engine": "chrome",
+          "launchHash": 6847324482101410000
+        },
+        "launched": false,
+        "relaunchedBrowser": false,
+        "restartedBackground": false,
+        "restoreStatus": "missing",
+        "reused": true,
+        "saveStatus": "not_attempted"
+      },
+      "messages": []
+    },
+    "success": true
+  },
+  {
+    "command": [
+      "errors"
+    ],
+    "error": null,
+    "result": {
+      "errors": [],
+      "lifecycle": {
+        "effectiveLaunch": {
+          "browserLaunched": true,
+          "engine": "chrome",
+          "launchHash": 6847324482101410000
+        },
+        "launched": false,
+        "relaunchedBrowser": false,
+        "restartedBackground": false,
+        "restoreStatus": "missing",
+        "reused": true,
+        "saveStatus": "not_attempted"
+      }
+    },
+    "success": true
+  }
+]

@@ -1,0 +1,717 @@
+{
+  "checkpoint": "after-spade-restart",
+  "capturedAt": "2026-08-21T03:02:32Z",
+  "restart": "spade_restart stop_at=2026-08-21T05:01:32+02:00 old_pid=673583 start_at=2026-08-21T05:01:33+02:00 new_pid=822392 ledger_sha_before=35e2d974a382b0f27b5eddcf5b6f0f89ba6002980e5b295a8530e4b1463b800e ledger_sha_after_launch=e09156a7f25cf2b1b328a873153e1a45b22b1e8f73dd5c68867aa63a955886ec",
+  "sources": {
+    "spade": "SPADE P3 durable ledger after process restart",
+    "paseo": "@getpaseo/cli 0.4.0 connection using daemon public agent/workspace/timeline RPCs; read-only diagnostic, not SPADE reconciliation input",
+    "github": "gh 2.96.0 structured JSON"
+  },
+  "limitations": [
+    "Integrated P3 exact-agent refetch again failed with Agent not found; persisted nodes were retained and marked error.",
+    "Provider-native discovery is unavailable; no rows means unknown, not absent.",
+    "Timeline ranges are bounded projected tails with requested limit 40, not complete conversations."
+  ],
+  "spade": {
+    "version": 2,
+    "nextSequence": 16,
+    "project": {
+      "id": "project-p3",
+      "name": "P3 bridge prototype"
+    },
+    "groups": [
+      {
+        "id": "work-item-1",
+        "kind": "work-item",
+        "projectId": "project-p3",
+        "name": "Issue 17 · Generic shell",
+        "position": {
+          "x": 120,
+          "y": 120
+        },
+        "task": "Build the workflow-agnostic P3 shell",
+        "sourceRef": {
+          "provider": "placeholder",
+          "kind": "task",
+          "id": "spade-17",
+          "revision": null
+        },
+        "status": "active"
+      },
+      {
+        "id": "group-2",
+        "kind": "group",
+        "projectId": "project-p3",
+        "name": "Visual cluster",
+        "position": {
+          "x": 680,
+          "y": 120
+        }
+      },
+      {
+        "id": "work-item-6",
+        "kind": "work-item",
+        "projectId": "project-p3",
+        "name": "Scaffold a Vue 3 TypeScript application",
+        "position": {
+          "x": 120,
+          "y": 480
+        },
+        "task": "## Goal\n\nCreate a minimal Vue 3 application that provides a fast, bounded implementation target for SPADE's real issue-to-PR workflow prototype.\n\n## Requirements\n\n- Scaffold a Vue 3 application with TypeScript and Vite in the repository root.\n- Replace the starter presentation with a simple page headed `SPADE workflow fixture` and a short sentence explaining that the repository exercises an agent issue-to-PR workflow.\n- Keep the implementation limited to the scaffold and this presentation; add no router, state library, backend, or unrelated features.\n- Commit the generated npm lockfile.\n- Document the development and production-build commands in the README.\n\n## Acceptance criteria\n\n- `npm install` succeeds from a clean checkout.\n- `npm run build` succeeds.\n- The application renders the required heading and explanatory copy.",
+        "sourceRef": {
+          "provider": "github",
+          "kind": "issue",
+          "id": "skflowne/spade-fixture#1",
+          "revision": "2026-08-20T12:03:05Z"
+        },
+        "status": "active"
+      }
+    ],
+    "nodes": [
+      {
+        "id": "node-3",
+        "projectId": "project-p3",
+        "groupId": "work-item-1",
+        "workItemId": "work-item-1",
+        "kind": "agent",
+        "title": "Root placeholder agent",
+        "position": {
+          "x": 156,
+          "y": 196
+        },
+        "resourceRef": {
+          "provider": "placeholder",
+          "kind": "agent",
+          "id": "agent-root",
+          "revision": "seed-v1"
+        },
+        "paseo": null
+      },
+      {
+        "id": "node-4",
+        "projectId": "project-p3",
+        "groupId": "group-2",
+        "workItemId": null,
+        "kind": "workspace",
+        "title": "Detached placeholder workspace",
+        "position": {
+          "x": 716,
+          "y": 196
+        },
+        "resourceRef": {
+          "provider": "placeholder",
+          "kind": "workspace",
+          "id": "workspace-root",
+          "revision": null
+        },
+        "paseo": null
+      },
+      {
+        "id": "node-7",
+        "projectId": "project-p3",
+        "groupId": "work-item-6",
+        "workItemId": "work-item-6",
+        "kind": "github-issue",
+        "title": "Scaffold a Vue 3 TypeScript application",
+        "position": {
+          "x": 156,
+          "y": 556
+        },
+        "resourceRef": {
+          "provider": "github",
+          "kind": "issue",
+          "id": "skflowne/spade-fixture#1",
+          "revision": "2026-08-20T12:03:05Z"
+        },
+        "paseo": null,
+        "issue": {
+          "repository": "skflowne/spade-fixture",
+          "number": 1,
+          "title": "Scaffold a Vue 3 TypeScript application",
+          "state": "OPEN",
+          "labels": [],
+          "body": "## Goal\n\nCreate a minimal Vue 3 application that provides a fast, bounded implementation target for SPADE's real issue-to-PR workflow prototype.\n\n## Requirements\n\n- Scaffold a Vue 3 application with TypeScript and Vite in the repository root.\n- Replace the starter presentation with a simple page headed `SPADE workflow fixture` and a short sentence explaining that the repository exercises an agent issue-to-PR workflow.\n- Keep the implementation limited to the scaffold and this presentation; add no router, state library, backend, or unrelated features.\n- Commit the generated npm lockfile.\n- Document the development and production-build commands in the README.\n\n## Acceptance criteria\n\n- `npm install` succeeds from a clean checkout.\n- `npm run build` succeeds.\n- The application renders the required heading and explanatory copy.\n",
+          "url": "https://github.com/skflowne/spade-fixture/issues/1",
+          "updatedAt": "2026-08-20T12:03:05Z"
+        }
+      },
+      {
+        "id": "node-8",
+        "projectId": "project-p3",
+        "groupId": "work-item-6",
+        "workItemId": "work-item-6",
+        "kind": "workspace",
+        "title": "main",
+        "position": {
+          "x": 400,
+          "y": 556
+        },
+        "resourceRef": {
+          "provider": "paseo",
+          "kind": "workspace",
+          "id": "wks_dede527f1d2385de",
+          "revision": "2026-08-21T02:28:06.052Z"
+        },
+        "paseo": {
+          "type": "workspace",
+          "state": "error",
+          "projectId": "prj_fb81b9fbfd71fd8d",
+          "directory": "/home/skflowne/projects/spade-fixture",
+          "branch": "main",
+          "status": "done"
+        }
+      },
+      {
+        "id": "node-9",
+        "projectId": "project-p3",
+        "groupId": "work-item-6",
+        "workItemId": "work-item-6",
+        "kind": "agent",
+        "title": "/skill:paseo-issue-to-pr https://github.com/skflowne/spade-f",
+        "position": {
+          "x": 156,
+          "y": 696
+        },
+        "resourceRef": {
+          "provider": "paseo",
+          "kind": "agent",
+          "id": "fe107baf-4b33-4442-9040-9183efa738da",
+          "revision": "2026-08-21T02:29:01.742Z"
+        },
+        "paseo": {
+          "type": "managed-agent",
+          "state": "error",
+          "parentAgentId": null,
+          "workspaceId": "wks_dede527f1d2385de",
+          "provider": "pi",
+          "model": "openai-codex/gpt-5.6-sol",
+          "status": "running",
+          "cwd": "/home/skflowne/projects/spade-fixture",
+          "timeline": []
+        }
+      },
+      {
+        "id": "node-10",
+        "projectId": "project-p3",
+        "groupId": "work-item-6",
+        "workItemId": "work-item-6",
+        "kind": "workspace",
+        "title": "paseo/issue-1-discovery-a557b80a",
+        "position": {
+          "x": 400,
+          "y": 696
+        },
+        "resourceRef": {
+          "provider": "paseo",
+          "kind": "workspace",
+          "id": "wks_bc966044af2bfedd",
+          "revision": "2026-08-21T02:29:43.542Z"
+        },
+        "paseo": {
+          "type": "workspace",
+          "state": "error",
+          "projectId": "prj_fb81b9fbfd71fd8d",
+          "directory": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-discovery-a557b80a",
+          "branch": "paseo/issue-1-discovery-a557b80a",
+          "status": "done"
+        }
+      },
+      {
+        "id": "node-11",
+        "projectId": "project-p3",
+        "groupId": "work-item-6",
+        "workItemId": "work-item-6",
+        "kind": "workspace",
+        "title": "feature/issue-1-vue-scaffold",
+        "position": {
+          "x": 156,
+          "y": 836
+        },
+        "resourceRef": {
+          "provider": "paseo",
+          "kind": "workspace",
+          "id": "wks_7055e4e4aa6c4080",
+          "revision": "2026-08-21T02:32:45.997Z"
+        },
+        "paseo": {
+          "type": "workspace",
+          "state": "error",
+          "projectId": "prj_fb81b9fbfd71fd8d",
+          "directory": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-implementation-a557b80a",
+          "branch": "feature/issue-1-vue-scaffold",
+          "status": "done"
+        }
+      },
+      {
+        "id": "node-12",
+        "projectId": "project-p3",
+        "groupId": "work-item-6",
+        "workItemId": "work-item-6",
+        "kind": "workspace",
+        "title": "feature/issue-1-vue-scaffold-1",
+        "position": {
+          "x": 400,
+          "y": 836
+        },
+        "resourceRef": {
+          "provider": "paseo",
+          "kind": "workspace",
+          "id": "wks_f27cf54214571eef",
+          "revision": "2026-08-21T02:42:34.395Z"
+        },
+        "paseo": {
+          "type": "workspace",
+          "state": "error",
+          "projectId": "prj_fb81b9fbfd71fd8d",
+          "directory": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/pr-7-review-r1-a557b80a",
+          "branch": "feature/issue-1-vue-scaffold-1",
+          "status": "done"
+        }
+      },
+      {
+        "id": "node-13",
+        "projectId": "project-p3",
+        "groupId": "work-item-6",
+        "workItemId": "work-item-6",
+        "kind": "workspace",
+        "title": "feature/issue-1-vue-scaffold-2",
+        "position": {
+          "x": 156,
+          "y": 976
+        },
+        "resourceRef": {
+          "provider": "paseo",
+          "kind": "workspace",
+          "id": "wks_2f5fe20b3713f228",
+          "revision": "2026-08-21T02:48:51.368Z"
+        },
+        "paseo": {
+          "type": "workspace",
+          "state": "error",
+          "projectId": "prj_fb81b9fbfd71fd8d",
+          "directory": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/pr-7-review-r2-a557b80a",
+          "branch": "feature/issue-1-vue-scaffold-2",
+          "status": "done"
+        }
+      },
+      {
+        "id": "node-14",
+        "projectId": "project-p3",
+        "groupId": "work-item-6",
+        "workItemId": "work-item-6",
+        "kind": "github-pull-request",
+        "title": "Scaffold Vue 3 TypeScript application",
+        "position": {
+          "x": 156,
+          "y": 976
+        },
+        "resourceRef": {
+          "provider": "github",
+          "kind": "pull-request",
+          "id": "skflowne/spade-fixture#7",
+          "revision": "32a9778e25e849ff5ff3d332ae86053b4ea6e3fb"
+        },
+        "paseo": null,
+        "pullRequest": {
+          "repository": "skflowne/spade-fixture",
+          "number": 7,
+          "title": "Scaffold Vue 3 TypeScript application",
+          "state": "OPEN",
+          "author": "skflowne",
+          "url": "https://github.com/skflowne/spade-fixture/pull/7",
+          "baseBranch": "main",
+          "headBranch": "feature/issue-1-vue-scaffold",
+          "latestRevision": "32a9778e25e849ff5ff3d332ae86053b4ea6e3fb",
+          "updatedAt": "2026-08-21T02:53:35Z",
+          "checks": [],
+          "reviews": [
+            {
+              "author": "skflowne",
+              "state": "COMMENTED",
+              "body": "## Automated drift review — Round 1/4\n\n## Findings\n\n- **Minor — [scope-drift] DRIFT-1: Remove the agent-internal CodeGraph evaluation report.** `.codegraph-evals/20260821T023509Z-issue-1-vue-scaffold.md:1-23` records a failed local tool invocation, a machine-specific path, and session fallback details; none contributes to the requested Vue scaffold, presentation, lockfile, or development documentation. A later workflow run can follow this committed precedent and add another timestamped environment report, causing operational artifacts to accumulate in the product repository and obscuring its intentionally minimal fixture contents. That trigger is plausible because this PR already establishes the pattern. Remove this file from the PR.\n\n## Resolution chunks\n\n1. **Remove the internal evaluation artifact (DRIFT-1).** Outcome: keep the PR limited to the requested scaffold and presentation. Owned scope: delete `.codegraph-evals/20260821T023509Z-issue-1-vue-scaffold.md` only. Dependencies: none. Acceptance criteria: the report is absent and all remaining changed paths serve the issue requirements. Focused validation: `git diff --check` and `npm run build`.\n\nValidation: Exact base/head diff inspected; supplied clean-equivalent install and production build passed, and production preview rendered the required heading and sentence.",
+              "submittedAt": "2026-08-21T02:47:37Z"
+            },
+            {
+              "author": "skflowne",
+              "state": "COMMENTED",
+              "body": "## Automated drift review — Round 2/4\n\nNo findings.\n\nValidation: Exact base/head diff inspected; clean-equivalent install and production build passed, and production preview rendered the required heading and sentence.",
+              "submittedAt": "2026-08-21T02:52:35Z"
+            }
+          ],
+          "comments": [
+            {
+              "author": "skflowne",
+              "body": "## Paseo issue-to-PR result\n\nStatus: Verified clear and ready for human review.\n\n- Round 1/4: https://github.com/skflowne/spade-fixture/pull/7#pullrequestreview-4989275980\n- Round 2/4: https://github.com/skflowne/spade-fixture/pull/7#pullrequestreview-4989294247",
+              "createdAt": "2026-08-21T02:53:35Z"
+            }
+          ],
+          "reviewComments": []
+        }
+      }
+    ],
+    "edges": [
+      {
+        "id": "edge-5",
+        "fromNodeId": "node-3",
+        "toNodeId": "node-4",
+        "relation": "connected"
+      },
+      {
+        "id": "edge-15",
+        "fromNodeId": "node-11",
+        "toNodeId": "node-14",
+        "relation": "derived"
+      }
+    ],
+    "paseo": {
+      "connection": "error",
+      "daemonUrl": "ws://127.0.0.1:17680/ws",
+      "lastRefreshAt": null,
+      "error": "Agent not found: fe107baf-4b33-4442-9040-9183efa738da",
+      "capabilities": [
+        {
+          "name": "agents",
+          "state": "available",
+          "detail": null
+        },
+        {
+          "name": "workspaces",
+          "state": "available",
+          "detail": null
+        },
+        {
+          "name": "providers",
+          "state": "available",
+          "detail": null
+        },
+        {
+          "name": "timeline-fetch",
+          "state": "available",
+          "detail": null
+        },
+        {
+          "name": "agent-workspace-subscriptions",
+          "state": "available",
+          "detail": null
+        },
+        {
+          "name": "provider-subagents",
+          "state": "unavailable",
+          "detail": "The bounded prototype does not project the daemon driver’s provider-subagent RPC."
+        },
+        {
+          "name": "live-timeline",
+          "state": "unavailable",
+          "detail": "The bounded prototype uses authoritative timeline tails instead of activating a live stream."
+        },
+        {
+          "name": "server-info",
+          "state": "unavailable",
+          "detail": "Server-info gates provider readiness but is not persisted as prototype runtime state."
+        }
+      ],
+      "bindings": [
+        {
+          "workItemId": "work-item-6",
+          "rootAgentId": "fe107baf-4b33-4442-9040-9183efa738da"
+        }
+      ]
+    }
+  },
+  "paseo": {
+    "capturedAt": "2026-08-21T03:02:30.922Z",
+    "source": "@getpaseo/cli 0.4.0 connection using daemon public agent/workspace/timeline RPCs; read-only diagnostic, not SPADE reconciliation input",
+    "providerNativeDiscovery": {
+      "state": "unavailable-in-integrated-prototype",
+      "rows": null,
+      "note": "No provider-native query was issued; absence is not inferred."
+    },
+    "agents": [
+      {
+        "id": "fe107baf-4b33-4442-9040-9183efa738da",
+        "parentAgentId": null,
+        "workspaceId": "wks_dede527f1d2385de",
+        "provider": "pi",
+        "model": "openai-codex/gpt-5.6-sol",
+        "status": "idle",
+        "cwd": "/home/skflowne/projects/spade-fixture",
+        "createdAt": "2026-08-21T02:29:01.737Z",
+        "updatedAt": "2026-08-21T02:54:48.041Z",
+        "timelineTail": {
+          "limit": 40,
+          "epoch": "621cad44-d8f4-4283-8ac2-c2dd9b7b3153",
+          "error": null,
+          "entryCount": 40,
+          "first": {
+            "timestamp": "2026-08-21T02:42:41.160Z",
+            "seqStart": 127,
+            "seqEnd": 127,
+            "kind": "reasoning"
+          },
+          "last": {
+            "timestamp": "2026-08-21T02:54:47.918Z",
+            "seqStart": 210,
+            "seqEnd": 218,
+            "kind": "assistant_message"
+          }
+        }
+      },
+      {
+        "id": "cc7f3107-330c-489b-a538-ca9257e5b768",
+        "parentAgentId": "fe107baf-4b33-4442-9040-9183efa738da",
+        "workspaceId": "wks_2f5fe20b3713f228",
+        "provider": "pi",
+        "model": "openai-codex/gpt-5.6-sol",
+        "status": "idle",
+        "cwd": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/pr-7-review-r2-a557b80a",
+        "createdAt": "2026-08-21T02:48:55.335Z",
+        "updatedAt": "2026-08-21T02:52:38.351Z",
+        "timelineTail": {
+          "limit": 40,
+          "epoch": "d2494686-3df5-49c5-b13a-c97070b199c6",
+          "error": null,
+          "entryCount": 41,
+          "first": {
+            "timestamp": "2026-08-21T02:49:07.268Z",
+            "seqStart": 4,
+            "seqEnd": 13,
+            "kind": "tool_call"
+          },
+          "last": {
+            "timestamp": "2026-08-21T02:52:38.283Z",
+            "seqStart": 106,
+            "seqEnd": 110,
+            "kind": "assistant_message"
+          }
+        }
+      },
+      {
+        "id": "aa1f78f1-c5a2-466f-b01f-26bfb10ae93b",
+        "parentAgentId": "fe107baf-4b33-4442-9040-9183efa738da",
+        "workspaceId": "wks_f27cf54214571eef",
+        "provider": "pi",
+        "model": "openai-codex/gpt-5.6-sol",
+        "status": "idle",
+        "cwd": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/pr-7-review-r1-a557b80a",
+        "createdAt": "2026-08-21T02:42:38.169Z",
+        "updatedAt": "2026-08-21T02:47:46.925Z",
+        "timelineTail": {
+          "limit": 40,
+          "epoch": "71c5936b-27fd-418f-bc59-372bb282195b",
+          "error": null,
+          "entryCount": 36,
+          "first": {
+            "timestamp": "2026-08-21T02:42:38.791Z",
+            "seqStart": 1,
+            "seqEnd": 1,
+            "kind": "user_message"
+          },
+          "last": {
+            "timestamp": "2026-08-21T02:47:46.860Z",
+            "seqStart": 97,
+            "seqEnd": 103,
+            "kind": "assistant_message"
+          }
+        }
+      },
+      {
+        "id": "838484d7-8180-4595-b071-ddc92b5743a7",
+        "parentAgentId": "fe107baf-4b33-4442-9040-9183efa738da",
+        "workspaceId": "wks_7055e4e4aa6c4080",
+        "provider": "pi",
+        "model": "openai-codex/gpt-5.6-sol",
+        "status": "idle",
+        "cwd": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-implementation-a557b80a",
+        "createdAt": "2026-08-21T02:32:48.770Z",
+        "updatedAt": "2026-08-21T02:41:24.271Z",
+        "timelineTail": {
+          "limit": 40,
+          "epoch": "a8e5073c-0a68-4fad-bec2-1a31de3eb859",
+          "error": null,
+          "entryCount": 40,
+          "first": {
+            "timestamp": "2026-08-21T02:35:51.576Z",
+            "seqStart": 99,
+            "seqEnd": 99,
+            "kind": "tool_call"
+          },
+          "last": {
+            "timestamp": "2026-08-21T02:41:24.049Z",
+            "seqStart": 158,
+            "seqEnd": 222,
+            "kind": "assistant_message"
+          }
+        }
+      },
+      {
+        "id": "d5124f66-52d8-4714-90e2-9f0646271483",
+        "parentAgentId": "fe107baf-4b33-4442-9040-9183efa738da",
+        "workspaceId": "wks_bc966044af2bfedd",
+        "provider": "pi",
+        "model": "openai-codex/gpt-5.6-sol",
+        "status": "idle",
+        "cwd": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-discovery-a557b80a",
+        "createdAt": "2026-08-21T02:29:46.590Z",
+        "updatedAt": "2026-08-21T02:32:03.826Z",
+        "timelineTail": {
+          "limit": 40,
+          "epoch": "e4bb864c-b2d4-4bbb-a2ff-9a1a1f146bb1",
+          "error": null,
+          "entryCount": 34,
+          "first": {
+            "timestamp": "2026-08-21T02:29:47.200Z",
+            "seqStart": 1,
+            "seqEnd": 1,
+            "kind": "user_message"
+          },
+          "last": {
+            "timestamp": "2026-08-21T02:32:03.810Z",
+            "seqStart": 77,
+            "seqEnd": 249,
+            "kind": "assistant_message"
+          }
+        }
+      }
+    ],
+    "workspaces": [
+      {
+        "id": "wks_2f5fe20b3713f228",
+        "projectId": "prj_fb81b9fbfd71fd8d",
+        "name": "feature/issue-1-vue-scaffold-2",
+        "workspaceDirectory": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/pr-7-review-r2-a557b80a",
+        "branch": "feature/issue-1-vue-scaffold-2",
+        "status": "attention",
+        "activityAt": null,
+        "statusEnteredAt": "2026-08-21T02:49:12.761Z"
+      },
+      {
+        "id": "wks_7055e4e4aa6c4080",
+        "projectId": "prj_fb81b9fbfd71fd8d",
+        "name": "feature/issue-1-vue-scaffold",
+        "workspaceDirectory": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-implementation-a557b80a",
+        "branch": "feature/issue-1-vue-scaffold",
+        "status": "attention",
+        "activityAt": null,
+        "statusEnteredAt": "2026-08-21T02:34:01.356Z"
+      },
+      {
+        "id": "wks_bc966044af2bfedd",
+        "projectId": "prj_fb81b9fbfd71fd8d",
+        "name": "paseo/issue-1-discovery-a557b80a",
+        "workspaceDirectory": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-discovery-a557b80a",
+        "branch": "paseo/issue-1-discovery-a557b80a",
+        "status": "attention",
+        "activityAt": null,
+        "statusEnteredAt": "2026-08-21T02:31:22.320Z"
+      },
+      {
+        "id": "wks_dede527f1d2385de",
+        "projectId": "prj_fb81b9fbfd71fd8d",
+        "name": "main",
+        "workspaceDirectory": "/home/skflowne/projects/spade-fixture",
+        "branch": "main",
+        "status": "attention",
+        "activityAt": null,
+        "statusEnteredAt": "2026-08-21T02:54:48.038Z"
+      },
+      {
+        "id": "wks_f27cf54214571eef",
+        "projectId": "prj_fb81b9fbfd71fd8d",
+        "name": "feature/issue-1-vue-scaffold-1",
+        "workspaceDirectory": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/pr-7-review-r1-a557b80a",
+        "branch": "feature/issue-1-vue-scaffold-1",
+        "status": "attention",
+        "activityAt": null,
+        "statusEnteredAt": "2026-08-21T02:42:56.913Z"
+      }
+    ]
+  },
+  "github": {
+    "issue": {
+      "body": "## Goal\n\nCreate a minimal Vue 3 application that provides a fast, bounded implementation target for SPADE's real issue-to-PR workflow prototype.\n\n## Requirements\n\n- Scaffold a Vue 3 application with TypeScript and Vite in the repository root.\n- Replace the starter presentation with a simple page headed `SPADE workflow fixture` and a short sentence explaining that the repository exercises an agent issue-to-PR workflow.\n- Keep the implementation limited to the scaffold and this presentation; add no router, state library, backend, or unrelated features.\n- Commit the generated npm lockfile.\n- Document the development and production-build commands in the README.\n\n## Acceptance criteria\n\n- `npm install` succeeds from a clean checkout.\n- `npm run build` succeeds.\n- The application renders the required heading and explanatory copy.\n",
+      "number": 1,
+      "state": "OPEN",
+      "title": "Scaffold a Vue 3 TypeScript application",
+      "updatedAt": "2026-08-20T12:03:05Z",
+      "url": "https://github.com/skflowne/spade-fixture/issues/1"
+    },
+    "pullRequest": {
+      "author": {
+        "id": "MDQ6VXNlcjE5ODAzNzA=",
+        "is_bot": false,
+        "login": "skflowne",
+        "name": ""
+      },
+      "baseRefName": "main",
+      "comments": [
+        {
+          "id": "IC_kwDOT-i9HM8AAAABP8GCoA",
+          "author": {
+            "login": "skflowne"
+          },
+          "authorAssociation": "OWNER",
+          "body": "## Paseo issue-to-PR result\n\nStatus: Verified clear and ready for human review.\n\n- Round 1/4: https://github.com/skflowne/spade-fixture/pull/7#pullrequestreview-4989275980\n- Round 2/4: https://github.com/skflowne/spade-fixture/pull/7#pullrequestreview-4989294247",
+          "createdAt": "2026-08-21T02:53:35Z",
+          "includesCreatedEdit": false,
+          "isMinimized": false,
+          "minimizedReason": "",
+          "reactionGroups": [],
+          "url": "https://github.com/skflowne/spade-fixture/pull/7#issuecomment-5364613792",
+          "viewerDidAuthor": true
+        }
+      ],
+      "headRefName": "feature/issue-1-vue-scaffold",
+      "headRefOid": "32a9778e25e849ff5ff3d332ae86053b4ea6e3fb",
+      "number": 7,
+      "reviews": [
+        {
+          "id": "PRR_kwDOT-i9HM8AAAABKWJPTA",
+          "author": {
+            "login": "skflowne"
+          },
+          "authorAssociation": "OWNER",
+          "body": "## Automated drift review — Round 1/4\n\n## Findings\n\n- **Minor — [scope-drift] DRIFT-1: Remove the agent-internal CodeGraph evaluation report.** `.codegraph-evals/20260821T023509Z-issue-1-vue-scaffold.md:1-23` records a failed local tool invocation, a machine-specific path, and session fallback details; none contributes to the requested Vue scaffold, presentation, lockfile, or development documentation. A later workflow run can follow this committed precedent and add another timestamped environment report, causing operational artifacts to accumulate in the product repository and obscuring its intentionally minimal fixture contents. That trigger is plausible because this PR already establishes the pattern. Remove this file from the PR.\n\n## Resolution chunks\n\n1. **Remove the internal evaluation artifact (DRIFT-1).** Outcome: keep the PR limited to the requested scaffold and presentation. Owned scope: delete `.codegraph-evals/20260821T023509Z-issue-1-vue-scaffold.md` only. Dependencies: none. Acceptance criteria: the report is absent and all remaining changed paths serve the issue requirements. Focused validation: `git diff --check` and `npm run build`.\n\nValidation: Exact base/head diff inspected; supplied clean-equivalent install and production build passed, and production preview rendered the required heading and sentence.",
+          "submittedAt": "2026-08-21T02:47:37Z",
+          "includesCreatedEdit": false,
+          "reactionGroups": [],
+          "state": "COMMENTED",
+          "commit": {
+            "oid": "32a9778e25e849ff5ff3d332ae86053b4ea6e3fb"
+          }
+        },
+        {
+          "id": "PRR_kwDOT-i9HM8AAAABKWKWpw",
+          "author": {
+            "login": "skflowne"
+          },
+          "authorAssociation": "OWNER",
+          "body": "## Automated drift review — Round 2/4\n\nNo findings.\n\nValidation: Exact base/head diff inspected; clean-equivalent install and production build passed, and production preview rendered the required heading and sentence.",
+          "submittedAt": "2026-08-21T02:52:35Z",
+          "includesCreatedEdit": false,
+          "reactionGroups": [],
+          "state": "COMMENTED",
+          "commit": {
+            "oid": "32a9778e25e849ff5ff3d332ae86053b4ea6e3fb"
+          }
+        }
+      ],
+      "state": "OPEN",
+      "statusCheckRollup": [],
+      "title": "Scaffold Vue 3 TypeScript application",
+      "updatedAt": "2026-08-21T02:53:35Z",
+      "url": "https://github.com/skflowne/spade-fixture/pull/7"
+    }
+  },
+  "integrity": {
+    "spadeNodeCount": 10,
+    "spadeResourceDuplicateCount": 0,
+    "spadeEdgeCount": 2,
+    "spadeEdgeDuplicateCount": 0,
+    "paseoManagedAgentCount": 5,
+    "paseoManagedAgentDuplicateCount": 0,
+    "paseoWorkspaceCount": 5,
+    "paseoWorkspaceDuplicateCount": 0,
+    "missingManagedParentCount": 0,
+    "missingManagedWorkspaceCount": 0
+  }
+}
