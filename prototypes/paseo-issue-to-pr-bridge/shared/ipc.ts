@@ -1,4 +1,5 @@
 import type { PrototypeCommand } from './commands'
+import type { P3IntegrationRequest, P3IntegrationResult } from './integration'
 import {
   isProvenanceRelation,
   isWorkItemStatus,
@@ -9,10 +10,12 @@ import {
 export const P3_SNAPSHOT_CHANNEL = 'spade:p3:snapshot'
 export const P3_COMMAND_CHANNEL = 'spade:p3:command'
 export const P3_SNAPSHOT_EVENT_CHANNEL = 'spade:p3:snapshot-event'
+export const P3_INTEGRATION_CHANNEL = 'spade:p3:integration'
 
 export type P3PrototypeBridge = {
   snapshot(): Promise<PrototypeLedger>
   execute(command: PrototypeCommand): Promise<PrototypeLedger>
+  integrate(request: P3IntegrationRequest): Promise<P3IntegrationResult>
   subscribe(listener: (ledger: PrototypeLedger) => void): () => void
 }
 

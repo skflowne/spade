@@ -116,6 +116,13 @@ export class PrototypeCommandService {
     })
   }
 
+  mutate(operation: (ledger: PrototypeLedger) => PrototypeLedger): Promise<PrototypeLedger> {
+    return this.enqueue(async () => {
+      await this.persistAndPublish(operation(this.snapshot()))
+      return this.snapshot()
+    })
+  }
+
   async close(): Promise<void> {
     this.closed = true
     this.unsubscribeAdapter?.()

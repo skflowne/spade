@@ -3,6 +3,7 @@ import {
   PROTOTYPE_LEDGER_VERSION,
   type ExternalResourceReference,
   type PlaceholderKind,
+  sameResourceIdentity,
   type PrototypeGroup,
   type PrototypeLedger,
   type ProvenanceRelation,
@@ -183,7 +184,9 @@ function putPlaceholder(
   command: Extract<PrototypeCommand, { type: 'spawn-placeholder' | 'attach-placeholder' }>
 ): CommandResult {
   const group = resolveGroup(ledger, command.targetGroup)
-  const existing = ledger.nodes.find(({ resourceRef }) => sameResource(resourceRef, command.resourceRef))
+  const existing = ledger.nodes.find(({ resourceRef }) =>
+    sameResourceIdentity(resourceRef, command.resourceRef)
+  )
   if (existing) {
     const updated = {
       ...existing,
@@ -282,10 +285,6 @@ function setWorkItemStatus(
 
 function requireNode(ledger: PrototypeLedger, id: string): void {
   if (!ledger.nodes.some((node) => node.id === id)) throw new Error(`No node has stable ID “${id}”.`)
-}
-
-function sameResource(left: ExternalResourceReference, right: ExternalResourceReference): boolean {
-  return left.provider === right.provider && left.kind === right.kind && left.id === right.id
 }
 
 function groupPosition(index: number): { x: number; y: number } {

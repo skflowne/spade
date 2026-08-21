@@ -7,6 +7,16 @@ import {
   createInitialLedger,
   type PrototypeCommand
 } from '../../prototypes/paseo-issue-to-pr-bridge/shared/commands'
+import type { GitHubIssue, GitHubPullRequest } from '../../prototypes/paseo-issue-to-pr-bridge/shared/github'
+import {
+  reconcileGitHubIssue,
+  reconcileGitHubPullRequest
+} from '../../prototypes/paseo-issue-to-pr-bridge/shared/githubReconciliation'
+import type {
+  P3IntegrationRequest,
+  P3IntegrationResult
+} from '../../prototypes/paseo-issue-to-pr-bridge/shared/integration'
+import { P3_INTEGRATION_CHANNEL } from '../../prototypes/paseo-issue-to-pr-bridge/shared/ipc'
 import { reconcilePaseoWorkItem } from '../../prototypes/paseo-issue-to-pr-bridge/shared/paseoReconciliation'
 import type { PrototypeLedger } from '../../prototypes/paseo-issue-to-pr-bridge/shared/model'
 
@@ -16,6 +26,7 @@ type P3Window = Window & {
   spadeP3: {
     snapshot(): Promise<PrototypeLedger>
     execute(command: PrototypeCommand | Record<string, unknown>): Promise<PrototypeLedger>
+    integrate(request: P3IntegrationRequest | Record<string, unknown>): Promise<P3IntegrationResult>
     subscribe(listener: (ledger: PrototypeLedger) => void): () => void
   }
 }
@@ -40,8 +51,8 @@ test('runs the generic P3 shell through narrow IPC and restores the exact ledger
     application = await launch(ledgerPath)
     let window = await application.firstWindow()
 
-    await expect(window).toHaveTitle('SPADE · P3 generic work shell')
-    await expect(window.getByRole('heading', { name: 'P3 generic work shell' })).toBeVisible()
+    await expect(window).toHaveTitle('SPADE · P3 native GitHub work shell')
+    await expect(window.getByRole('heading', { name: 'P3 native GitHub work shell' })).toBeVisible()
     await expect(window.getByTestId('project-container')).toContainText('P3 bridge prototype')
 
     const hulls = window.locator('.group-hull')
@@ -65,7 +76,7 @@ test('runs the generic P3 shell through narrow IPC and restores the exact ledger
     expect(boundary).toEqual({
       requireType: 'undefined',
       processType: 'undefined',
-      api: ['execute', 'snapshot', 'subscribe']
+      api: ['execute', 'integrate', 'snapshot', 'subscribe']
     })
 
     const publicationCount = await window.evaluate(async () => {
@@ -81,6 +92,11 @@ test('runs the generic P3 shell through narrow IPC and restores the exact ledger
       return count
     })
     expect(publicationCount).toBe(1)
+
+    await window.getByRole('button', { name: 'Refresh checkout' }).click()
+    await expect(window.getByRole('alert')).toContainText(
+      'missing-workspace: Selected node is not a Paseo workspace checkout.'
+    )
 
     const viewport = window.locator('.react-flow__viewport')
     const transformBeforeFocus = await viewport.getAttribute('style')
@@ -100,7 +116,8 @@ test('runs the generic P3 shell through narrow IPC and restores the exact ledger
 
     await window.getByLabel('New group name').fill('Second task')
     await window.getByLabel('Work item task').fill('Exercise generic creation')
-    await window.getByRole('button', { name: 'Create WorkItem' }).click()
+    await window.getByRole('heading', { name: 'Create containers' }).locator('..')
+      .getByRole('button', { name: 'Create WorkItem' }).click()
     await expect(activity.getByRole('button')).toHaveCount(2)
 
     await window.getByLabel('Target group').fill('Issue 17 · Generic shell')
@@ -277,6 +294,102 @@ test('renders live Paseo resource states and bounded conversation expansion defa
   }
 })
 
+test('renders persisted native GitHub Issue and PullRequest nodes with shared chrome', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'spade-p3-github-shell-'))
+  const ledgerPath = join(directory, 'ledger.json')
+  const issue: GitHubIssue = {
+    repository: 'skflowne/spade-fixture',
+    number: 1,
+    title: 'Scaffold a Vue app',
+    state: 'OPEN',
+    labels: ['prototype'],
+    body: 'Build the fixture.',
+    url: 'https://github.com/skflowne/spade-fixture/issues/1',
+    updatedAt: '2026-08-20T12:03:05Z'
+  }
+  const pullRequest: GitHubPullRequest = {
+    repository: 'skflowne/spade-fixture',
+    number: 7,
+    title: 'Build fixture',
+    state: 'OPEN',
+    author: 'octocat',
+    url: 'https://github.com/skflowne/spade-fixture/pull/7',
+    baseBranch: 'main',
+    headBranch: 'spade-fixture',
+    latestRevision: 'abcdef123456',
+    updatedAt: '2026-08-20T13:00:00Z',
+    checks: [{ name: 'build', state: 'passed', url: null }],
+    reviews: [{ author: 'reviewer', state: 'APPROVED', body: '', submittedAt: '2026-08-20T12:50:00Z' }],
+    comments: [{ author: 'maintainer', body: 'Ready.', createdAt: '2026-08-20T12:51:00Z' }],
+    reviewComments: [{ author: 'reviewer', body: 'Nice.', path: 'src/App.vue', createdAt: '2026-08-20T12:52:00Z' }]
+  }
+  let ledger = reconcileGitHubIssue(createInitialLedger('project-p3', 'Fixture project'), issue).ledger
+  ledger = applyPrototypeCommand(ledger, {
+    type: 'attach-placeholder',
+    targetGroup: 'work-item-1',
+    nodeKind: 'workspace',
+    title: 'Fixture checkout',
+    resourceRef: { provider: 'paseo', kind: 'workspace', id: 'workspace-opaque-1', revision: null }
+  }).ledger
+  ledger = reconcileGitHubPullRequest(ledger, pullRequest, 'node-3').ledger
+  await writeFile(ledgerPath, `${JSON.stringify(ledger, null, 2)}\n`, 'utf8')
+
+  const application = await launch(ledgerPath)
+  try {
+    const window = await application.firstWindow()
+    await application.evaluate(({ ipcMain }, channel) => {
+      ipcMain.removeHandler(channel)
+      ipcMain.handle(channel, (_event, request: { type?: string }) => {
+        if (request.type !== 'checkout-status') {
+          return { ok: false, error: { kind: 'invalid-request', message: 'UI evidence fixture.' } }
+        }
+        return {
+          ok: true,
+          value: {
+            type: 'checkout-status',
+            status: {
+              workspaceId: 'workspace-opaque-1',
+              branch: 'spade-19-validation',
+              headRevision: 'e1dbd2b6a7ec3f369cc5540277b630f7725fc84a',
+              baseRef: 'origin/main',
+              changedFiles: 0,
+              additions: 0,
+              deletions: 0,
+              stagedFiles: null,
+              unstagedFiles: null,
+              untrackedFiles: null,
+              conflicts: null
+            }
+          }
+        }
+      })
+    }, P3_INTEGRATION_CHANNEL)
+    await expect(window.locator('.github-node')).toHaveCount(2)
+    const issueNode = window.locator('.github-node').filter({ hasText: issue.title })
+    await expect(issueNode).toContainText('skflowne/spade-fixture#1')
+    await expect(issueNode).toContainText('prototype')
+    await expect(issueNode.getByRole('button', { name: 'Open on GitHub' })).toBeVisible()
+
+    const pullRequestNode = window.locator('.github-node').filter({ hasText: pullRequest.title })
+    await expect(pullRequestNode).toContainText('main ← spade-fixture')
+    await expect(pullRequestNode).toContainText('1 passed · 0 failed · 0 pending · 0 skipped')
+    await expect(pullRequestNode).toContainText('1 reviews · 1 comments · 1 inline')
+    const pullRequestActivity = pullRequestNode.locator('.github-activity')
+    await expect(pullRequestActivity).toContainText('INLINE')
+    await expect(pullRequestActivity).toContainText('src/App.vue: Nice.')
+    await expect(pullRequestNode.getByRole('button', { name: 'Refresh PR' })).toBeVisible()
+    await expect(window.getByLabel('Repository')).toHaveValue('skflowne/spade-fixture')
+    await window.getByRole('button', { name: 'Refresh checkout' }).click()
+    await expect(window.getByLabel('Checkout summary')).toContainText('spade-19-validation')
+    await expect(window.getByLabel('Checkout summary')).toContainText('e1dbd2b6a7ec')
+    await expect(window.getByRole('button', { name: 'Create/link PR' })).toBeVisible()
+    await window.screenshot({ path: test.info().outputPath('p3-native-github-shell.png') })
+  } finally {
+    await application.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 test('rejects malformed renderer commands at runtime', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'spade-p3-ipc-'))
   const ledgerPath = join(directory, 'ledger.json')
@@ -320,6 +433,23 @@ test('rejects malformed renderer commands at runtime', async () => {
     })
     expect(messages).toHaveLength(5)
     for (const message of messages) expect(message).toContain('Invalid P3 prototype command')
+    const integrationResults = await window.evaluate(() => Promise.all([
+      (globalThis as unknown as P3Window).spadeP3.integrate({
+        type: 'checkout-status',
+        workspaceNodeId: 'node-4',
+        cwd: '/tmp/injected'
+      }),
+      (globalThis as unknown as P3Window).spadeP3.integrate({
+        type: 'github-issue-detail',
+        repository: 'skflowne/spade-fixture',
+        number: 0
+      })
+    ]))
+    expect(integrationResults).toEqual([
+      { ok: false, error: { kind: 'invalid-request', message: 'Invalid P3 integration request.' } },
+      { ok: false, error: { kind: 'invalid-request', message: 'Invalid P3 integration request.' } }
+    ])
+
     const snapshot = await window.evaluate(() => (globalThis as unknown as P3Window).spadeP3.snapshot())
     expect(snapshot.groups).toHaveLength(2)
     expect(snapshot.edges).toHaveLength(1)

@@ -1,5 +1,4 @@
 import { expect, test } from '@playwright/test'
-import type { PaseoClient } from '@getpaseo/client'
 import {
   applyPrototypeCommand,
   createInitialLedger
@@ -12,8 +11,11 @@ import { createConfiguredPaseoAdapter } from '../../prototypes/paseo-issue-to-pr
 import { registerSnapshotPublication } from '../../prototypes/paseo-issue-to-pr-bridge/main/snapshotPublication'
 import {
   SpadePaseoAdapter,
-  type PaseoAdapterNotification
+  type PaseoAdapterNotification,
+  type PaseoDaemonDriver
 } from '../../prototypes/paseo-issue-to-pr-bridge/main/SpadePaseoAdapter'
+import { CheckoutAdapterError } from '../../prototypes/paseo-issue-to-pr-bridge/main/spadePaseoCheckout'
+import { runCheckoutValidation } from '../../prototypes/paseo-issue-to-pr-bridge/main/validateCheckout'
 import { runPaseoValidation } from '../../prototypes/paseo-issue-to-pr-bridge/main/validatePaseo'
 import type {
   PaseoAgentSnapshot,
@@ -201,14 +203,99 @@ test('preserves primary and cleanup failures while attempting every cleanup acti
   expect(fixture.calls.close).toBe(1)
 })
 
-test('uses one public client while exhausting pages and refetching exact opaque references', async () => {
+test('validates the disposable checkout sequence through one adapter', async () => {
+  const calls: string[] = []
+  let statusCount = 0
+  const checkoutEnvironment: NodeJS.ProcessEnv = {
+    SPADE_P3_PASEO_URL: 'ws://127.0.0.1:17677/ws',
+    SPADE_P3_CHECKOUT_VALIDATION_CWD: '/opaque/checkout',
+    SPADE_P3_CHECKOUT_VALIDATION_REPOSITORY: 'skflowne/spade-fixture',
+    SPADE_P3_CHECKOUT_VALIDATION_COMMIT_MESSAGE: 'Disposable validation',
+    SPADE_P3_CHECKOUT_VALIDATION_REMOTE: 'origin',
+    SPADE_P3_CHECKOUT_VALIDATION_PR_TITLE: 'Disposable validation',
+    SPADE_P3_CHECKOUT_VALIDATION_PR_BODY: 'Cleanup after validation.',
+    SPADE_P3_CHECKOUT_VALIDATION_BASE_BRANCH: 'main'
+  }
+  const adapter = {
+    connect: async () => { calls.push('connect') },
+    openProjectCheckout: async () => {
+      calls.push('open')
+      return workspace('checkout-validation')
+    },
+    checkoutStatus: async () => {
+      calls.push('status')
+      statusCount += 1
+      return {
+        workspaceId: 'checkout-validation',
+        branch: 'spade-19-validation',
+        headRevision: statusCount === 1 ? 'revision-before' : 'revision-after',
+        baseRef: 'origin/main',
+        changedFiles: statusCount === 1 ? 1 : 0,
+        additions: statusCount === 1 ? 1 : 0,
+        deletions: 0,
+        stagedFiles: null,
+        unstagedFiles: null,
+        untrackedFiles: null,
+        conflicts: null
+      }
+    },
+    checkoutCommit: async () => {
+      calls.push('commit')
+      return { revision: 'revision-after' }
+    },
+    checkoutPush: async () => {
+      calls.push('push')
+      return { remote: 'origin', branch: 'spade-19-validation' }
+    },
+    checkoutCreatePullRequest: async () => {
+      calls.push('pr-create')
+      return {
+        repository: 'skflowne/spade-fixture',
+        number: 9,
+        url: 'https://github.com/skflowne/spade-fixture/pull/9'
+      }
+    },
+    checkoutPullRequestStatus: async () => {
+      calls.push('pr-status')
+      return {
+        pullRequest: {
+          repository: 'skflowne/spade-fixture',
+          number: 9,
+          url: 'https://github.com/skflowne/spade-fixture/pull/9'
+        },
+        state: 'OPEN' as const
+      }
+    },
+    close: async () => { calls.push('close') }
+  }
+
+  await expect(runCheckoutValidation(checkoutEnvironment, () => adapter)).resolves.toMatchObject({
+    repository: 'skflowne/spade-fixture',
+    branch: 'spade-19-validation',
+    commitRevision: 'revision-after',
+    pullRequestState: 'OPEN'
+  })
+  expect(calls).toEqual([
+    'connect',
+    'open',
+    'status',
+    'commit',
+    'status',
+    'push',
+    'pr-create',
+    'pr-status',
+    'close'
+  ])
+})
+
+test('uses one daemon driver while exhausting pages and refetching exact opaque references', async () => {
   const calls = {
     connect: 0,
+    close: 0,
     agentLists: [] as unknown[],
     workspaceLists: [] as unknown[],
     agentRefreshes: [] as string[],
     agentArchives: [] as string[],
-    workspaceRefreshes: [] as string[],
     timelines: [] as string[],
     providerReadyCwds: [] as string[],
     spawnOptions: [] as unknown[]
@@ -216,127 +303,75 @@ test('uses one public client while exhausting pages and refetching exact opaque 
   const agents = [agent('root', null, 'workspace-a'), agent('child', 'root', 'workspace-b')]
   const createdAgent = agent('created', null, 'workspace-a')
   const workspaces = [workspace('workspace-a'), workspace('workspace-b')]
-  const agentSubscribers: Array<() => void> = []
-  const workspaceSubscribers: Array<() => void> = []
-  const providerSubscribers: Array<() => void> = []
-  const fake = {
+  const subscribers = new Map<string, Array<() => void>>()
+  const driver = {
     connect: async () => { calls.connect += 1 },
-    close: async () => undefined,
+    close: async () => { calls.close += 1 },
     getConnectionState: () => ({ status: 'connected' as const }),
-    ensureConnected: () => undefined,
-    agents: {
-      subscribe: (listener: () => void) => {
-        agentSubscribers.push(listener)
-        return () => undefined
-      },
-      list: async (options: { page?: { cursor?: string } }) => {
-        calls.agentLists.push(options)
-        const second = options.page?.cursor === 'agents-2'
-        return {
-          requestId: 'agents',
-          subscriptionId: second ? null : 'agent-subscription',
-          entries: [{ agent: publicAgent(agents[second ? 1 : 0]), project: {} }],
-          pageInfo: {
-            nextCursor: second ? null : 'agents-2',
-            prevCursor: null,
-            hasMore: !second
-          }
-        }
-      },
-      ref: (id: string) => ({
-        refresh: async () => {
-          calls.agentRefreshes.push(id)
-          const snapshot = [...agents, createdAgent].find((candidate) => candidate.id === id)
-          return snapshot ? { agent: publicAgent(snapshot), project: null } : null
-        },
-        archive: async () => {
-          calls.agentArchives.push(id)
-          return { archivedAt: '2026-08-20T10:02:00Z' }
-        },
-        timeline: {
-          refetch: async () => {
-            calls.timelines.push(id)
-            return {
-              agentId: id,
-              epoch: 'epoch-1',
-              entries: [{
-                timestamp: '2026-08-20T10:00:00Z',
-                seqStart: 1,
-                seqEnd: 1,
-                item: { type: 'assistant_message', text: id }
-              }],
-              error: null
-            }
-          }
-        }
-      }),
-      create: async (options: unknown) => {
-        calls.spawnOptions.push(options)
-        return {
-          current: () => publicAgent(createdAgent),
-          refresh: async () => ({ agent: publicAgent(createdAgent), project: null })
-        }
+    on: (type: string, listener: () => void) => {
+      subscribers.set(type, [...(subscribers.get(type) ?? []), listener])
+      return () => undefined
+    },
+    fetchAgents: async (options: { page?: { cursor?: string } }) => {
+      calls.agentLists.push(options)
+      const second = options.page?.cursor === 'agents-2'
+      return {
+        requestId: 'agents',
+        subscriptionId: second ? null : 'agent-subscription',
+        entries: [{ agent: publicAgent(agents[second ? 1 : 0]), project: {} }],
+        pageInfo: { nextCursor: second ? null : 'agents-2', prevCursor: null, hasMore: !second }
       }
     },
-    workspaces: {
-      subscribe: (listener: () => void) => {
-        workspaceSubscribers.push(listener)
-        return () => undefined
-      },
-      list: async (options: { page?: { cursor?: string } }) => {
-        calls.workspaceLists.push(options)
-        const second = options.page?.cursor === 'workspaces-2'
-        return {
-          requestId: 'workspaces',
-          subscriptionId: second ? null : 'workspace-subscription',
-          entries: [publicWorkspace(workspaces[second ? 1 : 0])],
-          pageInfo: {
-            nextCursor: second ? null : 'workspaces-2',
-            prevCursor: null,
-            hasMore: !second
-          }
-        }
-      },
-      ref: (id: string) => ({
-        refresh: async () => {
-          calls.workspaceRefreshes.push(id)
-          return publicWorkspace(workspaces.find((candidate) => candidate.id === id)!)
-        },
-        agents: {
-          create: async (options: unknown) => {
-            calls.spawnOptions.push(options)
-            return {
-              current: () => publicAgent(createdAgent),
-              refresh: async () => ({ agent: publicAgent(createdAgent), project: null })
-            }
-          }
-        }
-      }),
-      open: async () => ({
-        current: () => publicWorkspace(workspaces[0]),
-        refresh: async () => publicWorkspace(workspaces[0])
-      }),
-      create: async () => ({
-        current: () => publicWorkspace(workspaces[1]),
-        refresh: async () => publicWorkspace(workspaces[1])
-      })
-    },
-    providers: {
-      subscribe: (listener: () => void) => {
-        providerSubscribers.push(listener)
-        return () => undefined
-      },
-      waitForReady: async ({ cwd }: { cwd?: string }) => {
-        calls.providerReadyCwds.push(cwd ?? '')
-        return {}
+    fetchWorkspaces: async (options: { page?: { cursor?: string } }) => {
+      calls.workspaceLists.push(options)
+      const second = options.page?.cursor === 'workspaces-2'
+      return {
+        requestId: 'workspaces',
+        subscriptionId: second ? null : 'workspace-subscription',
+        entries: [publicWorkspace(workspaces[second ? 1 : 0])],
+        pageInfo: { nextCursor: second ? null : 'workspaces-2', prevCursor: null, hasMore: !second }
       }
+    },
+    openProject: async () => ({ workspace: publicWorkspace(workspaces[0]), error: null }),
+    createWorkspace: async () => ({ workspace: publicWorkspace(workspaces[1]), error: null }),
+    fetchAgent: async (id: string) => {
+      calls.agentRefreshes.push(id)
+      const snapshot = [...agents, createdAgent].find((candidate) => candidate.id === id)
+      return snapshot ? { agent: publicAgent(snapshot), project: null } : null
+    },
+    archiveAgent: async (id: string) => {
+      calls.agentArchives.push(id)
+      return { archivedAt: '2026-08-20T10:02:00Z' }
+    },
+    fetchAgentTimeline: async (id: string) => {
+      calls.timelines.push(id)
+      return {
+        agentId: id,
+        epoch: 'epoch-1',
+        entries: [{
+          timestamp: '2026-08-20T10:00:00Z',
+          seqStart: 1,
+          seqEnd: 1,
+          item: { type: 'assistant_message', text: id }
+        }],
+        error: null
+      }
+    },
+    createAgent: async (options: unknown) => {
+      calls.spawnOptions.push(options)
+      return publicAgent(createdAgent)
+    },
+    getLastServerInfoMessage: () => ({ features: { providersSnapshotCwd: true } }),
+    getProvidersSnapshot: async ({ cwd }: { cwd?: string }) => {
+      calls.providerReadyCwds.push(cwd ?? '')
+      return { requestId: 'providers', cwd: cwd ?? '', entries: [] }
     }
-  } as unknown as PaseoClient
+  } as unknown as PaseoDaemonDriver
 
   const notifications: PaseoAdapterNotification[] = []
   const adapter = new SpadePaseoAdapter({
     url: 'ws://127.0.0.1:7677/ws',
-    client: fake,
+    driver,
     pollIntervalMs: 0,
     now: () => '2026-08-20T10:01:00Z'
   })
@@ -347,7 +382,7 @@ test('uses one public client while exhausting pages and refetching exact opaque 
   expect((await adapter.attachWorkspace('workspace-b'))?.id).toBe('workspace-b')
   expect(await adapter.spawnAgent({
     workspaceId: 'workspace-a',
-    cwd: '/opaque/workspace-a',
+    cwd: '/ignored/by/opaque-workspace',
     provider: 'claude',
     model: 'model-1',
     prompt: 'Caller prompt',
@@ -359,27 +394,402 @@ test('uses one public client while exhausting pages and refetching exact opaque 
     agentIds: ['child'],
     workspaceIds: ['workspace-b']
   })
-  agentSubscribers[0]()
-  workspaceSubscribers[0]()
-  providerSubscribers[0]()
+  for (const type of ['agent_update', 'workspace_update', 'providers_snapshot_update']) {
+    subscribers.get(type)?.[0]()
+  }
+  await adapter.close()
 
   expect(calls.connect).toBe(1)
+  expect(calls.close).toBe(1)
   expect(calls.agentLists).toHaveLength(2)
-  expect(calls.workspaceLists).toHaveLength(2)
+  expect(calls.workspaceLists.some((options) =>
+    (options as { page?: { cursor?: string } }).page?.cursor === 'workspaces-2'
+  )).toBe(true)
   expect(calls.agentRefreshes).toEqual(['created', 'root', 'child'])
   expect(calls.agentArchives).toEqual(['created'])
-  expect(calls.workspaceRefreshes).toEqual(['workspace-b', 'workspace-a', 'workspace-b'])
   expect(calls.providerReadyCwds).toEqual(['/opaque/workspace-a'])
   expect(calls.spawnOptions).toEqual([{
-    config: { provider: 'claude/model-1' },
+    config: {
+      provider: 'claude',
+      model: 'model-1',
+      cwd: '/opaque/workspace-a',
+      title: 'Caller title'
+    },
     cwd: '/opaque/workspace-a',
-    prompt: 'Caller prompt',
-    title: 'Caller title'
+    workspaceId: 'workspace-a',
+    initialPrompt: 'Caller prompt'
   }])
   expect(calls.timelines.sort()).toEqual(['child', 'root'])
   expect(snapshot.agentPages[0].map(({ id }) => id).sort()).toEqual(['child', 'root'])
   expect(snapshot.providerSubagents).toEqual([])
   expect(notifications.filter(({ type }) => type === 'refresh')).toHaveLength(3)
+})
+
+test('waits for a matching provider update before spawning through the daemon driver', async () => {
+  let providerListener: ((message: { payload: { cwd: string; entries: unknown[] } }) => void) | null = null
+  const created = agent('created-after-provider-ready', null, 'workspace-a')
+  const driver = {
+    on: (type: string, listener: typeof providerListener) => {
+      if (type === 'providers_snapshot_update') providerListener = listener
+      return () => undefined
+    },
+    fetchWorkspaces: async () => ({
+      requestId: 'workspaces',
+      entries: [publicWorkspace(workspace('workspace-a'))],
+      pageInfo: { nextCursor: null, prevCursor: null, hasMore: false }
+    }),
+    getLastServerInfoMessage: () => ({ features: { providersSnapshotCwd: true } }),
+    getProvidersSnapshot: async () => {
+      queueMicrotask(() => providerListener?.({
+        payload: {
+          cwd: '/opaque/workspace-a',
+          entries: [{ provider: 'claude', status: 'ready' }]
+        }
+      }))
+      return {
+        requestId: 'providers',
+        cwd: '/opaque/workspace-a',
+        entries: [{ provider: 'claude', status: 'loading' }]
+      }
+    },
+    createAgent: async () => publicAgent(created)
+  } as unknown as PaseoDaemonDriver
+  const adapter = new SpadePaseoAdapter({
+    url: 'ws://127.0.0.1:7677/ws',
+    driver,
+    pollIntervalMs: 0
+  })
+
+  await expect(adapter.spawnAgent({
+    workspaceId: 'workspace-a',
+    cwd: '/ignored',
+    provider: 'claude',
+    model: 'model-1',
+    prompt: 'Start after discovery'
+  })).resolves.toMatchObject({ id: created.id })
+})
+
+test('maps checkout operations through the same opaque-workspace daemon driver', async () => {
+  const checkoutCalls: Array<{ method: string; cwd: string; input?: unknown }> = []
+  let committed = false
+  const workspaceRecord = publicWorkspace({
+    ...workspace('workspace-checkout'),
+    directory: '/opaque/checkout',
+    branch: 'spade-19-checkout'
+  })
+  const driver = {
+    fetchWorkspaces: async () => ({
+      requestId: 'workspaces',
+      entries: [workspaceRecord],
+      pageInfo: { nextCursor: null, prevCursor: null, hasMore: false }
+    }),
+    getCheckoutStatus: async (cwd: string) => {
+      checkoutCalls.push({ method: 'status', cwd })
+      return {
+        cwd,
+        requestId: 'status',
+        error: null,
+        upstreamRef: 'refs/remotes/origin/spade-19-checkout',
+        isGit: true as const,
+        isPaseoOwnedWorktree: false as const,
+        repoRoot: cwd,
+        mainRepoRoot: null,
+        currentBranch: 'spade-19-checkout',
+        isDirty: true,
+        baseRef: 'origin/main',
+        aheadBehind: { ahead: 1, behind: 0 },
+        aheadOfOrigin: 0,
+        behindOfOrigin: 0,
+        hasRemote: true,
+        remoteUrl: 'git@github.com:skflowne/spade-fixture.git'
+      }
+    },
+    getCheckoutDiff: async (cwd: string) => {
+      checkoutCalls.push({ method: 'diff', cwd })
+      return {
+        cwd,
+        requestId: 'diff',
+        error: null,
+        diffTooLarge: false,
+        files: [
+          { path: 'fixture.txt', isNew: false, isDeleted: false, additions: 2, deletions: 1, hunks: [] },
+          { path: 'evidence.txt', isNew: true, isDeleted: false, additions: 3, deletions: 0, hunks: [] }
+        ]
+      }
+    },
+    listCheckoutCommits: async (cwd: string) => {
+      checkoutCalls.push({ method: 'commits', cwd })
+      return {
+        baseRef: 'origin/main',
+        commits: [{
+          sha: committed ? 'revision-after-commit' : 'revision-before-commit',
+          shortSha: committed ? 'revision-a' : 'revision-b',
+          subject: 'Fixture commit',
+          authorName: 'SPADE',
+          authorDate: '2026-08-21T01:00:00Z',
+          isOnRemote: committed,
+          isOnBase: false,
+          files: []
+        }]
+      }
+    },
+    checkoutCommit: async (cwd: string, input: unknown) => {
+      checkoutCalls.push({ method: 'commit', cwd, input })
+      committed = true
+      return { cwd, requestId: 'commit', success: true, error: null }
+    },
+    checkoutPush: async (cwd: string) => {
+      checkoutCalls.push({ method: 'push', cwd })
+      return { cwd, requestId: 'push', success: true, error: null }
+    },
+    checkoutPrCreate: async (cwd: string, input: unknown) => {
+      checkoutCalls.push({ method: 'pr-create', cwd, input })
+      return {
+        cwd,
+        requestId: 'pr-create',
+        url: 'https://api.github.com/repos/skflowne/spade-fixture/pulls/7',
+        number: 7,
+        error: null
+      }
+    },
+    checkoutPrStatus: async (cwd: string) => {
+      checkoutCalls.push({ method: 'pr-status', cwd })
+      return {
+        cwd,
+        requestId: 'pr-status',
+        githubFeaturesEnabled: true,
+        forge: 'github',
+        authState: 'authenticated',
+        error: null,
+        status: {
+          forge: 'github',
+          number: 7,
+          url: 'https://github.com/skflowne/spade-fixture/pull/7',
+          title: 'Fixture PR',
+          state: 'OPEN',
+          baseRefName: 'main',
+          headRefName: 'spade-19-checkout',
+          isMerged: false,
+          isDraft: false,
+          mergeable: 'MERGEABLE',
+          checks: [],
+          repoOwner: 'skflowne',
+          repoName: 'spade-fixture'
+        }
+      }
+    }
+  } as unknown as PaseoDaemonDriver
+  const adapter = new SpadePaseoAdapter({
+    url: 'ws://127.0.0.1:7677/ws',
+    driver,
+    pollIntervalMs: 0
+  })
+
+  await expect(adapter.checkoutStatus('workspace-checkout')).resolves.toEqual({
+    workspaceId: 'workspace-checkout',
+    branch: 'spade-19-checkout',
+    headRevision: 'revision-before-commit',
+    baseRef: 'origin/main',
+    changedFiles: 2,
+    additions: 5,
+    deletions: 1,
+    stagedFiles: null,
+    unstagedFiles: null,
+    untrackedFiles: null,
+    conflicts: null
+  })
+  await expect(adapter.checkoutCommit('workspace-checkout', 'Fixture commit')).resolves.toEqual({
+    revision: 'revision-after-commit'
+  })
+  await expect(adapter.checkoutPush('workspace-checkout')).resolves.toEqual({
+    remote: 'origin',
+    branch: 'spade-19-checkout'
+  })
+  await expect(adapter.checkoutCreatePullRequest('workspace-checkout', {
+    title: 'Fixture PR',
+    body: 'Disposable evidence',
+    baseBranch: 'main'
+  })).resolves.toEqual({
+    repository: 'skflowne/spade-fixture',
+    number: 7,
+    url: 'https://github.com/skflowne/spade-fixture/pull/7'
+  })
+  await expect(adapter.checkoutPullRequestStatus('workspace-checkout')).resolves.toEqual({
+    pullRequest: {
+      repository: 'skflowne/spade-fixture',
+      number: 7,
+      url: 'https://github.com/skflowne/spade-fixture/pull/7'
+    },
+    state: 'OPEN'
+  })
+
+  expect(checkoutCalls.every(({ cwd }) => cwd === '/opaque/checkout')).toBe(true)
+  expect(checkoutCalls.find(({ method }) => method === 'commit')?.input).toEqual({
+    message: 'Fixture commit',
+    addAll: true
+  })
+  expect(checkoutCalls.find(({ method }) => method === 'pr-create')?.input).toEqual({
+    title: 'Fixture PR',
+    body: 'Disposable evidence',
+    baseRef: 'main'
+  })
+})
+
+test('preserves base-branch HEAD for status and successful commits', async () => {
+  let committed = false
+  const cwd = '/opaque/workspace-checkout'
+  const driver = {
+    fetchWorkspaces: async () => ({
+      requestId: 'workspaces',
+      entries: [publicWorkspace({ ...workspace('workspace-checkout'), branch: 'main' })],
+      pageInfo: { nextCursor: null, prevCursor: null, hasMore: false }
+    }),
+    getCheckoutStatus: async () => ({
+      cwd,
+      requestId: 'status',
+      error: null,
+      upstreamRef: 'origin/main',
+      isGit: true as const,
+      isPaseoOwnedWorktree: false as const,
+      repoRoot: cwd,
+      mainRepoRoot: null,
+      currentBranch: 'main',
+      isDirty: false,
+      baseRef: 'origin/main',
+      aheadBehind: { ahead: 0, behind: 0 },
+      aheadOfOrigin: 0,
+      behindOfOrigin: 0,
+      hasRemote: true,
+      remoteUrl: 'git@github.com:skflowne/spade-fixture.git'
+    }),
+    getCheckoutDiff: async () => ({
+      cwd,
+      requestId: 'diff',
+      error: null,
+      diffTooLarge: false,
+      files: []
+    }),
+    listCheckoutCommits: async () => ({
+      baseRef: null,
+      commits: [{
+        sha: committed ? 'base-revision-after-commit' : 'base-revision-before-commit',
+        shortSha: committed ? 'base-after' : 'base-before',
+        subject: 'Base commit',
+        authorName: 'SPADE',
+        authorDate: '2026-08-21T01:00:00Z',
+        isOnRemote: !committed,
+        isOnBase: true,
+        files: []
+      }]
+    }),
+    checkoutCommit: async () => {
+      committed = true
+      return { cwd, requestId: 'commit', success: true, error: null }
+    }
+  } as unknown as PaseoDaemonDriver
+  const adapter = new SpadePaseoAdapter({
+    url: 'ws://127.0.0.1:7677/ws',
+    driver,
+    pollIntervalMs: 0
+  })
+
+  await expect(adapter.checkoutStatus('workspace-checkout')).resolves.toMatchObject({
+    branch: 'main',
+    headRevision: 'base-revision-before-commit'
+  })
+  await expect(adapter.checkoutCommit('workspace-checkout', 'Base commit')).resolves.toEqual({
+    revision: 'base-revision-after-commit'
+  })
+})
+
+test('classifies missing workspaces and daemon checkout failures', async () => {
+  const missingAdapter = new SpadePaseoAdapter({
+    url: 'ws://127.0.0.1:7677/ws',
+    driver: {
+      fetchWorkspaces: async () => ({
+        requestId: 'workspaces',
+        entries: [],
+        pageInfo: { nextCursor: null, prevCursor: null, hasMore: false }
+      })
+    } as unknown as PaseoDaemonDriver,
+    pollIntervalMs: 0
+  })
+  await expect(missingAdapter.checkoutStatus('missing-workspace')).rejects.toMatchObject({
+    name: 'CheckoutAdapterError',
+    kind: 'missing-workspace'
+  } satisfies Partial<CheckoutAdapterError>)
+
+  const failedAdapter = new SpadePaseoAdapter({
+    url: 'ws://127.0.0.1:7677/ws',
+    driver: {
+      fetchWorkspaces: async () => ({
+        requestId: 'workspaces',
+        entries: [publicWorkspace(workspace('workspace-checkout'))],
+        pageInfo: { nextCursor: null, prevCursor: null, hasMore: false }
+      }),
+      checkoutPush: async (cwd: string) => ({
+        cwd,
+        requestId: 'push',
+        success: false,
+        error: { code: 'UNKNOWN' as const, message: 'push rejected' }
+      })
+    } as unknown as PaseoDaemonDriver,
+    pollIntervalMs: 0
+  })
+  await expect(failedAdapter.checkoutPush('workspace-checkout')).rejects.toMatchObject({
+    name: 'CheckoutAdapterError',
+    kind: 'mutation',
+    message: 'push rejected'
+  } satisfies Partial<CheckoutAdapterError>)
+})
+
+test('rejects mismatched pull-request identities and unknown states from the daemon', async () => {
+  const workspaceResponse = {
+    requestId: 'workspaces',
+    entries: [publicWorkspace(workspace('workspace-checkout'))],
+    pageInfo: { nextCursor: null, prevCursor: null, hasMore: false }
+  }
+  const adapter = new SpadePaseoAdapter({
+    url: 'ws://127.0.0.1:7677/ws',
+    driver: {
+      fetchWorkspaces: async () => workspaceResponse,
+      checkoutPrCreate: async (cwd: string) => ({
+        cwd,
+        requestId: 'pr-create',
+        url: 'https://github.com/skflowne/spade-fixture/pull/8',
+        number: 7,
+        error: null
+      }),
+      checkoutPrStatus: async (cwd: string) => ({
+        cwd,
+        requestId: 'pr-status',
+        githubFeaturesEnabled: true,
+        forge: 'github',
+        error: null,
+        status: {
+          forge: 'github',
+          number: 7,
+          url: 'https://github.com/skflowne/spade-fixture/pull/7',
+          title: 'Fixture PR',
+          state: 'QUEUED',
+          baseRefName: 'main',
+          headRefName: 'fixture',
+          isMerged: false,
+          checks: []
+        }
+      })
+    } as unknown as PaseoDaemonDriver,
+    pollIntervalMs: 0
+  })
+
+  await expect(adapter.checkoutCreatePullRequest('workspace-checkout', {
+    title: 'Fixture PR',
+    body: 'Evidence'
+  })).rejects.toMatchObject({ kind: 'mutation' } satisfies Partial<CheckoutAdapterError>)
+  await expect(adapter.checkoutPullRequestStatus('workspace-checkout')).rejects.toMatchObject({
+    kind: 'check',
+    message: 'Paseo returned unknown pull-request state “QUEUED”.'
+  } satisfies Partial<CheckoutAdapterError>)
 })
 
 class FakeAdapter implements PaseoAdapterPort {

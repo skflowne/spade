@@ -1,6 +1,6 @@
-# P3 Paseo issue-to-PR bridge
+# P3 Paseo and native GitHub work shell
 
-This directory is the isolated SPADE Prototype 3 shell and Paseo bridge. It keeps Group and WorkItem behavior workflow-agnostic while projecting exact Paseo agent, workspace, connection, capability, and normalized-conversation facts. It is not part of the production `src/` Electron entry.
+This directory is SPADE Prototype 3's isolated Electron shell. It keeps Group and WorkItem behavior workflow-agnostic while projecting exact Paseo agent, workspace, connection, capability, and normalized-conversation facts alongside native GitHub Issue/PullRequest entities and generic checkout actions. It is not part of the production `src/` Electron entry and does not redefine canonical product facts.
 
 ## Run
 
@@ -9,7 +9,11 @@ npm install
 npm run prototype:p3
 ```
 
-The executable creates one `SpadePaseoAdapter` and one public `@getpaseo/client` connection. Configuration:
+The executable creates one `SpadePaseoAdapter` backed by one exported internal `@getpaseo/client` `DaemonClient` connection. The main process stores `p3-ledger.json` under Electron's user-data directory; automated checks use an isolated path.
+
+Native GitHub reads require `gh` on `PATH`, an authenticated GitHub account, and repository access for the selected `owner/name` target. Authentication credentials remain owned by `gh` and never cross into preload or renderer state.
+
+Configuration:
 
 | Variable | Meaning | Default |
 |---|---|---|
@@ -21,13 +25,13 @@ The renderer exposes generic controls to select/open a checkout, create or attac
 
 ## Architecture and invariants
 
-- `main/SpadePaseoAdapter.ts` is the only `@getpaseo/client` boundary. It owns one public SDK client and never constructs or imports an internal `DaemonClient`.
+- `main/SpadePaseoAdapter.ts` is the only `@getpaseo/client` boundary. It owns one exported internal `DaemonClient` because checkout RPCs are absent from the public 0.4 facade; lifecycle and checkout operations share that one connection.
 - `main/commandService.ts` serializes commands, persistence, adapter notifications, startup restoration, reconnect refetch, and publication. Refresh notifications are buffered/coalesced through initialization and reconnect; a reconnect snapshot completes before one pending post-authoritative refresh.
 - A successful external spawn persists its exact opaque identity and root binding before the fallible authoritative fetch.
 - One opaque root belongs to at most one WorkItem. Rebinding transfers ownership; persisted duplicate roots are rejected.
 - `shared/paseoReconciliation.ts` owns recursive explicit-parent closure, actual-parent `delegated` edges, workspace dedupe, missing-resource preservation, managed/provider-native identity separation, and bounded timeline normalization.
 - Main forwards one `PrototypeCommandService.subscribe()` stream per window. Command-specific sends do not exist, so command and adapter-originated snapshots have one publication authority and window cleanup.
-- The sandboxed renderer still receives only typed snapshot, command, and snapshot-event operations through preload. No SDK, arbitrary IPC, filesystem, terminal, GitHub, MCP, or CLI surface crosses into the renderer.
+- The sandboxed renderer receives only typed snapshot, command, integration, and snapshot-event operations through preload. No SDK, arbitrary IPC, filesystem, terminal, GitHub, MCP, or CLI surface crosses into the renderer.
 
 External identity is always `provider + kind + opaque ID`. Titles, cwd segments, branches, prompt text, skill names, and creation order never determine identity or presentation type.
 
@@ -35,18 +39,20 @@ External identity is always `provider + kind + opaque ID`. Titles, cwd segments,
 
 `package.json` pins `@getpaseo/client` to exactly `0.4.0`. The persisted inventory in `shared/model.ts` is the prototype authority.
 
-| Capability | Prototype state | Public 0.4.0 API used |
+| Capability | Prototype state | Paseo 0.4.0 driver operation |
 |---|---|---|
-| Agents | Available | `agents.list`, `agents.create`, `agents.ref().refresh`, `agents.ref().archive`, local `agents.subscribe` |
-| Workspaces | Available | `workspaces.list`, `workspaces.open`, `workspaces.create`, `workspaces.ref().refresh`, local `workspaces.subscribe` |
-| Providers | Available | `providers.waitForReady`, local `providers.subscribe` |
-| Timeline fetch | Available | `agents.ref(id).timeline.refetch` with projected tail and limit 40 |
-| Agent/workspace subscriptions | Available | Public local update listeners plus list subscription IDs; callbacks trigger serialized authoritative refreshes |
-| Provider-native subagent discovery | Unavailable | Provider-subagent RPCs exist only on unsupported internal client exports |
-| Live timeline activation | Unavailable | Public `timeline.subscribe` is a local listener, but the public facade cannot activate daemon timeline streaming |
-| Server info/version | Unavailable | Public facade exposes no server-info/version RPC |
+| Agents | Available | paginated `fetchAgents`, exact `fetchAgent`, `createAgent`, `archiveAgent`, `agent_update` |
+| Workspaces | Available | paginated `fetchWorkspaces`, `openProject`, `createWorkspace`, `workspace_update` |
+| Providers | Available | `getProvidersSnapshot` plus matching `providers_snapshot_update` readiness |
+| Timeline fetch | Available | `fetchAgentTimeline` with projected tail and limit 40 |
+| Agent/workspace subscriptions | Available | driver events plus list subscription IDs; callbacks trigger serialized authoritative refreshes |
+| Provider-native subagent discovery | Unavailable | the bounded prototype does not project the driver's provider-subagent RPC |
+| Live timeline activation | Unavailable | the bounded prototype uses authoritative timeline tails rather than activating a live stream |
+| Server info/version | Unavailable | server-info is used only as a provider-readiness feature gate, not persisted as runtime state |
 
-Direct internal imports: **none**. The unavailable states are rendered explicitly; the bridge does not claim provider-native discovery, activated live timelines, or server version inspection. Authoritative bounded timeline fetches replace unsupported live delivery. Provider-native fixture records only prove that their identity/lifecycle type cannot collide with managed agents.
+Checkout reads/mutations use status, diff, commit, push, PR create, and PR status on that same connection; they are not a separate persisted capability record.
+
+Direct internal imports: **one**, confined to `main/SpadePaseoAdapter.ts`. `@getpaseo/client/internal/daemon-client` is an explicit package export and is required because the public 0.4 facade closes over an inaccessible driver and exposes none of the checkout RPCs. Constructing a second client for checkout would create a prohibited second daemon connection. The unavailable states remain explicit; authoritative bounded timeline fetches replace unsupported live delivery.
 
 ## Deterministic coverage
 
@@ -61,7 +67,7 @@ Automated fixtures cover:
 - startup/reconnect buffering and post-authoritative refresh ordering;
 - successful-spawn durability before failed refresh;
 - global root-binding transfer and caller/resource failure classification;
-- one concrete adapter composition and one disposable, exactly-once snapshot publication path;
+- one concrete adapter/daemon-driver composition, exact workspace-to-directory resolution, checkout result/error mapping, and one disposable exactly-once snapshot publication path;
 - live renderer states, capability failures, exact resource facts, conversations, expansion defaults/user changes, IPC guards, sandboxing, and relaunch persistence.
 
 Run focused checks:
@@ -108,13 +114,34 @@ Validation record from 2026-08-21:
 | Repeated refetch | Stable root, agent, workspace, and timeline-agent identities |
 | Cleanup | Child archived at `2026-08-21T00:33:54.655Z`; root archived at `2026-08-21T00:33:54.891Z`; isolated daemon stopped gracefully |
 
-`SPADE_P3_VALIDATION_ROOT_PROMPT` and `SPADE_P3_VALIDATION_CHILD_PROMPT` are required caller inputs and are passed unchanged to their respective agents. The recorded prompts requested exact short replies and prohibited tools/file changes. The adapter opened the existing checkout, created root and explicit child through public SDK calls, fetched two authoritative snapshots, verified exact parent/workspace identities and bounds, archived both agents, and closed its single client. Validation exits with failure if any agent cannot be archived or if the client cannot close; every reverse-order archive and client close is still attempted. No current Paseo process was stopped or upgraded.
+`SPADE_P3_VALIDATION_ROOT_PROMPT` and `SPADE_P3_VALIDATION_CHILD_PROMPT` are required caller inputs and are passed unchanged to their respective agents. The recorded prompts requested exact short replies and prohibited tools/file changes. The adapter opened the existing checkout, created root and explicit child through its single daemon driver, fetched two authoritative snapshots, verified exact parent/workspace identities and bounds, archived both agents, and closed that connection. Validation exits with failure if any agent cannot be archived or if the client cannot close; every reverse-order archive and client close is still attempted. No current Paseo process was stopped or upgraded.
 
 Raw local evidence was captured at `/tmp/spade18-paseo-validation.log`, `/tmp/spade18-paseo-validation.json`, and `/tmp/spade18-daemon-evidence.log` during the run.
 
+### Disposable checkout validation
+
+The bundled checkout validator uses the same `SpadePaseoAdapter` instance for workspace resolution and every checkout operation:
+
+```bash
+SPADE_P3_PASEO_URL=ws://127.0.0.1:17679/ws \
+SPADE_P3_CHECKOUT_VALIDATION_CWD=/path/to/disposable/spade-fixture \
+SPADE_P3_CHECKOUT_VALIDATION_REPOSITORY=skflowne/spade-fixture \
+SPADE_P3_CHECKOUT_VALIDATION_COMMIT_MESSAGE='Disposable checkout validation' \
+SPADE_P3_CHECKOUT_VALIDATION_REMOTE=origin \
+SPADE_P3_CHECKOUT_VALIDATION_PR_TITLE='Disposable checkout validation' \
+SPADE_P3_CHECKOUT_VALIDATION_PR_BODY='Close after evidence capture.' \
+SPADE_P3_CHECKOUT_VALIDATION_BASE_BRANCH=main \
+SPADE_P3_CHECKOUT_VALIDATION_OUTPUT=/tmp/spade19-checkout-validation.json \
+npm run prototype:p3:validate:checkout
+```
+
+Direct validation on 2026-08-21 used an isolated CLI/daemon 0.4.0 home at `127.0.0.1:17679`, with relay, MCP injection, MCP HTTP, and web UI disabled. The active 0.3.1 daemon at `127.0.0.1:6768` remained unchanged. Through the adapter, the fixture reported one changed file with two additions, committed it, returned the new HEAD with a clean diff, pushed the exact `origin` branch, created `skflowne/spade-fixture#6`, and read that same PR as `OPEN`. Paseo's qualified `refs/remotes/origin/...` upstream and GitHub API PR URL were normalized to the public `origin` and canonical `https://github.com/.../pull/6` identity.
+
+Cleanup closed fixture PR #6, deleted its remote branch, stopped the isolated daemon gracefully, and removed the disposable checkout/home. A final GitHub query found no open fixture PR or remaining `spade-19-validation-*` branch. The documented evidence contains no credentials or disposable filesystem paths.
+
 ## Direct UI evidence
 
-Electron 43 was exercised under Xvfb through Playwright's real Electron automation. The live fixture rendered connected managed-agent, provider-subagent, and workspace records; explicit unavailable capabilities; normalized conversation details; retained user expansion; and generic Paseo controls. The renderer sandbox exposed only `execute`, `snapshot`, and `subscribe`.
+Electron 43 was exercised under Xvfb through Playwright's real Electron automation. The live fixture rendered connected managed-agent, provider-subagent, and workspace records; explicit unavailable capabilities; normalized conversation details; retained user expansion; and generic Paseo controls. The native GitHub artifact additionally shows a successful selected-checkout summary with branch, HEAD, base, and clean diff totals. The renderer sandbox exposes only typed snapshot, command, integration, and subscription methods.
 
 Artifact: [`artifacts/p3-paseo-live.png`](artifacts/p3-paseo-live.png)
 
@@ -129,11 +156,89 @@ xvfb-run -a npm test
 git diff --check
 ```
 
+## Native GitHub boundary
+
+`SpadeGitHubAdapter` is the only owner of `gh` invocation. It uses argument arrays and structured JSON output, validates repository/resource identity, limits output, applies a timeout, and classifies authentication, repository, not-found, network, malformed-response, and command failures. PR detail combines `gh pr view` with paginated/slurped inline review comments while keeping reviews, conversation comments, and inline comments distinct.
+
+The renderer can request only validated operations through `P3PrototypeBridge.integrate`. Main-process `P3IntegrationService` fetches provider state, applies serialized ledger mutations, and returns typed success, failure, or partial-success results. `Open on GitHub` constructs a canonical GitHub URL in main rather than accepting an arbitrary renderer URL.
+
+Native entities retain exact references:
+
+- Issue: `github / issue / <lowercase-owner/repository>#<number>` with the issue update timestamp as revision.
+- Pull request: `github / pull-request / <lowercase-owner/repository>#<number>` with the head revision as revision.
+
+Refreshing either resource updates its existing node. Creating a WorkItem from an Issue records the Issue as its source and adds one native Issue node. A checkout-returned PR adds or refreshes one native PullRequest node and one idempotent `derived` edge from the selected workspace/agent surface.
+
+## GitHub reads versus checkout mutations
+
+Responsibilities intentionally remain separate:
+
+| Responsibility | Owner |
+|---|---|
+| Issue and PR reads, checks, reviews/comments, canonical GitHub URLs | `SpadeGitHubAdapter` using authenticated `gh` |
+| Serialized SPADE ledger mutation and publication | `PrototypeCommandService` |
+| GitHub-to-SPADE identity and node/edge reconciliation | `shared/githubReconciliation.ts` |
+| Selected-workspace checkout status, commit, push, PR creation/status contract | `SpadePaseoCheckoutAdapter` port in `main/spadePaseoCheckout.ts` |
+| Concrete daemon connection and checkout implementation | the single `SpadePaseoAdapter` owned by issue #18 |
+| Renderer capability surface | validated integration IPC plus sandboxed preload |
+
+The checkout port accepts only an opaque Paseo workspace ID. It does not accept a renderer-supplied cwd or infer a checkout from branch names. Returned checkout status must match the requested workspace identity, and the renderer keys status to the current workspace selection so stale responses cannot appear under another checkout.
+
+Main injects the same concrete `SpadePaseoAdapter` instance into `PrototypeCommandService` and `P3IntegrationService`. Its lifecycle and five checkout methods share one `DaemonClient`; no second connection or copied reconciliation path exists. In the default seed, checkout refresh still reports `missing-workspace` because the selected node is an intentional placeholder rather than a live Paseo workspace.
+
+## Workflow-agnostic shell invariants
+
+- WorkItem and ordinary Group records use the same hull projection and `GroupHull` renderer.
+- WorkItem adds source/task/status, semantic membership, and activity-sidebar projection without duplicating Group geometry.
+- Ordinary Group placement changes visual `groupId` only; WorkItem placement assigns semantic `workItemId`.
+- Names are lookup conveniences. Exact stable IDs and provider/kind/opaque-ID references own identity.
+- Native Issue, PullRequest, agent, and workspace nodes share `NodeFrame` chrome and Control Room tokens.
+- Edges communicate provenance only. `derived` records the PR's origin; it does not execute a workflow.
+- There are no workflow-stage types or title/path/branch/prompt/order classification rules.
+- The sandboxed renderer has no Node process, filesystem, `gh`, Paseo client, credentials, or arbitrary IPC access.
+
+## Typed owners
+
+| Boundary | Owner | Exported contract |
+|---|---|---|
+| Records and exact external identity | `shared/model.ts`, `shared/github.ts` | ledger/node records, GitHub DTOs, runtime predicates, canonical resource identity |
+| Generic Group/WorkItem mutations | `shared/commands.ts` | `PrototypeCommand`, `applyPrototypeCommand`, `resolveGroup` |
+| GitHub reconciliation | `shared/githubReconciliation.ts` | Issue/PR create-refresh and `derived` provenance |
+| Canvas/activity geometry | `shared/projection.ts` | shared hull and node-size projections |
+| Checkout action DTOs and selection binding | `shared/checkout.ts` | status/diff totals, mutation results, PR identity/status, stale-response guard |
+| Renderer bridge | `shared/ipc.ts`, `shared/integration.ts` | narrow channels, requests/results, runtime validation |
+| GitHub provider adapter | `main/spadeGitHubAdapter.ts` | structured `gh` reads and classified errors |
+| Checkout provider port | `main/spadePaseoCheckout.ts` | five small opaque-workspace methods for #18's adapter |
+| Integration orchestration | `main/integrationService.ts` | provider calls, partial PR state, durable reconciliation |
+| Persistence | `main/ledgerStore.ts`, `main/commandService.ts` | validated atomic replacement and serialized publication |
+
+## Direct validation record
+
+Environment: Electron 43 under Xvfb, Node 24.18.0, `gh` 2.96.0 authenticated as the current host user.
+
+| Check | Observation | Result |
+|---|---|---|
+| Live fixture Issue | `SpadeGitHubAdapter.getIssue('skflowne/spade-fixture', 1)` returned repository, number, title, OPEN state, body, URL, and update timestamp. | Pass |
+| Disposable fixture PR | Created `spade-fixture#2` on a disposable branch, read it through `SpadeGitHubAdapter.getPullRequest`, and observed exact base/head/revision plus empty checks/activity arrays. The PR was closed and its branch deleted immediately afterward. | Pass |
+| Native presentation | Electron rendered one Issue and one PR with shared chrome, WorkItem membership, `derived` provenance, labels/body, branches/revision, checks, review/comment activity, and GitHub escape hatches. | Pass |
+| Narrow IPC/sandbox | Runtime rejected malformed integration requests and renderer-supplied cwd/extra fields; renderer exposed only snapshot, generic command, integration, and subscription methods. | Pass |
+| Partial PR safety | Deterministic integration coverage retained checkout-returned PR identity when subsequent GitHub detail/reconciliation failed. | Pass |
+| Selected checkout | Deterministic coverage rejected mismatched adapter workspace status and dropped status from changed or superseded selections. | Pass |
+| Persistence/reconnect | Existing version-1 placeholder ledgers remain valid; repeated Issue/PR reconciliation creates no duplicate nodes or edges. | Pass |
+| Concrete checkout mapping | Deterministic driver fixtures cover exact workspace resolution, base-branch HEAD, status/diff totals, commit revision, qualified upstream normalization, GitHub API/public PR identity, PR status, and classified failures on one adapter. | Pass |
+| Real Paseo mutations | Isolated Paseo 0.4 executed fixture status/commit/push/create-PR/status through one adapter; PR #6 was closed and its remote branch deleted. | Pass |
+
+Artifact: [`artifacts/p3-native-github-shell.png`](artifacts/p3-native-github-shell.png)
+
 ## Scope and residual limitations
 
-- This remains a prototype; it does not redefine canonical product direction or production architecture.
-- Provider-native live discovery and activated timeline streaming remain unavailable through the public 0.4.0 facade.
+- No embedded GitHub webview is used as the primary Issue/PR experience.
+- There is no GitHub App, OAuth flow, webhook listener, hosted authorization, merge action, issue mutation, or generic comment composer.
+- There is no file list/diff viewer, file node, editor, preview, or terminal.
+- Checkout actions are generic selected-workspace operations and contain no `paseo-issue-to-pr` stage names.
+- Concrete checkout mutations stay behind the single Paseo adapter; the renderer cannot bypass it with direct Git commands.
+- Provider-native live discovery and activated timeline streaming remain outside this bounded prototype.
 - Server/feature version facts are validation evidence from the CLI status command, not runtime facts claimed by the adapter.
 - Node dragging remains presentation-only; no move command is persisted.
 - Edges communicate provenance and context only; they do not execute or schedule work.
-- Canonical docs are unchanged because this prototype validates proposed boundaries rather than selecting new product facts.
+- Canonical pages under `docs/` remain unchanged because this isolated prototype does not redefine current production facts.

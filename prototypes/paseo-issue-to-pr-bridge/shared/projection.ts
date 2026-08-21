@@ -9,7 +9,9 @@ import type {
 const HULL_PADDING = 32
 const HULL_HEADER_HEIGHT = 44
 const HULL_MINIMUM_SIZE: Size = { width: 420, height: 260 }
-const NODE_SIZE: Size = { width: 220, height: 116 }
+const PLACEHOLDER_NODE_SIZE: Size = { width: 220, height: 116 }
+const GITHUB_ISSUE_NODE_SIZE: Size = { width: 300, height: 250 }
+const GITHUB_PULL_REQUEST_NODE_SIZE: Size = { width: 340, height: 360 }
 
 export type GroupHullProjection = {
   id: string
@@ -53,6 +55,12 @@ export function projectActivitySidebar(
     .map(({ id, name, status }) => ({ id, title: name, status }))
 }
 
+export function nodePresentationSize(node: PrototypeNode): Size {
+  if (node.kind === 'github-issue') return GITHUB_ISSUE_NODE_SIZE
+  if (node.kind === 'github-pull-request') return GITHUB_PULL_REQUEST_NODE_SIZE
+  return PLACEHOLDER_NODE_SIZE
+}
+
 function memberGeometry(origin: Point, members: readonly PrototypeNode[]): GroupHullProjection['geometry'] {
   const minimumX = Math.min(origin.x, ...members.map(({ position }) => position.x - HULL_PADDING))
   const minimumY = Math.min(
@@ -61,11 +69,11 @@ function memberGeometry(origin: Point, members: readonly PrototypeNode[]): Group
   )
   const maximumX = Math.max(
     origin.x + HULL_MINIMUM_SIZE.width,
-    ...members.map(({ position }) => position.x + NODE_SIZE.width + HULL_PADDING)
+    ...members.map((node) => node.position.x + nodePresentationSize(node).width + HULL_PADDING)
   )
   const maximumY = Math.max(
     origin.y + HULL_MINIMUM_SIZE.height,
-    ...members.map(({ position }) => position.y + NODE_SIZE.height + HULL_PADDING)
+    ...members.map((node) => node.position.y + nodePresentationSize(node).height + HULL_PADDING)
   )
 
   return {
