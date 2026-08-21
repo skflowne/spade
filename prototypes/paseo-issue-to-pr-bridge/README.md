@@ -1,6 +1,6 @@
-# P3 generic work-item and group shell
+# P3 Paseo issue-to-PR bridge
 
-This directory is the isolated shell for SPADE Prototype 3. It exercises workflow-agnostic Group, WorkItem, placeholder-resource, provenance, IPC, and persistence boundaries without calling Paseo, GitHub, or any external service. It is not part of the production `src/` Electron entry.
+This directory is the isolated SPADE Prototype 3 shell and Paseo bridge. It keeps Group and WorkItem behavior workflow-agnostic while projecting exact Paseo agent, workspace, connection, capability, and normalized-conversation facts. It is not part of the production `src/` Electron entry.
 
 ## Run
 
@@ -9,71 +9,131 @@ npm install
 npm run prototype:p3
 ```
 
-The main process stores `p3-ledger.json` under Electron's user-data directory. Automated checks set `SPADE_P3_LEDGER_PATH` to an isolated temporary file so relaunch behavior is deterministic.
+The executable creates one `SpadePaseoAdapter` and one public `@getpaseo/client` connection. Configuration:
 
-Integrity checks:
+| Variable | Meaning | Default |
+|---|---|---|
+| `SPADE_P3_PASEO_URL` | Paseo daemon WebSocket URL | `ws://127.0.0.1:6767/ws` |
+| `SPADE_P3_LEDGER_PATH` | Prototype ledger path | Electron user-data `p3-ledger.json` |
+| `SPADE_P3_DISABLE_PASEO=1` | Deterministic test opt-out | unset |
+
+The renderer exposes generic controls to select/open a checkout, create or attach a workspace, spawn or attach a root agent, and request an authoritative refresh. Provider, model, prompt, cwd, WorkItem, agent ID, and workspace ID are caller input. The bridge does not classify prompt content or infer workflow roles.
+
+## Architecture and invariants
+
+- `main/SpadePaseoAdapter.ts` is the only `@getpaseo/client` boundary. It owns one public SDK client and never constructs or imports an internal `DaemonClient`.
+- `main/commandService.ts` serializes commands, persistence, adapter notifications, startup restoration, reconnect refetch, and publication. Refresh notifications are buffered/coalesced through initialization and reconnect; a reconnect snapshot completes before one pending post-authoritative refresh.
+- A successful external spawn persists its exact opaque identity and root binding before the fallible authoritative fetch.
+- One opaque root belongs to at most one WorkItem. Rebinding transfers ownership; persisted duplicate roots are rejected.
+- `shared/paseoReconciliation.ts` owns recursive explicit-parent closure, actual-parent `delegated` edges, workspace dedupe, missing-resource preservation, managed/provider-native identity separation, and bounded timeline normalization.
+- Main forwards one `PrototypeCommandService.subscribe()` stream per window. Command-specific sends do not exist, so command and adapter-originated snapshots have one publication authority and window cleanup.
+- The sandboxed renderer still receives only typed snapshot, command, and snapshot-event operations through preload. No SDK, arbitrary IPC, filesystem, terminal, GitHub, MCP, or CLI surface crosses into the renderer.
+
+External identity is always `provider + kind + opaque ID`. Titles, cwd segments, branches, prompt text, skill names, and creation order never determine identity or presentation type.
+
+## Paseo 0.4.0 capability inventory
+
+`package.json` pins `@getpaseo/client` to exactly `0.4.0`. The persisted inventory in `shared/model.ts` is the prototype authority.
+
+| Capability | Prototype state | Public 0.4.0 API used |
+|---|---|---|
+| Agents | Available | `agents.list`, `agents.create`, `agents.ref().refresh`, `agents.ref().archive`, local `agents.subscribe` |
+| Workspaces | Available | `workspaces.list`, `workspaces.open`, `workspaces.create`, `workspaces.ref().refresh`, local `workspaces.subscribe` |
+| Providers | Available | `providers.waitForReady`, local `providers.subscribe` |
+| Timeline fetch | Available | `agents.ref(id).timeline.refetch` with projected tail and limit 40 |
+| Agent/workspace subscriptions | Available | Public local update listeners plus list subscription IDs; callbacks trigger serialized authoritative refreshes |
+| Provider-native subagent discovery | Unavailable | Provider-subagent RPCs exist only on unsupported internal client exports |
+| Live timeline activation | Unavailable | Public `timeline.subscribe` is a local listener, but the public facade cannot activate daemon timeline streaming |
+| Server info/version | Unavailable | Public facade exposes no server-info/version RPC |
+
+Direct internal imports: **none**. The unavailable states are rendered explicitly; the bridge does not claim provider-native discovery, activated live timelines, or server version inspection. Authoritative bounded timeline fetches replace unsupported live delivery. Provider-native fixture records only prove that their identity/lifecycle type cannot collide with managed agents.
+
+## Deterministic coverage
+
+Automated fixtures cover:
+
+- recursive descendants across paginated agent/workspace lists;
+- exact parent edges, shared/distinct workspaces, and repeated reconciliation;
+- managed/provider-native identity separation;
+- missing resources without deleting durable mappings;
+- sequenced, unsequenced, shuffled, duplicate, mixed, and bounded timeline events;
+- v1-to-v2 migration and malformed/duplicate ledger rejection;
+- startup/reconnect buffering and post-authoritative refresh ordering;
+- successful-spawn durability before failed refresh;
+- global root-binding transfer and caller/resource failure classification;
+- one concrete adapter composition and one disposable, exactly-once snapshot publication path;
+- live renderer states, capability failures, exact resource facts, conversations, expansion defaults/user changes, IPC guards, sandboxing, and relaunch persistence.
+
+Run focused checks:
 
 ```bash
 npm run prototype:p3:typecheck
 npm run prototype:p3:build
-npx playwright test tests/e2e/p3-model.spec.ts tests/e2e/p3-ledger.spec.ts
-xvfb-run -a npx playwright test tests/e2e/p3-shell.spec.ts
+xvfb-run -a npx playwright test \
+  tests/e2e/p3-model.spec.ts \
+  tests/e2e/p3-ledger.spec.ts \
+  tests/e2e/p3-reconciliation.spec.ts \
+  tests/e2e/p3-paseo-adapter.spec.ts \
+  tests/e2e/p3-shell.spec.ts
+```
+
+## Isolated real Paseo 0.4.0 validation
+
+The validation entry is bundled with the prototype and exercises `SpadePaseoAdapter` itself:
+
+```bash
+SPADE_P3_PASEO_URL=ws://127.0.0.1:17677/ws \
+SPADE_P3_VALIDATION_CWD="$PWD" \
+SPADE_P3_VALIDATION_PROVIDER=codex \
+SPADE_P3_VALIDATION_MODEL=gpt-5.6-luna \
+SPADE_P3_VALIDATION_ROOT_PROMPT='Reply exactly SPADE_ROOT_OK. Do not use tools or modify files.' \
+SPADE_P3_VALIDATION_CHILD_PROMPT='Reply exactly SPADE_CHILD_OK. Do not use tools or modify files.' \
+SPADE_P3_VALIDATION_OUTPUT=/tmp/spade18-paseo-validation.json \
+npm run prototype:p3:validate:paseo
+```
+
+Validation record from 2026-08-21:
+
+| Fact | Evidence |
+|---|---|
+| Client | `@getpaseo/client` 0.4.0 |
+| CLI and daemon | `@getpaseo/cli` 0.4.0 and isolated daemon 0.4.0 |
+| Isolation | Home `/tmp/spade-paseo-0.4.0-Tn5Skk`, `127.0.0.1:17677`, relay/MCP/web UI disabled |
+| Existing sessions | Active home `/home/skflowne/.paseo` remained running at `127.0.0.1:6768` on CLI/daemon 0.3.1 with PID 1349 |
+| Provider/model | Caller selected `codex/gpt-5.6-luna`; both validation agents completed `idle` |
+| Workspace | `wks_8bcc691d2259c589` shared exactly by root and child |
+| Root | `c1df22ff-bcfc-4b41-b79b-d262901b172a` |
+| Child | `f1f1f5b6-14a8-4f8d-b514-af98d0b69053` with exact parent `c1df22ff-bcfc-4b41-b79b-d262901b172a` |
+| Timelines | Two projected events for each agent, both below the 40-event bound |
+| Repeated refetch | Stable root, agent, workspace, and timeline-agent identities |
+| Cleanup | Child archived at `2026-08-21T00:33:54.655Z`; root archived at `2026-08-21T00:33:54.891Z`; isolated daemon stopped gracefully |
+
+`SPADE_P3_VALIDATION_ROOT_PROMPT` and `SPADE_P3_VALIDATION_CHILD_PROMPT` are required caller inputs and are passed unchanged to their respective agents. The recorded prompts requested exact short replies and prohibited tools/file changes. The adapter opened the existing checkout, created root and explicit child through public SDK calls, fetched two authoritative snapshots, verified exact parent/workspace identities and bounds, archived both agents, and closed its single client. Validation exits with failure if any agent cannot be archived or if the client cannot close; every reverse-order archive and client close is still attempted. No current Paseo process was stopped or upgraded.
+
+Raw local evidence was captured at `/tmp/spade18-paseo-validation.log`, `/tmp/spade18-paseo-validation.json`, and `/tmp/spade18-daemon-evidence.log` during the run.
+
+## Direct UI evidence
+
+Electron 43 was exercised under Xvfb through Playwright's real Electron automation. The live fixture rendered connected managed-agent, provider-subagent, and workspace records; explicit unavailable capabilities; normalized conversation details; retained user expansion; and generic Paseo controls. The renderer sandbox exposed only `execute`, `snapshot`, and `subscribe`.
+
+Artifact: [`artifacts/p3-paseo-live.png`](artifacts/p3-paseo-live.png)
+
+## Repository gate
+
+```bash
+npm run prototype:p3:typecheck
+npm run prototype:p3:build
 npm run typecheck
 npm run lint
 xvfb-run -a npm test
 git diff --check
 ```
 
-## What the shell proves
-
-- Group and WorkItem records pass through the same `projectGroupHull` geometry projection and the same `GroupHull` renderer.
-- WorkItem adds task/source metadata, lifecycle status, semantic membership, and activity-sidebar projection to the shared Group contract.
-- Ordinary Group placement changes `groupId` only. WorkItem placement assigns `workItemId`; moving an existing WorkItem member into an ordinary Group preserves that semantic membership.
-- Group lookup prefers an exact stable ID, otherwise accepts one case-insensitive name match. Ambiguous names produce a visible error, while each hull exposes its ID for recovery.
-- Generic commands create Group and WorkItem records, spawn or attach agent/workspace placeholders, connect existing nodes with provenance-only edges, and update WorkItem status.
-- External placeholders reconcile by exact provider/kind/opaque-ID identity. Repeating a placeholder or edge command does not duplicate its record.
-- Main-process persistence writes a complete same-directory temporary file and atomically renames it over the ledger. Failed writes/replacements leave the prior ledger readable.
-- Command execution serializes mutation, persistence, and snapshot publication so concurrent calls cannot reuse IDs or lose accepted changes.
-- The sandboxed renderer has no `require`, Node `process`, filesystem, `gh`, Paseo client, or arbitrary IPC access. Preload exposes only typed snapshot, command, and snapshot-event methods.
-
-## Handoff boundaries for #18
-
-All contracts are prototype-local and exported for the next child:
-
-| Boundary | Owner | Exported contract |
-|---|---|---|
-| Records and external identity | `shared/model.ts` | `PrototypeLedger`, `PrototypeGroup`, `WorkItem`, `PrototypeNode`, `PrototypeEdge`, `ExternalResourceReference`, exact runtime predicates |
-| Generic mutations | `shared/commands.ts` | `PrototypeCommand`, `applyPrototypeCommand`, `resolveGroup`, `createInitialLedger` |
-| Canvas and activity views | `shared/projection.ts` | `projectGroupHull`, `projectActivitySidebar`, hull/sidebar projections |
-| Renderer bridge | `shared/ipc.ts` | `P3PrototypeBridge`, narrow channel constants, `isPrototypeCommand` |
-| Durable replacement | `main/ledgerStore.ts` | `LedgerStore`, injectable file-operation contract |
-| Sequenced application service | `main/commandService.ts` | `PrototypeCommandService`, ledger-store port |
-
-A later adapter can submit generic commands and exact resource references through these seams. It must not infer workflow stages from titles, paths, branches, or creation order.
-
-## Direct validation record
-
-Environment: Electron 43 under Xvfb, exercised through Playwright's real Electron automation.
-
-| Check | Observation | Result |
-|---|---|---|
-| Shared hull | WorkItem and ordinary Group render as `.group-hull` through one component; deterministic projection coverage compares identical geometry. | Pass |
-| Sidebar/status distinction | WorkItems appear with semantic status; ordinary Groups do not. A blocked WorkItem renders a red `BLOCKED` label on hull and sidebar. | Pass |
-| Focus/jump | Selecting a WorkItem changes the React Flow viewport transform and marks the focused hull. | Pass |
-| Generic commands | UI created a WorkItem and duplicate-named Groups, spawned an agent, attached a workspace, and connected existing nodes. | Pass |
-| Membership | WorkItem placeholders show `work-item-1`; the ordinary-Group seed workspace shows `None · visual containment only`. | Pass |
-| Ambiguous lookup | Name targeting showed the required visible error; targeting the displayed stable ID then succeeded and cleared the error. | Pass |
-| Runtime IPC guard | Commands with extra keys, array-valued status, or array-valued relation were rejected without ledger mutation. | Pass |
-| Sandbox | Renderer reported `require` and `process` as unavailable and exposed only `execute`, `snapshot`, and `subscribe`. | Pass |
-| Reload | Relaunching Electron against the same temporary ledger restored exact records, references, node/edge counts, and status. | Pass |
-| Clean build prerequisite | After deleting prototype output, the complete `npm test` gate rebuilt main, preload, and renderer entries before running the full suite. | Pass |
-
-Artifact: [`artifacts/p3-generic-shell.png`](artifacts/p3-generic-shell.png)
-
 ## Scope and residual limitations
 
-- Resources are deterministic placeholders only. There are no Paseo calls, GitHub entities, checkout actions, workflow stages, MCP/CLI transports, files, terminals, or external-service requirements.
-- Node dragging is presentation-only in this shell; no move command is persisted yet.
-- The ledger format is prototype-only and intentionally small. It validates stable identities and references but does not claim production migration or crash-recovery guarantees beyond atomic local replacement.
-- Edges communicate provenance and context only; they never execute or schedule work.
-- Canonical product documentation is unchanged. This prototype validates proposed boundaries but does not redefine current production facts or select new product direction.
+- This remains a prototype; it does not redefine canonical product direction or production architecture.
+- Provider-native live discovery and activated timeline streaming remain unavailable through the public 0.4.0 facade.
+- Server/feature version facts are validation evidence from the CLI status command, not runtime facts claimed by the adapter.
+- Node dragging remains presentation-only; no move command is persisted.
+- Edges communicate provenance and context only; they do not execute or schedule work.
+- Canonical docs are unchanged because this prototype validates proposed boundaries rather than selecting new product facts.

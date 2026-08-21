@@ -15,7 +15,13 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import type { PrototypeCommand } from '../../shared/commands'
-import type { PrototypeLedger, WorkItemStatus } from '../../shared/model'
+import type {
+  NormalizedConversationEvent,
+  PaseoNodeRuntime,
+  PrototypeLedger,
+  PrototypeNode,
+  WorkItemStatus
+} from '../../shared/model'
 import { projectActivitySidebar, projectGroupHull } from '../../shared/projection'
 
 type HullData = Record<string, unknown> & {
@@ -26,10 +32,7 @@ type HullData = Record<string, unknown> & {
   focused: boolean
 }
 type PlaceholderData = Record<string, unknown> & {
-  title: string
-  kind: 'agent' | 'workspace'
-  externalId: string
-  workItemId: string | null
+  node: PrototypeNode
 }
 type HullNode = Node<HullData, 'hull'>
 type PlaceholderNode = Node<PlaceholderData, 'placeholder'>
@@ -48,22 +51,76 @@ function GroupHull({ data }: NodeProps<HullNode>): React.JSX.Element {
 }
 
 function GenericNode({ data }: NodeProps<PlaceholderNode>): React.JSX.Element {
+  const { node } = data
   return (
-    <article className="generic-node">
+    <article
+      className="generic-node"
+      data-paseo-type={node.paseo?.type ?? 'placeholder'}
+      data-resource-state={node.paseo?.state ?? 'placeholder'}
+    >
       <Handle type="target" position={Position.Left} />
       <header className="generic-node__chrome">
-        <span>{data.kind === 'agent' ? 'A' : 'W'}</span>
+        <span>{node.kind === 'agent' ? 'A' : 'W'}</span>
         <div>
-          <strong>{data.title}</strong>
-          <small>{data.kind.toUpperCase()} · {data.externalId}</small>
+          <strong>{node.title}</strong>
+          <small>{node.kind.toUpperCase()} · {node.resourceRef.id}</small>
         </div>
+        {node.paseo && <em className={`resource-state resource-state--${node.paseo.state}`}>{node.paseo.state}</em>}
       </header>
       <div className="generic-node__body">
-        <span>Semantic work item</span>
-        <b>{data.workItemId ?? 'None · visual containment only'}</b>
+        {node.paseo ? <PaseoResource runtime={node.paseo} /> : (
+          <>
+            <span>Semantic work item</span>
+            <b>{node.workItemId ?? 'None · visual containment only'}</b>
+          </>
+        )}
       </div>
       <Handle type="source" position={Position.Right} />
     </article>
+  )
+}
+
+function PaseoResource({ runtime }: { runtime: PaseoNodeRuntime }): React.JSX.Element {
+  if (runtime.type === 'workspace') {
+    return (
+      <dl className="resource-facts">
+        <div><dt>Type</dt><dd>WORKSPACE</dd></div>
+        <div><dt>Status</dt><dd>{runtime.status}</dd></div>
+        <div><dt>Directory</dt><dd>{runtime.directory ?? 'Unavailable'}</dd></div>
+        <div><dt>Branch</dt><dd>{runtime.branch ?? 'Unavailable'}</dd></div>
+      </dl>
+    )
+  }
+
+  return (
+    <>
+      <dl className="resource-facts">
+        <div><dt>Type</dt><dd>{runtime.type === 'managed-agent' ? 'MANAGED AGENT' : 'PROVIDER SUBAGENT'}</dd></div>
+        <div><dt>Provider</dt><dd>{runtime.provider}{runtime.type === 'managed-agent' && runtime.model ? ` · ${runtime.model}` : ''}</dd></div>
+        <div><dt>Status</dt><dd>{runtime.status}</dd></div>
+        {runtime.type === 'managed-agent' && <div><dt>Workspace</dt><dd>{runtime.workspaceId ?? 'None'}</dd></div>}
+        <div><dt>Cwd</dt><dd>{runtime.cwd ?? 'Unavailable'}</dd></div>
+      </dl>
+      <section className="conversation" aria-label="Normalized conversation">
+        {runtime.timeline.length === 0 ? <span>No timeline events</span> : runtime.timeline.map((event) => (
+          <ConversationEvent event={event} key={event.id} />
+        ))}
+      </section>
+    </>
+  )
+}
+
+function ConversationEvent({ event }: { event: NormalizedConversationEvent }): React.JSX.Element {
+  const [expanded, setExpanded] = useState(event.initialExpanded)
+  return (
+    <details
+      className="conversation-event"
+      open={expanded}
+      onToggle={(toggleEvent) => setExpanded(toggleEvent.currentTarget.open)}
+    >
+      <summary><b>{event.kind}</b><span>{event.summary}</span></summary>
+      <pre>{event.detail}</pre>
+    </details>
   )
 }
 
@@ -115,13 +172,8 @@ function toFlowNodes(ledger: PrototypeLedger, focusedGroupId: string | null): P3
     type: 'placeholder',
     position: node.position,
     dragHandle: '.generic-node__chrome',
-    style: { width: 220, zIndex: 2 },
-    data: {
-      title: node.title,
-      kind: node.kind,
-      externalId: node.resourceRef.id,
-      workItemId: node.workItemId
-    }
+    style: { width: 220, height: 116, zIndex: 2 },
+    data: { node }
   }))
   return [...hulls, ...placeholders]
 }
@@ -148,6 +200,13 @@ export function App(): React.JSX.Element {
   const [externalId, setExternalId] = useState('')
   const [fromNodeId, setFromNodeId] = useState('')
   const [toNodeId, setToNodeId] = useState('')
+  const [paseoCwd, setPaseoCwd] = useState('')
+  const [workspaceId, setWorkspaceId] = useState('')
+  const [agentId, setAgentId] = useState('')
+  const [provider, setProvider] = useState('')
+  const [model, setModel] = useState('')
+  const [prompt, setPrompt] = useState('')
+  const [workItemId, setWorkItemId] = useState('work-item-1')
 
   useEffect(() => {
     const unsubscribe = window.spadeP3.subscribe(setLedger)
@@ -200,7 +259,10 @@ export function App(): React.JSX.Element {
           <p>SPADE EXPERIMENT P3</p>
           <h1>P3 generic work shell</h1>
         </div>
-        <span>Prototype-only · deterministic placeholders</span>
+        <span data-testid="paseo-connection">
+          PASEO · {ledger.paseo.connection.toUpperCase()}
+          {ledger.paseo.daemonUrl ? ` · ${ledger.paseo.daemonUrl}` : ''}
+        </span>
       </header>
 
       <aside className="activity-sidebar">
@@ -251,6 +313,87 @@ export function App(): React.JSX.Element {
       </section>
 
       <aside className="command-panel" aria-label="Prototype commands">
+        <section className="paseo-status-panel">
+          <h2>Paseo state</h2>
+          {ledger.paseo.error && <p className="connection-error">{ledger.paseo.error}</p>}
+          <ul data-testid="paseo-capabilities">
+            {ledger.paseo.capabilities.map((capability) => (
+              <li key={capability.name} data-state={capability.state}>
+                <b>{capability.name}</b> · {capability.state.toUpperCase()}
+                {capability.detail && <small>{capability.detail}</small>}
+              </li>
+            ))}
+          </ul>
+        </section>
+
+        <section>
+          <h2>Paseo bridge</h2>
+          <label>
+            Target WorkItem or group
+            <input value={targetGroup} onChange={(event) => setTargetGroup(event.target.value)} />
+          </label>
+          <label>
+            Checkout / agent cwd
+            <input value={paseoCwd} onChange={(event) => setPaseoCwd(event.target.value)} />
+          </label>
+          <label>
+            Opaque workspace ID
+            <input value={workspaceId} onChange={(event) => setWorkspaceId(event.target.value)} />
+          </label>
+          <label>
+            Opaque agent ID
+            <input value={agentId} onChange={(event) => setAgentId(event.target.value)} />
+          </label>
+          <div className="button-row">
+            <button type="button" onClick={() => void run({ type: 'select-project-checkout', targetGroup, cwd: paseoCwd })}>
+              Select checkout
+            </button>
+            <button type="button" onClick={() => void run({ type: 'create-workspace', targetGroup, cwd: paseoCwd })}>
+              Create workspace
+            </button>
+            <button type="button" onClick={() => void run({ type: 'attach-workspace', targetGroup, workspaceId })}>
+              Attach Paseo workspace
+            </button>
+            <button type="button" onClick={() => void run({ type: 'attach-agent', targetGroup, agentId })}>
+              Attach root
+            </button>
+          </div>
+          <label>
+            Provider
+            <input value={provider} onChange={(event) => setProvider(event.target.value)} />
+          </label>
+          <label>
+            Model
+            <input value={model} onChange={(event) => setModel(event.target.value)} />
+          </label>
+          <label>
+            Caller prompt
+            <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} />
+          </label>
+          <button
+            type="button"
+            className="primary"
+            onClick={() => void run({
+              type: 'spawn-agent',
+              targetGroup,
+              ...(workspaceId ? { workspaceId } : {}),
+              cwd: paseoCwd,
+              provider,
+              model,
+              prompt
+            })}
+          >
+            Spawn root agent
+          </button>
+          <label>
+            Bound WorkItem ID
+            <input value={workItemId} onChange={(event) => setWorkItemId(event.target.value)} />
+          </label>
+          <button type="button" onClick={() => void run({ type: 'refresh-paseo', workItemId })}>
+            Refresh authoritative snapshot
+          </button>
+        </section>
+
         <section>
           <h2>Create containers</h2>
           <label>

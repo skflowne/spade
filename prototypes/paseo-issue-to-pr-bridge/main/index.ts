@@ -7,6 +7,8 @@ import {
 } from 'electron'
 import { PrototypeCommandService } from './commandService'
 import { LedgerStore } from './ledgerStore'
+import { createConfiguredPaseoAdapter } from './paseoComposition'
+import { registerSnapshotPublication } from './snapshotPublication'
 import {
   applyPrototypeCommand,
   createInitialLedger,
@@ -67,9 +69,7 @@ function registerIpc(window: BrowserWindow, service: PrototypeCommandService): (
   ipcMain.handle(P3_COMMAND_CHANNEL, async (event, value: unknown) => {
     authorize(event)
     if (!isPrototypeCommand(value)) throw new Error('Invalid P3 prototype command.')
-    const snapshot = await service.execute(value)
-    if (!window.isDestroyed()) window.webContents.send(P3_SNAPSHOT_EVENT_CHANNEL, snapshot)
-    return snapshot
+    return service.execute(value)
   })
 
   return () => {
@@ -94,7 +94,14 @@ function createWindow(service: PrototypeCommandService): void {
     }
   })
   const unregisterIpc = registerIpc(window, service)
-  window.once('closed', unregisterIpc)
+  const unregisterSnapshots = registerSnapshotPublication(service, {
+    isDestroyed: () => window.isDestroyed(),
+    send: (snapshot) => window.webContents.send(P3_SNAPSHOT_EVENT_CHANNEL, snapshot)
+  })
+  window.once('closed', () => {
+    unregisterIpc()
+    unregisterSnapshots()
+  })
   window.once('ready-to-show', () => window.show())
 
   if (process.env.ELECTRON_RENDERER_URL) {
@@ -104,11 +111,24 @@ function createWindow(service: PrototypeCommandService): void {
   }
 }
 
+let service: PrototypeCommandService | null = null
+let closing = false
+
 void app.whenReady().then(async () => {
   const ledgerPath = process.env.SPADE_P3_LEDGER_PATH ?? join(app.getPath('userData'), 'p3-ledger.json')
-  const service = new PrototypeCommandService(new LedgerStore(ledgerPath))
+  service = new PrototypeCommandService(
+    new LedgerStore(ledgerPath),
+    createConfiguredPaseoAdapter(process.env)
+  )
   await service.initialize(createSeedLedger())
   createWindow(service)
+})
+
+app.on('before-quit', (event) => {
+  if (!service || closing) return
+  event.preventDefault()
+  closing = true
+  void service.close().finally(() => app.quit())
 })
 
 app.on('window-all-closed', () => app.quit())

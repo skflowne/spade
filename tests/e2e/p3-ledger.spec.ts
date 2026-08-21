@@ -40,7 +40,8 @@ test('atomically replaces and reloads the exact prototype ledger without duplica
             kind: 'agent',
             id: 'external-agent-9',
             revision: 'opaque-revision'
-          }
+          },
+          paseo: null
         }
       ],
       edges: [
@@ -137,7 +138,8 @@ test('rejects duplicate identities and collision-prone sequence state', () => {
         kind: 'agent',
         title: 'Agent',
         position: { x: 140, y: 180 },
-        resourceRef: { provider: 'placeholder', kind: 'agent', id: 'external-1', revision: null }
+        resourceRef: { provider: 'placeholder', kind: 'agent', id: 'external-1', revision: null },
+        paseo: null
       },
       {
         id: 'node-3',
@@ -147,7 +149,8 @@ test('rejects duplicate identities and collision-prone sequence state', () => {
         kind: 'workspace',
         title: 'Workspace',
         position: { x: 380, y: 180 },
-        resourceRef: { provider: 'placeholder', kind: 'workspace', id: 'external-2', revision: null }
+        resourceRef: { provider: 'placeholder', kind: 'workspace', id: 'external-2', revision: null },
+        paseo: null
       }
     ],
     edges: [{ id: 'edge-4', fromNodeId: 'node-2', toNodeId: 'node-3', relation: 'connected' }]
@@ -167,9 +170,143 @@ test('rejects duplicate identities and collision-prone sequence state', () => {
       nextSequence: 6
     },
     { ...ledger, edges: [...ledger.edges, { ...ledger.edges[0], id: 'edge-5' }], nextSequence: 6 },
+    {
+      ...ledger,
+      nodes: ledger.nodes.map((node) => node.id === 'node-2'
+        ? {
+            ...node,
+            paseo: {
+              type: 'managed-agent',
+              state: 'connected',
+              parentAgentId: null,
+              workspaceId: null,
+              provider: 'claude',
+              model: 'model-1',
+              status: 'idle',
+              cwd: '/opaque/display/path',
+              timeline: [
+                {
+                  id: 'seq:epoch-1:1:1',
+                  timestamp: '2026-08-20T10:00:00Z',
+                  epoch: 'epoch-1',
+                  sequenceStart: 1,
+                  sequenceEnd: 1,
+                  kind: 'assistant-message',
+                  summary: 'Done',
+                  detail: 'Done',
+                  initialExpanded: true
+                },
+                {
+                  id: 'seq:epoch-1:1:1',
+                  timestamp: '2026-08-20T10:00:00Z',
+                  epoch: 'epoch-1',
+                  sequenceStart: 1,
+                  sequenceEnd: 1,
+                  kind: 'assistant-message',
+                  summary: 'Done',
+                  detail: 'Done',
+                  initialExpanded: true
+                }
+              ]
+            }
+          }
+        : node)
+    },
     { ...ledger, nextSequence: 4 }
   ]
   for (const invalid of invalidLedgers) expect(isPrototypeLedger(invalid)).toBe(false)
+})
+
+test('rejects duplicate opaque roots across WorkItem bindings', () => {
+  const ledger = {
+    ...createInitialLedger('project-1', 'Prototype project'),
+    nextSequence: 3,
+    groups: [
+      {
+        id: 'work-item-1',
+        kind: 'work-item' as const,
+        projectId: 'project-1',
+        name: 'First',
+        position: { x: 100, y: 100 },
+        task: 'First owner',
+        sourceRef: null,
+        status: 'active' as const
+      },
+      {
+        id: 'work-item-2',
+        kind: 'work-item' as const,
+        projectId: 'project-1',
+        name: 'Second',
+        position: { x: 600, y: 100 },
+        task: 'Second owner',
+        sourceRef: null,
+        status: 'active' as const
+      }
+    ],
+    paseo: {
+      ...createInitialLedger('project-1', 'Prototype project').paseo,
+      bindings: [
+        { workItemId: 'work-item-1', rootAgentId: 'root-a' },
+        { workItemId: 'work-item-2', rootAgentId: 'root-b' }
+      ]
+    }
+  }
+  expect(isPrototypeLedger(ledger)).toBe(true)
+  expect(isPrototypeLedger({
+    ...ledger,
+    paseo: {
+      ...ledger.paseo,
+      bindings: ledger.paseo.bindings.map((binding) => ({ ...binding, rootAgentId: 'root-a' }))
+    }
+  })).toBe(false)
+})
+
+test('migrates a valid version 1 ledger without changing stable identities', async () => {
+  await withTemporaryDirectory(async (directory) => {
+    const path = join(directory, 'ledger.json')
+    const versionOne = {
+      version: 1,
+      nextSequence: 4,
+      project: { id: 'project-1', name: 'Prototype project' },
+      groups: [
+        {
+          id: 'work-item-1',
+          kind: 'work-item',
+          projectId: 'project-1',
+          name: 'Issue 17',
+          position: { x: 100, y: 100 },
+          task: 'Build shell',
+          sourceRef: null,
+          status: 'active'
+        }
+      ],
+      nodes: [
+        {
+          id: 'node-2',
+          projectId: 'project-1',
+          groupId: 'work-item-1',
+          workItemId: 'work-item-1',
+          kind: 'agent',
+          title: 'Root agent',
+          position: { x: 140, y: 180 },
+          resourceRef: { provider: 'placeholder', kind: 'agent', id: 'external-1', revision: null }
+        }
+      ],
+      edges: [
+        { id: 'edge-3', fromNodeId: 'node-2', toNodeId: 'node-2', relation: 'connected' }
+      ]
+    }
+    await writeFile(path, JSON.stringify(versionOne), 'utf8')
+
+    const migrated = await new LedgerStore(path).load()
+    expect(migrated).toMatchObject({ version: 2, nextSequence: 4 })
+    expect(migrated?.groups).toEqual(versionOne.groups)
+    expect(migrated?.nodes[0]).toEqual({ ...versionOne.nodes[0], paseo: null })
+    expect(migrated?.edges).toEqual(versionOne.edges)
+    expect(migrated?.paseo.capabilities.find(({ name }) => name === 'live-timeline')).toMatchObject({
+      state: 'unavailable'
+    })
+  })
 })
 
 test('rejects malformed ledgers instead of exposing partial records', async () => {

@@ -1,4 +1,5 @@
 import {
+  createInitialPaseoState,
   PROTOTYPE_LEDGER_VERSION,
   type ExternalResourceReference,
   type PlaceholderKind,
@@ -31,6 +32,45 @@ export type PrototypeCommand =
       relation: ProvenanceRelation
     }
   | { type: 'set-work-item-status'; workItemId: string; status: WorkItemStatus }
+  | { type: 'select-project-checkout'; targetGroup: string; cwd: string }
+  | { type: 'create-workspace'; targetGroup: string; cwd: string; title?: string }
+  | { type: 'attach-workspace'; targetGroup: string; workspaceId: string }
+  | {
+      type: 'spawn-agent'
+      targetGroup: string
+      workspaceId?: string
+      cwd: string
+      provider: string
+      model: string
+      prompt: string
+      title?: string
+    }
+  | { type: 'attach-agent'; targetGroup: string; agentId: string }
+  | { type: 'refresh-paseo'; workItemId: string }
+
+export type PaseoCommand = Extract<
+  PrototypeCommand,
+  {
+    type:
+      | 'select-project-checkout'
+      | 'create-workspace'
+      | 'attach-workspace'
+      | 'spawn-agent'
+      | 'attach-agent'
+      | 'refresh-paseo'
+  }
+>
+
+export function isPaseoCommand(command: PrototypeCommand): command is PaseoCommand {
+  return [
+    'select-project-checkout',
+    'create-workspace',
+    'attach-workspace',
+    'spawn-agent',
+    'attach-agent',
+    'refresh-paseo'
+  ].includes(command.type)
+}
 
 export type CommandResult = {
   ledger: PrototypeLedger
@@ -44,7 +84,8 @@ export function createInitialLedger(projectId: string, projectName: string): Pro
     project: { id: requiredText(projectId, 'Project ID'), name: requiredText(projectName, 'Project name') },
     groups: [],
     nodes: [],
-    edges: []
+    edges: [],
+    paseo: createInitialPaseoState()
   }
 }
 
@@ -77,6 +118,13 @@ export function applyPrototypeCommand(
       return connectNodes(ledger, command)
     case 'set-work-item-status':
       return setWorkItemStatus(ledger, command.workItemId, command.status)
+    case 'select-project-checkout':
+    case 'create-workspace':
+    case 'attach-workspace':
+    case 'spawn-agent':
+    case 'attach-agent':
+    case 'refresh-paseo':
+      throw new Error(`Command “${command.type}” requires the Paseo adapter service.`)
   }
 }
 
@@ -173,7 +221,8 @@ function putPlaceholder(
             x: group.position.x + 36 + (members % 2) * 244,
             y: group.position.y + 76 + Math.floor(members / 2) * 140
           },
-          resourceRef: command.resourceRef
+          resourceRef: command.resourceRef,
+          paseo: null
         }
       ]
     },

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises'
 import { basename, dirname, join } from 'node:path'
-import { isPrototypeLedger, type PrototypeLedger } from '../shared/model'
+import { isPrototypeLedger, migratePrototypeLedger, type PrototypeLedger } from '../shared/model'
 
 export type LedgerFileOperations = {
   mkdir(path: string): Promise<void>
@@ -40,8 +40,9 @@ export class LedgerStore {
     } catch {
       throw new Error('Invalid P3 prototype ledger: file is not valid JSON.')
     }
-    if (!isPrototypeLedger(value)) throw new Error('Invalid P3 prototype ledger: records are malformed.')
-    return value
+    const ledger = migratePrototypeLedger(value)
+    if (!ledger) throw new Error('Invalid P3 prototype ledger: records are malformed.')
+    return ledger
   }
 
   async save(ledger: PrototypeLedger): Promise<void> {

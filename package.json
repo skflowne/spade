@@ -14,6 +14,7 @@
     "prototype:p3": "electron-vite --config prototypes/paseo-issue-to-pr-bridge/electron.vite.config.ts --entry prototypes/paseo-issue-to-pr-bridge/out/main/index.js",
     "prototype:p3:build": "electron-vite build --config prototypes/paseo-issue-to-pr-bridge/electron.vite.config.ts",
     "prototype:p3:typecheck": "tsc --noEmit -p prototypes/paseo-issue-to-pr-bridge/tsconfig.node.json && tsc --noEmit -p prototypes/paseo-issue-to-pr-bridge/tsconfig.web.json",
+    "prototype:p3:validate:paseo": "npm run prototype:p3:build && node prototypes/paseo-issue-to-pr-bridge/out/main/validatePaseo.js",
     "docs:compare": "node scripts/docs-compare.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "eslint .",
@@ -24,6 +25,7 @@
   },
   "packageManager": "npm@12.0.2",
   "dependencies": {
+    "@getpaseo/client": "0.4.0",
     "@xyflow/react": "12.11.3",
     "react": "19.2.8",
     "react-dom": "19.2.8"
