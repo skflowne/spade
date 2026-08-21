@@ -1,15 +1,15 @@
 export type CheckoutStatus = {
   workspaceId: string
   branch: string | null
-  headRevision: string
+  headRevision: string | null
   baseRef: string | null
   changedFiles: number
   additions: number
   deletions: number
-  stagedFiles: number
-  unstagedFiles: number
-  untrackedFiles: number
-  conflicts: number
+  stagedFiles: number | null
+  unstagedFiles: number | null
+  untrackedFiles: number | null
+  conflicts: number | null
 }
 
 export type SelectedCheckoutStatus = {
@@ -39,7 +39,7 @@ export type CheckoutCommitResult = {
 }
 
 export type CheckoutPushResult = {
-  remote: string
+  remote: string | null
   branch: string
 }
 

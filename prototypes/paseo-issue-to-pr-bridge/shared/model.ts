@@ -233,17 +233,17 @@ export function createInitialPaseoState(): PaseoAdapterState {
       capability(
         'provider-subagents',
         'unavailable',
-        '@getpaseo/client 0.4.0 exposes provider-subagent RPCs only through its internal client.'
+        'The bounded prototype does not project the daemon driver’s provider-subagent RPC.'
       ),
       capability(
         'live-timeline',
         'unavailable',
-        '@getpaseo/client 0.4.0 cannot activate timeline streaming through its public facade.'
+        'The bounded prototype uses authoritative timeline tails instead of activating a live stream.'
       ),
       capability(
         'server-info',
         'unavailable',
-        '@getpaseo/client 0.4.0 does not expose server version or feature metadata publicly.'
+        'Server-info gates provider readiness but is not persisted as prototype runtime state.'
       )
     ],
     bindings: []

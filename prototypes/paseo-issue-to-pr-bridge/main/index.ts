@@ -136,15 +136,13 @@ let closing = false
 
 void app.whenReady().then(async () => {
   const ledgerPath = process.env.SPADE_P3_LEDGER_PATH ?? join(app.getPath('userData'), 'p3-ledger.json')
-  service = new PrototypeCommandService(
-    new LedgerStore(ledgerPath),
-    createConfiguredPaseoAdapter(process.env)
-  )
+  const paseo = createConfiguredPaseoAdapter(process.env)
+  service = new PrototypeCommandService(new LedgerStore(ledgerPath), paseo)
   await service.initialize(createSeedLedger())
   const integrations = new P3IntegrationService(
     service,
     new SpadeGitHubAdapter(),
-    null,
+    paseo ?? null,
     (url) => shell.openExternal(url)
   )
   createWindow(service, integrations)

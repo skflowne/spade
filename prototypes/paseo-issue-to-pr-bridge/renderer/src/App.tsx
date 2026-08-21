@@ -545,7 +545,7 @@ export function App(): React.JSX.Element {
   const pushCheckout = async (): Promise<void> => {
     const response = await integrate({ type: 'checkout-push', workspaceNodeId })
     if (response?.type === 'checkout-push') {
-      setNotice(`Pushed ${response.result.remote}/${response.result.branch}.`)
+      setNotice(`Pushed ${response.result.remote ? `${response.result.remote}/` : ''}${response.result.branch}.`)
     }
   }
 
@@ -907,16 +907,23 @@ function CheckoutSummary({ status }: { status: CheckoutStatus }): React.JSX.Elem
   return (
     <dl className="checkout-summary" aria-label="Checkout summary">
       <div><dt>Branch</dt><dd>{status.branch ?? 'Detached'}</dd></div>
-      <div><dt>Revision</dt><dd>{status.headRevision.slice(0, 12)}</dd></div>
+      <div><dt>Revision</dt><dd>{status.headRevision?.slice(0, 12) ?? 'Unavailable'}</dd></div>
       <div><dt>Base</dt><dd>{status.baseRef ?? 'Not set'}</dd></div>
       <div><dt>Diff</dt><dd>{status.changedFiles} files · +{status.additions} −{status.deletions}</dd></div>
       <div>
         <dt>Working tree</dt>
-        <dd>{status.stagedFiles} staged · {status.unstagedFiles} unstaged · {status.untrackedFiles} untracked</dd>
+        <dd>
+          {checkoutCount(status.stagedFiles)} staged · {checkoutCount(status.unstagedFiles)} unstaged ·{' '}
+          {checkoutCount(status.untrackedFiles)} untracked
+        </dd>
       </div>
-      <div><dt>Conflicts</dt><dd>{status.conflicts}</dd></div>
+      <div><dt>Conflicts</dt><dd>{checkoutCount(status.conflicts)}</dd></div>
     </dl>
   )
+}
+
+function checkoutCount(value: number | null): string {
+  return value === null ? 'Unavailable' : String(value)
 }
 
 function summarizeChecks(pullRequest: GitHubPullRequest): string {

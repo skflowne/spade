@@ -1,11 +1,14 @@
-import {
-  createPaseoClient,
-  type ConnectionState,
-  type PaseoAgent,
-  type PaseoAgentHandle,
-  type PaseoClient,
-  type PaseoWorkspace
-} from '@getpaseo/client'
+import { type ConnectionState, type PaseoAgent, type PaseoWorkspace } from '@getpaseo/client'
+import { DaemonClient } from '@getpaseo/client/internal/daemon-client'
+import { CheckoutAdapterError } from './spadePaseoCheckout'
+import type {
+  CheckoutCommitResult,
+  CheckoutPullRequestIdentity,
+  CheckoutPullRequestStatus,
+  CheckoutPushResult,
+  CheckoutStatus,
+  CreateCheckoutPullRequestInput
+} from '../shared/checkout'
 import { PASEO_TIMELINE_LIMIT, type PaseoConnectionState } from '../shared/model'
 import {
   type PaseoAgentSnapshot,
@@ -16,6 +19,31 @@ import {
 
 const PAGE_LIMIT = 200
 const PARENT_AGENT_ID_LABEL = 'paseo.parent-agent-id'
+
+type DriverMethod =
+  | 'connect'
+  | 'close'
+  | 'getConnectionState'
+  | 'on'
+  | 'fetchAgents'
+  | 'fetchAgent'
+  | 'fetchAgentTimeline'
+  | 'createAgent'
+  | 'archiveAgent'
+  | 'fetchWorkspaces'
+  | 'openProject'
+  | 'createWorkspace'
+  | 'getProvidersSnapshot'
+  | 'getLastServerInfoMessage'
+  | 'getCheckoutStatus'
+  | 'getCheckoutDiff'
+  | 'listCheckoutCommits'
+  | 'checkoutCommit'
+  | 'checkoutPush'
+  | 'checkoutPrCreate'
+  | 'checkoutPrStatus'
+
+export type PaseoDaemonDriver = Pick<DaemonClient, DriverMethod>
 
 export type PaseoAdapterNotification =
   | { type: 'connection'; state: PaseoConnectionState; error: string | null }
@@ -38,18 +66,18 @@ export type SpawnAgentInput = {
 
 export type SpadePaseoAdapterOptions = {
   url: string
-  client?: PaseoClient
+  driver?: PaseoDaemonDriver
   pollIntervalMs?: number
   now?: () => string
 }
 
 export class SpadePaseoAdapter {
   readonly url: string
-  private readonly client: PaseoClient
+  private readonly driver: PaseoDaemonDriver
   private readonly pollIntervalMs: number
   private readonly now: () => string
   private readonly listeners = new Set<(notification: PaseoAdapterNotification) => void>()
-  private cleanupPublicSubscriptions: (() => void) | null = null
+  private cleanupDriverSubscriptions: (() => void) | null = null
   private connectionTimer: ReturnType<typeof setInterval> | null = null
   private lastConnectionState: PaseoConnectionState | null = null
   private agentSubscriptionId: string | null = null
@@ -57,9 +85,10 @@ export class SpadePaseoAdapter {
 
   constructor(options: SpadePaseoAdapterOptions) {
     this.url = options.url
-    this.client = options.client ?? createPaseoClient({
+    this.driver = options.driver ?? new DaemonClient({
       url: options.url,
       clientId: 'spade-p3-prototype',
+      clientType: 'cli',
       appVersion: 'spade-p3-paseo-bridge',
       reconnect: { enabled: true }
     })
@@ -73,18 +102,18 @@ export class SpadePaseoAdapter {
   }
 
   async connect(): Promise<void> {
-    if (!this.cleanupPublicSubscriptions) {
-      const unsubscribeAgent = this.client.agents.subscribe(() => this.emit({ type: 'refresh' }))
-      const unsubscribeWorkspace = this.client.workspaces.subscribe(() => this.emit({ type: 'refresh' }))
-      const unsubscribeProvider = this.client.providers.subscribe(() => this.emit({ type: 'refresh' }))
-      this.cleanupPublicSubscriptions = () => {
+    if (!this.cleanupDriverSubscriptions) {
+      const unsubscribeAgent = this.driver.on('agent_update', () => this.emit({ type: 'refresh' }))
+      const unsubscribeWorkspace = this.driver.on('workspace_update', () => this.emit({ type: 'refresh' }))
+      const unsubscribeProvider = this.driver.on('providers_snapshot_update', () => this.emit({ type: 'refresh' }))
+      this.cleanupDriverSubscriptions = () => {
         unsubscribeAgent()
         unsubscribeWorkspace()
         unsubscribeProvider()
       }
     }
 
-    await this.client.connect()
+    await this.driver.connect()
     this.pollConnectionState()
     if (!this.connectionTimer && this.pollIntervalMs > 0) {
       this.connectionTimer = setInterval(() => this.pollConnectionState(), this.pollIntervalMs)
@@ -95,13 +124,13 @@ export class SpadePaseoAdapter {
   async close(): Promise<void> {
     if (this.connectionTimer) clearInterval(this.connectionTimer)
     this.connectionTimer = null
-    this.cleanupPublicSubscriptions?.()
-    this.cleanupPublicSubscriptions = null
-    await this.client.close()
+    this.cleanupDriverSubscriptions?.()
+    this.cleanupDriverSubscriptions = null
+    await this.driver.close()
   }
 
   pollConnectionState(): PaseoConnectionState {
-    const connection = mapConnectionState(this.client.getConnectionState())
+    const connection = mapConnectionState(this.driver.getConnectionState())
     if (connection.state !== this.lastConnectionState) {
       this.lastConnectionState = connection.state
       this.emit({ type: 'connection', ...connection })
@@ -110,56 +139,58 @@ export class SpadePaseoAdapter {
   }
 
   async openProjectCheckout(cwd: string): Promise<PaseoWorkspaceSnapshot> {
-    const handle = await this.client.workspaces.open({ cwd })
-    const workspace = handle.current() ?? await handle.refresh()
-    if (!workspace) throw new Error(`Paseo did not return the workspace opened for ${cwd}.`)
-    return toWorkspaceSnapshot(workspace, this.now())
+    const result = await this.driver.openProject(cwd)
+    if (result.error || !result.workspace) {
+      throw new Error(result.error ?? `Paseo did not return the workspace opened for ${cwd}.`)
+    }
+    return toWorkspaceSnapshot(result.workspace, this.now())
   }
 
   async createWorkspace(cwd: string, title?: string): Promise<PaseoWorkspaceSnapshot> {
-    const handle = await this.client.workspaces.create({
+    const result = await this.driver.createWorkspace({
       source: { kind: 'directory', path: cwd },
       ...(title ? { title } : {})
     })
-    const workspace = handle.current() ?? await handle.refresh()
-    if (!workspace) throw new Error(`Paseo did not return the workspace created for ${cwd}.`)
-    return toWorkspaceSnapshot(workspace, this.now())
+    if (result.error || !result.workspace) {
+      throw new Error(result.error ?? `Paseo did not return the workspace created for ${cwd}.`)
+    }
+    return toWorkspaceSnapshot(result.workspace, this.now())
   }
 
   async attachWorkspace(workspaceId: string): Promise<PaseoWorkspaceSnapshot | null> {
-    const workspace = await this.client.workspaces.ref(workspaceId).refresh()
+    const workspace = await this.fetchWorkspaceById(workspaceId)
     return workspace ? toWorkspaceSnapshot(workspace, this.now()) : null
   }
 
   async spawnAgent(input: SpawnAgentInput): Promise<PaseoAgentSnapshot> {
-    await this.client.providers.waitForReady({ cwd: input.cwd })
-    const options = {
-      config: { provider: `${input.provider}/${input.model}` },
-      cwd: input.cwd,
-      prompt: input.prompt,
-      ...(input.title ? { title: input.title } : {}),
-      ...(input.parentAgentId ? { parent: input.parentAgentId } : {})
-    }
-    let handle: PaseoAgentHandle
+    let cwd = input.cwd
     if (input.workspaceId) {
-      const workspace = this.client.workspaces.ref(input.workspaceId)
-      if (!await workspace.refresh()) throw new Error(`Paseo workspace ${input.workspaceId} is missing.`)
-      handle = await workspace.agents.create(options)
-    } else {
-      handle = await this.client.agents.create(options)
+      const workspace = await this.requireWorkspace(input.workspaceId)
+      cwd = workspace.workspaceDirectory
     }
-    const agent = handle.current() ?? (await handle.refresh())?.agent
-    if (!agent) throw new Error('Paseo did not return the created agent.')
-    return toAgentSnapshot(agent)
+    await waitForProvidersReady(this.driver, cwd)
+    const created = await this.driver.createAgent({
+      config: {
+        provider: input.provider,
+        model: input.model,
+        cwd,
+        ...(input.title ? { title: input.title } : {})
+      },
+      cwd,
+      ...(input.workspaceId ? { workspaceId: input.workspaceId } : {}),
+      ...(input.parentAgentId ? { callerAgentId: input.parentAgentId } : {}),
+      initialPrompt: input.prompt
+    })
+    return toAgentSnapshot(created)
   }
 
   async attachAgent(agentId: string): Promise<PaseoAgentSnapshot | null> {
-    const result = await this.client.agents.ref(agentId).refresh()
+    const result = await this.driver.fetchAgent(agentId)
     return result ? toAgentSnapshot(result.agent) : null
   }
 
   async archiveAgent(agentId: string): Promise<string> {
-    return (await this.client.agents.ref(agentId).archive()).archivedAt
+    return (await this.driver.archiveAgent(agentId)).archivedAt
   }
 
   async fetchAuthoritative(
@@ -172,12 +203,12 @@ export class SpadePaseoAdapter {
     const workspaceById = new Map(workspacePages.flat().map((workspace) => [workspace.id, workspace]))
 
     for (const agentId of new Set([rootAgentId, ...references.agentIds])) {
-      const result = await this.client.agents.ref(agentId).refresh()
+      const result = await this.driver.fetchAgent(agentId)
       if (result) agentById.set(agentId, toAgentSnapshot(result.agent))
       else agentById.delete(agentId)
     }
     for (const workspaceId of new Set(references.workspaceIds)) {
-      const workspace = await this.client.workspaces.ref(workspaceId).refresh()
+      const workspace = await this.fetchWorkspaceById(workspaceId)
       if (workspace) workspaceById.set(workspaceId, toWorkspaceSnapshot(workspace, this.now()))
       else workspaceById.delete(workspaceId)
     }
@@ -189,7 +220,7 @@ export class SpadePaseoAdapter {
     ])
     const timelines: PaseoTimelineSnapshot[] = []
     for (const agentId of timelineAgentIds) {
-      const result = await this.client.agents.ref(agentId).timeline.refetch({
+      const result = await this.driver.fetchAgentTimeline(agentId, {
         direction: 'tail',
         projection: 'projected',
         limit: PASEO_TIMELINE_LIMIT
@@ -217,12 +248,107 @@ export class SpadePaseoAdapter {
     }
   }
 
+  async checkoutStatus(workspaceId: string): Promise<CheckoutStatus> {
+    const workspace = await this.requireWorkspace(workspaceId)
+    const cwd = workspace.workspaceDirectory
+    const [status, diff, commits] = await Promise.all([
+      this.driver.getCheckoutStatus(cwd),
+      this.driver.getCheckoutDiff(cwd, { mode: 'uncommitted' }),
+      this.driver.listCheckoutCommits(cwd)
+    ])
+    requireCheckoutCwd(status.cwd, cwd, 'check')
+    requireCheckoutCwd(diff.cwd, cwd, 'check')
+    if (status.error) throw new CheckoutAdapterError('check', status.error.message)
+    if (!status.isGit) throw new CheckoutAdapterError('check', 'Selected Paseo workspace is not a Git checkout.')
+    if (diff.error) throw new CheckoutAdapterError('check', diff.error.message)
+    if (diff.diffTooLarge) {
+      throw new CheckoutAdapterError('check', 'Paseo could not return complete checkout diff totals.')
+    }
+
+    return {
+      workspaceId,
+      branch: status.currentBranch,
+      headRevision: latestCheckoutRevision(commits.commits),
+      baseRef: status.baseRef,
+      changedFiles: diff.files.length,
+      additions: sum(diff.files.map(({ additions }) => additions)),
+      deletions: sum(diff.files.map(({ deletions }) => deletions)),
+      stagedFiles: null,
+      unstagedFiles: null,
+      untrackedFiles: null,
+      conflicts: null
+    }
+  }
+
+  async checkoutCommit(workspaceId: string, message: string): Promise<CheckoutCommitResult> {
+    const cwd = (await this.requireWorkspace(workspaceId)).workspaceDirectory
+    const trimmedMessage = message.trim()
+    if (!trimmedMessage) throw new CheckoutAdapterError('mutation', 'Commit message is required.')
+    const result = await this.driver.checkoutCommit(cwd, { message: trimmedMessage, addAll: true })
+    requireCheckoutMutation(result, cwd)
+    const commits = await this.driver.listCheckoutCommits(cwd)
+    const revision = latestCheckoutRevision(commits.commits)
+    if (!revision) {
+      throw new CheckoutAdapterError('mutation', 'Paseo committed the checkout but returned no revision.')
+    }
+    return { revision }
+  }
+
+  async checkoutPush(workspaceId: string): Promise<CheckoutPushResult> {
+    const cwd = (await this.requireWorkspace(workspaceId)).workspaceDirectory
+    const result = await this.driver.checkoutPush(cwd)
+    requireCheckoutMutation(result, cwd)
+    const status = await this.driver.getCheckoutStatus(cwd)
+    requireCheckoutCwd(status.cwd, cwd, 'mutation')
+    if (status.error) throw new CheckoutAdapterError('mutation', status.error.message)
+    if (!status.isGit || !status.currentBranch) {
+      throw new CheckoutAdapterError('mutation', 'Paseo pushed the checkout but returned no branch.')
+    }
+    return {
+      remote: upstreamRemote(status.upstreamRef),
+      branch: status.currentBranch
+    }
+  }
+
+  async checkoutCreatePullRequest(
+    workspaceId: string,
+    input: CreateCheckoutPullRequestInput
+  ): Promise<CheckoutPullRequestIdentity> {
+    const cwd = (await this.requireWorkspace(workspaceId)).workspaceDirectory
+    const result = await this.driver.checkoutPrCreate(cwd, {
+      title: input.title,
+      body: input.body,
+      ...(input.baseBranch ? { baseRef: input.baseBranch } : {})
+    })
+    requireCheckoutCwd(result.cwd, cwd, 'mutation')
+    if (result.error) throw new CheckoutAdapterError('mutation', result.error.message)
+    if (!result.url || !result.number) {
+      throw new CheckoutAdapterError('mutation', 'Paseo created no pull-request identity.')
+    }
+    return parseGitHubPullRequest(result.url, result.number, 'mutation')
+  }
+
+  async checkoutPullRequestStatus(workspaceId: string): Promise<CheckoutPullRequestStatus> {
+    const cwd = (await this.requireWorkspace(workspaceId)).workspaceDirectory
+    const result = await this.driver.checkoutPrStatus(cwd)
+    requireCheckoutCwd(result.cwd, cwd, 'check')
+    if (result.error) throw new CheckoutAdapterError('check', result.error.message)
+    if (!result.status) return { pullRequest: null, state: null }
+    if (!result.status.number) {
+      throw new CheckoutAdapterError('check', 'Paseo returned pull-request status without a number.')
+    }
+    return {
+      pullRequest: parseGitHubPullRequest(result.status.url, result.status.number, 'check'),
+      state: pullRequestState(result.status.state, result.status.isMerged)
+    }
+  }
+
   private async fetchAllAgentPages(): Promise<PaseoAgentSnapshot[][]> {
     const pages: PaseoAgentSnapshot[][] = []
     let cursor: string | undefined
     let firstPage = true
     do {
-      const result = await this.client.agents.list({
+      const result = await this.driver.fetchAgents({
         filter: { includeArchived: true },
         page: { limit: PAGE_LIMIT, ...(cursor ? { cursor } : {}) },
         ...(firstPage
@@ -242,7 +368,7 @@ export class SpadePaseoAdapter {
     let cursor: string | undefined
     let firstPage = true
     do {
-      const result = await this.client.workspaces.list({
+      const result = await this.driver.fetchWorkspaces({
         page: { limit: PAGE_LIMIT, ...(cursor ? { cursor } : {}) },
         ...(firstPage
           ? { subscribe: this.workspaceSubscriptionId ? { subscriptionId: this.workspaceSubscriptionId } : {} }
@@ -254,6 +380,30 @@ export class SpadePaseoAdapter {
       firstPage = false
     } while (cursor)
     return pages
+  }
+
+  private async fetchWorkspaceById(workspaceId: string): Promise<PaseoWorkspace | null> {
+    let cursor: string | undefined
+    do {
+      const result = await this.driver.fetchWorkspaces({
+        page: { limit: PAGE_LIMIT, ...(cursor ? { cursor } : {}) }
+      })
+      const workspace = result.entries.find(({ id }) => id === workspaceId)
+      if (workspace) return workspace
+      cursor = result.pageInfo.nextCursor ?? undefined
+    } while (cursor)
+    return null
+  }
+
+  private async requireWorkspace(workspaceId: string): Promise<PaseoWorkspace & { workspaceDirectory: string }> {
+    const workspace = await this.fetchWorkspaceById(workspaceId)
+    if (!workspace?.workspaceDirectory) {
+      throw new CheckoutAdapterError(
+        'missing-workspace',
+        `Paseo workspace ${workspaceId} is missing or has no checkout directory.`
+      )
+    }
+    return workspace as PaseoWorkspace & { workspaceDirectory: string }
   }
 
   private emit(notification: PaseoAdapterNotification): void {
@@ -326,4 +476,141 @@ function mapConnectionState(connection: ConnectionState): {
     case 'disposed':
       return { state: 'error', error: 'The Paseo client connection is disposed.' }
   }
+}
+
+async function waitForProvidersReady(driver: PaseoDaemonDriver, cwd: string): Promise<void> {
+  if (driver.getLastServerInfoMessage()?.features?.providersSnapshotCwd !== true) {
+    throw new Error('Update the host to wait for provider discovery.')
+  }
+
+  await new Promise<void>((resolve, reject) => {
+    let settled = false
+    let snapshotCwd: string | null = null
+    const pendingUpdates = new Map<string, { entries: Array<{ status: string }> }>()
+    let latestEntries: Array<{ provider: string; status: string }> = []
+    const cleanup = (): void => {
+      clearTimeout(timeout)
+      unsubscribe()
+    }
+    const finish = (): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      resolve()
+    }
+    const fail = (error: unknown): void => {
+      if (settled) return
+      settled = true
+      cleanup()
+      reject(error instanceof Error ? error : new Error(String(error)))
+    }
+    const unsubscribe = driver.on('providers_snapshot_update', (message) => {
+      const update = message.payload
+      const updateCwd = update.cwd ?? ''
+      if (!snapshotCwd) {
+        pendingUpdates.set(updateCwd, update)
+        return
+      }
+      if (updateCwd !== snapshotCwd) return
+      latestEntries = update.entries
+      if (!update.entries.some(({ status }) => status === 'loading')) finish()
+    })
+    const timeout = setTimeout(() => {
+      const loading = latestEntries
+        .filter(({ status }) => status === 'loading')
+        .map(({ provider }) => provider)
+        .join(', ')
+      fail(new Error(
+        loading ? `Timed out waiting for providers: ${loading}` : 'Timed out waiting for provider discovery'
+      ))
+    }, 60_000)
+
+    void driver.getProvidersSnapshot({ cwd }).then((snapshot) => {
+      snapshotCwd = snapshot.cwd ?? ''
+      latestEntries = snapshot.entries
+      if (!snapshot.entries.some(({ status }) => status === 'loading')) {
+        finish()
+        return
+      }
+      const pending = pendingUpdates.get(snapshotCwd)
+      if (pending && !pending.entries.some(({ status }) => status === 'loading')) finish()
+    }).catch(fail)
+  })
+}
+
+function requireCheckoutCwd(
+  actual: string,
+  expected: string,
+  kind: 'check' | 'mutation'
+): void {
+  if (actual !== expected) {
+    throw new CheckoutAdapterError(kind, 'Paseo returned checkout data for a different directory.')
+  }
+}
+
+function requireCheckoutMutation(
+  result: { cwd: string; success: boolean; error: { message: string } | null },
+  cwd: string
+): void {
+  requireCheckoutCwd(result.cwd, cwd, 'mutation')
+  if (result.error) throw new CheckoutAdapterError('mutation', result.error.message)
+  if (!result.success) throw new CheckoutAdapterError('mutation', 'Paseo checkout mutation failed.')
+}
+
+function latestCheckoutRevision(
+  commits: readonly { sha: string; isOnBase?: boolean }[]
+): string | null {
+  return commits.find(({ isOnBase }) => isOnBase !== true)?.sha ?? null
+}
+
+function parseGitHubPullRequest(
+  value: string,
+  number: number,
+  kind: 'check' | 'mutation'
+): CheckoutPullRequestIdentity {
+  let url: URL
+  try {
+    url = new URL(value)
+  } catch {
+    throw new CheckoutAdapterError(kind, 'Paseo returned an invalid pull-request URL.')
+  }
+  const match = /^\/([^/]+)\/([^/]+)\/pull\/(\d+)$/.exec(url.pathname)
+  if (
+    url.protocol !== 'https:' ||
+    url.hostname.toLowerCase() !== 'github.com' ||
+    url.port ||
+    url.username ||
+    url.password ||
+    url.search ||
+    url.hash ||
+    !match ||
+    !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(match[1]) ||
+    !/^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(match[2]) ||
+    Number(match[3]) !== number
+  ) {
+    throw new CheckoutAdapterError(kind, 'Paseo returned a mismatched pull-request identity.')
+  }
+  const repository = `${match[1]}/${match[2]}`.toLowerCase()
+  return {
+    repository,
+    number,
+    url: `https://github.com/${repository}/pull/${number}`
+  }
+}
+
+function pullRequestState(state: string, isMerged: boolean): CheckoutPullRequestStatus['state'] {
+  if (isMerged) return 'MERGED'
+  const normalized = state.toUpperCase()
+  if (normalized === 'OPEN' || normalized === 'CLOSED') return normalized
+  throw new CheckoutAdapterError('check', `Paseo returned unknown pull-request state “${state}”.`)
+}
+
+function upstreamRemote(upstreamRef: string | null | undefined): string | null {
+  if (!upstreamRef) return null
+  const separator = upstreamRef.indexOf('/')
+  return separator > 0 ? upstreamRef.slice(0, separator) : null
+}
+
+function sum(values: readonly number[]): number {
+  return values.reduce((total, value) => total + value, 0)
 }
