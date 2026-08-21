@@ -11,6 +11,7 @@ export default defineConfig({
       rollupOptions: {
         input: {
           index: resolve(prototypeRoot, 'main/index.ts'),
+          validateCheckout: resolve(prototypeRoot, 'main/validateCheckout.ts'),
           validatePaseo: resolve(prototypeRoot, 'main/validatePaseo.ts')
         }
       }

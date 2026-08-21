@@ -16,6 +16,7 @@ import type {
   P3IntegrationRequest,
   P3IntegrationResult
 } from '../../prototypes/paseo-issue-to-pr-bridge/shared/integration'
+import { P3_INTEGRATION_CHANNEL } from '../../prototypes/paseo-issue-to-pr-bridge/shared/ipc'
 import { reconcilePaseoWorkItem } from '../../prototypes/paseo-issue-to-pr-bridge/shared/paseoReconciliation'
 import type { PrototypeLedger } from '../../prototypes/paseo-issue-to-pr-bridge/shared/model'
 
@@ -336,6 +337,33 @@ test('renders persisted native GitHub Issue and PullRequest nodes with shared ch
   const application = await launch(ledgerPath)
   try {
     const window = await application.firstWindow()
+    await application.evaluate(({ ipcMain }, channel) => {
+      ipcMain.removeHandler(channel)
+      ipcMain.handle(channel, (_event, request: { type?: string }) => {
+        if (request.type !== 'checkout-status') {
+          return { ok: false, error: { kind: 'invalid-request', message: 'UI evidence fixture.' } }
+        }
+        return {
+          ok: true,
+          value: {
+            type: 'checkout-status',
+            status: {
+              workspaceId: 'workspace-opaque-1',
+              branch: 'spade-19-validation',
+              headRevision: 'e1dbd2b6a7ec3f369cc5540277b630f7725fc84a',
+              baseRef: 'origin/main',
+              changedFiles: 0,
+              additions: 0,
+              deletions: 0,
+              stagedFiles: null,
+              unstagedFiles: null,
+              untrackedFiles: null,
+              conflicts: null
+            }
+          }
+        }
+      })
+    }, P3_INTEGRATION_CHANNEL)
     await expect(window.locator('.github-node')).toHaveCount(2)
     const issueNode = window.locator('.github-node').filter({ hasText: issue.title })
     await expect(issueNode).toContainText('skflowne/spade-fixture#1')
@@ -351,7 +379,9 @@ test('renders persisted native GitHub Issue and PullRequest nodes with shared ch
     await expect(pullRequestActivity).toContainText('src/App.vue: Nice.')
     await expect(pullRequestNode.getByRole('button', { name: 'Refresh PR' })).toBeVisible()
     await expect(window.getByLabel('Repository')).toHaveValue('skflowne/spade-fixture')
-    await expect(window.getByRole('button', { name: 'Refresh checkout' })).toBeVisible()
+    await window.getByRole('button', { name: 'Refresh checkout' }).click()
+    await expect(window.getByLabel('Checkout summary')).toContainText('spade-19-validation')
+    await expect(window.getByLabel('Checkout summary')).toContainText('e1dbd2b6a7ec')
     await expect(window.getByRole('button', { name: 'Create/link PR' })).toBeVisible()
     await window.screenshot({ path: test.info().outputPath('p3-native-github-shell.png') })
   } finally {

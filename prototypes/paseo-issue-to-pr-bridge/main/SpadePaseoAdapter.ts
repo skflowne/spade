@@ -574,10 +574,14 @@ function parseGitHubPullRequest(
   } catch {
     throw new CheckoutAdapterError(kind, 'Paseo returned an invalid pull-request URL.')
   }
-  const match = /^\/([^/]+)\/([^/]+)\/pull\/(\d+)$/.exec(url.pathname)
+  const hostname = url.hostname.toLowerCase()
+  const match = hostname === 'github.com'
+    ? /^\/([^/]+)\/([^/]+)\/pull\/(\d+)$/.exec(url.pathname)
+    : hostname === 'api.github.com'
+      ? /^\/repos\/([^/]+)\/([^/]+)\/pulls\/(\d+)$/.exec(url.pathname)
+      : null
   if (
     url.protocol !== 'https:' ||
-    url.hostname.toLowerCase() !== 'github.com' ||
     url.port ||
     url.username ||
     url.password ||
@@ -607,8 +611,11 @@ function pullRequestState(state: string, isMerged: boolean): CheckoutPullRequest
 
 function upstreamRemote(upstreamRef: string | null | undefined): string | null {
   if (!upstreamRef) return null
-  const separator = upstreamRef.indexOf('/')
-  return separator > 0 ? upstreamRef.slice(0, separator) : null
+  const normalized = upstreamRef.startsWith('refs/remotes/')
+    ? upstreamRef.slice('refs/remotes/'.length)
+    : upstreamRef
+  const separator = normalized.indexOf('/')
+  return separator > 0 ? normalized.slice(0, separator) : null
 }
 
 function sum(values: readonly number[]): number {

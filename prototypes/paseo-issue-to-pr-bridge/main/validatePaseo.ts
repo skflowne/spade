@@ -1,7 +1,10 @@
-import { writeFile } from 'node:fs/promises'
-import { resolve } from 'node:path'
-import { pathToFileURL } from 'node:url'
 import { SpadePaseoAdapter } from './SpadePaseoAdapter'
+import {
+  emitValidationResult,
+  errorMessage,
+  isDirectEntry,
+  requiredEnvironment
+} from './validationSupport'
 import { PASEO_TIMELINE_LIMIT } from '../shared/model'
 import type { PaseoAuthoritativeSnapshot } from '../shared/paseoReconciliation'
 
@@ -122,9 +125,7 @@ export async function runPaseoValidation(
   if (!evidence) throw new Error('Paseo validation completed without evidence.')
 
   const result = { ...evidence, archivedAgents }
-  const serialized = `${JSON.stringify(result, null, 2)}\n`
-  if (outputPath) await writeFile(outputPath, serialized, 'utf8')
-  process.stdout.write(serialized)
+  await emitValidationResult(outputPath, result)
   return result
 }
 
@@ -189,12 +190,6 @@ function sortedWorkspaceIds(snapshot: PaseoAuthoritativeSnapshot): string[] {
   return snapshot.workspacePages.flat().map(({ id }) => id).sort()
 }
 
-function requiredEnvironment(environment: NodeJS.ProcessEnv, name: string): string {
-  const value = environment[name]?.trim()
-  if (!value) throw new Error(`${name} is required.`)
-  return value
-}
-
 function requiredPrompt(environment: NodeJS.ProcessEnv, name: string): string {
   const value = environment[name]
   if (!value?.trim()) throw new Error(`${name} is required.`)
@@ -205,12 +200,7 @@ function delay(milliseconds: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, milliseconds))
 }
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error)
-}
-
-const entryPath = process.argv[1]
-if (entryPath && import.meta.url === pathToFileURL(resolve(entryPath)).href) {
+if (isDirectEntry(import.meta.url)) {
   void runPaseoValidation().catch((error: unknown) => {
     process.stderr.write(`${errorMessage(error)}\n`)
     process.exitCode = 1

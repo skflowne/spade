@@ -118,9 +118,30 @@ Validation record from 2026-08-21:
 
 Raw local evidence was captured at `/tmp/spade18-paseo-validation.log`, `/tmp/spade18-paseo-validation.json`, and `/tmp/spade18-daemon-evidence.log` during the run.
 
+### Disposable checkout validation
+
+The bundled checkout validator uses the same `SpadePaseoAdapter` instance for workspace resolution and every checkout operation:
+
+```bash
+SPADE_P3_PASEO_URL=ws://127.0.0.1:17679/ws \
+SPADE_P3_CHECKOUT_VALIDATION_CWD=/path/to/disposable/spade-fixture \
+SPADE_P3_CHECKOUT_VALIDATION_REPOSITORY=skflowne/spade-fixture \
+SPADE_P3_CHECKOUT_VALIDATION_COMMIT_MESSAGE='Disposable checkout validation' \
+SPADE_P3_CHECKOUT_VALIDATION_REMOTE=origin \
+SPADE_P3_CHECKOUT_VALIDATION_PR_TITLE='Disposable checkout validation' \
+SPADE_P3_CHECKOUT_VALIDATION_PR_BODY='Close after evidence capture.' \
+SPADE_P3_CHECKOUT_VALIDATION_BASE_BRANCH=main \
+SPADE_P3_CHECKOUT_VALIDATION_OUTPUT=/tmp/spade19-checkout-validation.json \
+npm run prototype:p3:validate:checkout
+```
+
+Direct validation on 2026-08-21 used an isolated CLI/daemon 0.4.0 home at `127.0.0.1:17679`, with relay, MCP injection, MCP HTTP, and web UI disabled. The active 0.3.1 daemon at `127.0.0.1:6768` remained unchanged. Through the adapter, the fixture reported one changed file with two additions, committed it, returned the new HEAD with a clean diff, pushed the exact `origin` branch, created `skflowne/spade-fixture#6`, and read that same PR as `OPEN`. Paseo's qualified `refs/remotes/origin/...` upstream and GitHub API PR URL were normalized to the public `origin` and canonical `https://github.com/.../pull/6` identity.
+
+Cleanup closed fixture PR #6, deleted its remote branch, stopped the isolated daemon gracefully, and removed the disposable checkout/home. A final GitHub query found no open fixture PR or remaining `spade-19-validation-*` branch. The documented evidence contains no credentials or disposable filesystem paths.
+
 ## Direct UI evidence
 
-Electron 43 was exercised under Xvfb through Playwright's real Electron automation. The live fixture rendered connected managed-agent, provider-subagent, and workspace records; explicit unavailable capabilities; normalized conversation details; retained user expansion; and generic Paseo controls. The renderer sandbox exposed only `execute`, `snapshot`, and `subscribe`.
+Electron 43 was exercised under Xvfb through Playwright's real Electron automation. The live fixture rendered connected managed-agent, provider-subagent, and workspace records; explicit unavailable capabilities; normalized conversation details; retained user expansion; and generic Paseo controls. The native GitHub artifact additionally shows a successful selected-checkout summary with branch, HEAD, base, and clean diff totals. The renderer sandbox exposes only typed snapshot, command, integration, and subscription methods.
 
 Artifact: [`artifacts/p3-paseo-live.png`](artifacts/p3-paseo-live.png)
 
@@ -204,8 +225,8 @@ Environment: Electron 43 under Xvfb, Node 24.18.0, `gh` 2.96.0 authenticated as 
 | Partial PR safety | Deterministic integration coverage retained checkout-returned PR identity when subsequent GitHub detail/reconciliation failed. | Pass |
 | Selected checkout | Deterministic coverage rejected mismatched adapter workspace status and dropped status from changed or superseded selections. | Pass |
 | Persistence/reconnect | Existing version-1 placeholder ledgers remain valid; repeated Issue/PR reconciliation creates no duplicate nodes or edges. | Pass |
-| Concrete checkout mapping | Deterministic driver fixtures cover exact workspace resolution, status/diff totals, commit revision, push target, PR identity/status, and classified failures on one adapter. | Pass |
-| Real Paseo mutations | Disposable fixture status/commit/push/create-PR/status execution is the remaining direct-validation gate. | Pending M7 |
+| Concrete checkout mapping | Deterministic driver fixtures cover exact workspace resolution, base-branch HEAD, status/diff totals, commit revision, qualified upstream normalization, GitHub API/public PR identity, PR status, and classified failures on one adapter. | Pass |
+| Real Paseo mutations | Isolated Paseo 0.4 executed fixture status/commit/push/create-PR/status through one adapter; PR #6 was closed and its remote branch deleted. | Pass |
 
 Artifact: [`artifacts/p3-native-github-shell.png`](artifacts/p3-native-github-shell.png)
 

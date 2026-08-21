@@ -15,6 +15,7 @@ import {
   type PaseoDaemonDriver
 } from '../../prototypes/paseo-issue-to-pr-bridge/main/SpadePaseoAdapter'
 import { CheckoutAdapterError } from '../../prototypes/paseo-issue-to-pr-bridge/main/spadePaseoCheckout'
+import { runCheckoutValidation } from '../../prototypes/paseo-issue-to-pr-bridge/main/validateCheckout'
 import { runPaseoValidation } from '../../prototypes/paseo-issue-to-pr-bridge/main/validatePaseo'
 import type {
   PaseoAgentSnapshot,
@@ -200,6 +201,91 @@ test('preserves primary and cleanup failures while attempting every cleanup acti
   ])
   expect(fixture.calls.archivedAgentIds).toEqual(['validation-child', 'validation-root'])
   expect(fixture.calls.close).toBe(1)
+})
+
+test('validates the disposable checkout sequence through one adapter', async () => {
+  const calls: string[] = []
+  let statusCount = 0
+  const checkoutEnvironment: NodeJS.ProcessEnv = {
+    SPADE_P3_PASEO_URL: 'ws://127.0.0.1:17677/ws',
+    SPADE_P3_CHECKOUT_VALIDATION_CWD: '/opaque/checkout',
+    SPADE_P3_CHECKOUT_VALIDATION_REPOSITORY: 'skflowne/spade-fixture',
+    SPADE_P3_CHECKOUT_VALIDATION_COMMIT_MESSAGE: 'Disposable validation',
+    SPADE_P3_CHECKOUT_VALIDATION_REMOTE: 'origin',
+    SPADE_P3_CHECKOUT_VALIDATION_PR_TITLE: 'Disposable validation',
+    SPADE_P3_CHECKOUT_VALIDATION_PR_BODY: 'Cleanup after validation.',
+    SPADE_P3_CHECKOUT_VALIDATION_BASE_BRANCH: 'main'
+  }
+  const adapter = {
+    connect: async () => { calls.push('connect') },
+    openProjectCheckout: async () => {
+      calls.push('open')
+      return workspace('checkout-validation')
+    },
+    checkoutStatus: async () => {
+      calls.push('status')
+      statusCount += 1
+      return {
+        workspaceId: 'checkout-validation',
+        branch: 'spade-19-validation',
+        headRevision: statusCount === 1 ? 'revision-before' : 'revision-after',
+        baseRef: 'origin/main',
+        changedFiles: statusCount === 1 ? 1 : 0,
+        additions: statusCount === 1 ? 1 : 0,
+        deletions: 0,
+        stagedFiles: null,
+        unstagedFiles: null,
+        untrackedFiles: null,
+        conflicts: null
+      }
+    },
+    checkoutCommit: async () => {
+      calls.push('commit')
+      return { revision: 'revision-after' }
+    },
+    checkoutPush: async () => {
+      calls.push('push')
+      return { remote: 'origin', branch: 'spade-19-validation' }
+    },
+    checkoutCreatePullRequest: async () => {
+      calls.push('pr-create')
+      return {
+        repository: 'skflowne/spade-fixture',
+        number: 9,
+        url: 'https://github.com/skflowne/spade-fixture/pull/9'
+      }
+    },
+    checkoutPullRequestStatus: async () => {
+      calls.push('pr-status')
+      return {
+        pullRequest: {
+          repository: 'skflowne/spade-fixture',
+          number: 9,
+          url: 'https://github.com/skflowne/spade-fixture/pull/9'
+        },
+        state: 'OPEN' as const
+      }
+    },
+    close: async () => { calls.push('close') }
+  }
+
+  await expect(runCheckoutValidation(checkoutEnvironment, () => adapter)).resolves.toMatchObject({
+    repository: 'skflowne/spade-fixture',
+    branch: 'spade-19-validation',
+    commitRevision: 'revision-after',
+    pullRequestState: 'OPEN'
+  })
+  expect(calls).toEqual([
+    'connect',
+    'open',
+    'status',
+    'commit',
+    'status',
+    'push',
+    'pr-create',
+    'pr-status',
+    'close'
+  ])
 })
 
 test('uses one daemon driver while exhausting pages and refetching exact opaque references', async () => {
@@ -403,7 +489,7 @@ test('maps checkout operations through the same opaque-workspace daemon driver',
         cwd,
         requestId: 'status',
         error: null,
-        upstreamRef: 'origin/spade-19-checkout',
+        upstreamRef: 'refs/remotes/origin/spade-19-checkout',
         isGit: true as const,
         isPaseoOwnedWorktree: false as const,
         repoRoot: cwd,
@@ -461,7 +547,7 @@ test('maps checkout operations through the same opaque-workspace daemon driver',
       return {
         cwd,
         requestId: 'pr-create',
-        url: 'https://github.com/skflowne/spade-fixture/pull/7',
+        url: 'https://api.github.com/repos/skflowne/spade-fixture/pulls/7',
         number: 7,
         error: null
       }
