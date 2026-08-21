@@ -1,8 +1,13 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { _electron as electron, expect, test, type ElectronApplication } from '@playwright/test'
-import type { PrototypeCommand } from '../../prototypes/paseo-issue-to-pr-bridge/shared/commands'
+import {
+  applyPrototypeCommand,
+  createInitialLedger,
+  type PrototypeCommand
+} from '../../prototypes/paseo-issue-to-pr-bridge/shared/commands'
+import { reconcilePaseoWorkItem } from '../../prototypes/paseo-issue-to-pr-bridge/shared/paseoReconciliation'
 import type { PrototypeLedger } from '../../prototypes/paseo-issue-to-pr-bridge/shared/model'
 
 const entry = resolve('prototypes/paseo-issue-to-pr-bridge/out/main/index.js')
@@ -18,7 +23,11 @@ type P3Window = Window & {
 async function launch(ledgerPath: string): Promise<ElectronApplication> {
   return electron.launch({
     args: [entry],
-    env: { ...process.env, SPADE_P3_LEDGER_PATH: ledgerPath }
+    env: {
+      ...process.env,
+      SPADE_P3_LEDGER_PATH: ledgerPath,
+      SPADE_P3_DISABLE_PASEO: '1'
+    }
   })
 }
 
@@ -58,6 +67,20 @@ test('runs the generic P3 shell through narrow IPC and restores the exact ledger
       processType: 'undefined',
       api: ['execute', 'snapshot', 'subscribe']
     })
+
+    const publicationCount = await window.evaluate(async () => {
+      let count = 0
+      const unregister = (globalThis as unknown as P3Window).spadeP3.subscribe(() => { count += 1 })
+      await (globalThis as unknown as P3Window).spadeP3.execute({
+        type: 'set-work-item-status',
+        workItemId: 'work-item-1',
+        status: 'active'
+      })
+      await new Promise((resolve) => setTimeout(resolve, 20))
+      unregister()
+      return count
+    })
+    expect(publicationCount).toBe(1)
 
     const viewport = window.locator('.react-flow__viewport')
     const transformBeforeFocus = await viewport.getAttribute('style')
@@ -145,6 +168,114 @@ test('runs the generic P3 shell through narrow IPC and restores the exact ledger
   }
 })
 
+test('renders live Paseo resource states and bounded conversation expansion defaults', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'spade-p3-live-shell-'))
+  const ledgerPath = join(directory, 'ledger.json')
+  let ledger = createInitialLedger('project-1', 'Prototype project')
+  ledger = applyPrototypeCommand(ledger, {
+    type: 'create-work-item',
+    name: 'Live bridge',
+    task: 'Render live Paseo facts'
+  }).ledger
+  ledger = reconcilePaseoWorkItem(ledger, 'work-item-1', {
+    rootAgentId: 'root-agent',
+    agentPages: [[{
+      id: 'root-agent',
+      parentAgentId: null,
+      workspaceId: 'workspace-root',
+      title: 'Root agent',
+      provider: 'pi',
+      model: 'model-1',
+      status: 'running',
+      cwd: '/opaque/root',
+      updatedAt: '2026-08-21T10:00:00Z'
+    }]],
+    workspacePages: [[{
+      id: 'workspace-root',
+      projectId: 'project-1',
+      name: 'Opaque workspace',
+      directory: '/opaque/workspace',
+      branch: 'opaque-branch',
+      status: 'active',
+      updatedAt: '2026-08-21T10:00:00Z'
+    }]],
+    providerSubagents: [{
+      id: 'native-child',
+      parentAgentId: 'root-agent',
+      provider: 'pi-native',
+      title: 'Provider child',
+      status: 'running',
+      cwd: null,
+      updatedAt: '2026-08-21T10:00:01Z',
+      timeline: []
+    }],
+    timelines: [{
+      agentId: 'root-agent',
+      epoch: 'epoch-1',
+      entries: [
+        {
+          timestamp: '2026-08-21T10:00:01Z',
+          seqStart: 1,
+          item: { type: 'tool_call', name: 'write', detail: { type: 'diff' } }
+        },
+        {
+          timestamp: '2026-08-21T10:00:02Z',
+          seqStart: 2,
+          item: { type: 'tool_call', name: 'read', detail: { type: 'read' } }
+        }
+      ]
+    }],
+    refreshedAt: '2026-08-21T10:00:03Z'
+  })
+  ledger = {
+    ...ledger,
+    paseo: {
+      ...ledger.paseo,
+      daemonUrl: 'ws://127.0.0.1:7777/ws',
+      bindings: [{ workItemId: 'work-item-1', rootAgentId: 'root-agent' }]
+    }
+  }
+  await writeFile(ledgerPath, JSON.stringify(ledger), 'utf8')
+  const application = await launch(ledgerPath)
+
+  try {
+    const window = await application.firstWindow()
+    await expect(window.getByTestId('paseo-connection')).toContainText('CONNECTED')
+    await expect(window.getByTestId('paseo-capabilities')).toContainText(
+      'provider-subagents · UNAVAILABLE'
+    )
+
+    const managed = window.locator('[data-paseo-type="managed-agent"]')
+    await expect(managed).toContainText('MANAGED AGENT')
+    await expect(managed).toContainText('pi · model-1')
+    await expect(managed).toContainText('workspace-root')
+    const providerNative = window.locator('[data-paseo-type="provider-subagent"]')
+    await expect(providerNative).toContainText('PROVIDER SUBAGENT')
+    await expect(providerNative).toContainText('pi-native')
+    const workspace = window.locator('[data-paseo-type="workspace"]')
+    await expect(workspace).toContainText('/opaque/workspace')
+    await expect(workspace).toContainText('opaque-branch')
+
+    const events = managed.locator('.conversation-event')
+    await expect(events).toHaveCount(2)
+    await expect(events.filter({ hasText: 'write' })).toHaveAttribute('open', '')
+    const readEvent = events.filter({ hasText: 'read' })
+    await expect(readEvent).not.toHaveAttribute('open', '')
+    await readEvent.locator('summary').click()
+    await expect(readEvent).toHaveAttribute('open', '')
+    await window.evaluate(() => (globalThis as unknown as P3Window).spadeP3.execute({
+      type: 'set-work-item-status',
+      workItemId: 'work-item-1',
+      status: 'blocked'
+    }))
+    await expect(readEvent).toHaveAttribute('open', '')
+    await expect(window.getByRole('heading', { name: 'Paseo bridge' })).toBeVisible()
+  } finally {
+    await application.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 test('rejects malformed renderer commands at runtime', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'spade-p3-ipc-'))
   const ledgerPath = join(directory, 'ledger.json')
@@ -161,6 +292,20 @@ test('rejects malformed renderer commands at runtime', async () => {
           fromNodeId: 'node-3',
           toNodeId: 'node-4',
           relation: ['connected']
+        },
+        {
+          type: 'spawn-agent',
+          targetGroup: 'work-item-1',
+          cwd: '/opaque/root',
+          provider: ['pi'],
+          model: 'model-1',
+          prompt: 'Caller prompt'
+        },
+        {
+          type: 'attach-agent',
+          targetGroup: 'work-item-1',
+          agentId: 'root',
+          unexpected: true
         }
       ]
       return Promise.all(commands.map(async (command) => {
@@ -172,7 +317,7 @@ test('rejects malformed renderer commands at runtime', async () => {
         }
       }))
     })
-    expect(messages).toHaveLength(3)
+    expect(messages).toHaveLength(5)
     for (const message of messages) expect(message).toContain('Invalid P3 prototype command')
     const snapshot = await window.evaluate(() => (globalThis as unknown as P3Window).spadeP3.snapshot())
     expect(snapshot.groups).toHaveLength(2)

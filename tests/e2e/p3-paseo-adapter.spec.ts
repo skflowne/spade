@@ -8,6 +8,8 @@ import {
   PrototypeCommandService,
   type PaseoAdapterPort
 } from '../../prototypes/paseo-issue-to-pr-bridge/main/commandService'
+import { createConfiguredPaseoAdapter } from '../../prototypes/paseo-issue-to-pr-bridge/main/paseoComposition'
+import { registerSnapshotPublication } from '../../prototypes/paseo-issue-to-pr-bridge/main/snapshotPublication'
 import {
   SpadePaseoAdapter,
   type PaseoAdapterNotification
@@ -473,6 +475,43 @@ test('persists a spawned opaque identity before refresh and keeps command failur
     agentId: 'missing-root'
   })).rejects.toThrow('Paseo agent missing-root is missing')
   expect(service.snapshot().paseo).toMatchObject({ connection: 'connected', error: null })
+  await service.close()
+})
+
+test('composes the concrete adapter from the configured daemon URL', async () => {
+  expect(createConfiguredPaseoAdapter({ SPADE_P3_DISABLE_PASEO: '1' })).toBeUndefined()
+  const adapter = createConfiguredPaseoAdapter({
+    SPADE_P3_PASEO_URL: 'ws://127.0.0.1:7777/ws'
+  })
+  expect(adapter?.url).toBe('ws://127.0.0.1:7777/ws')
+  await adapter?.close()
+})
+
+test('forwards command and adapter snapshots once through one disposable publication path', async () => {
+  const adapter = new FakeAdapter()
+  const service = new PrototypeCommandService({
+    load: async () => null,
+    save: async () => undefined
+  }, adapter)
+  await service.initialize(createInitialLedger('project-1', 'Prototype project'))
+  const snapshots: PrototypeLedger[] = []
+  const unregister = registerSnapshotPublication(service, {
+    isDestroyed: () => false,
+    send: (snapshot) => snapshots.push(snapshot)
+  })
+
+  await service.execute({ type: 'create-group', name: 'Once' })
+  expect(snapshots).toHaveLength(1)
+  expect(snapshots[0].groups.map(({ name }) => name)).toEqual(['Once'])
+
+  adapter.emit({ type: 'connection', state: 'stale', error: 'restart' })
+  await service.execute({ type: 'create-group', name: 'Flush adapter update' })
+  expect(snapshots.filter(({ paseo }) => paseo.connection === 'stale')).toHaveLength(2)
+  expect(snapshots.filter(({ groups }) => groups.some(({ name }) => name === 'Flush adapter update'))).toHaveLength(1)
+
+  unregister()
+  await service.execute({ type: 'create-group', name: 'After cleanup' })
+  expect(snapshots).toHaveLength(3)
   await service.close()
 })
 

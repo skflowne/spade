@@ -11,13 +11,14 @@
 * { box-sizing: border-box; }
 html, body, #root { width: 100%; height: 100%; margin: 0; }
 body { overflow: hidden; }
-button, input, select { font: inherit; }
-button, input, select { min-height: 32px; border: var(--cr-border); border-radius: var(--cr-radius-control); }
+button, input, select, textarea { font: inherit; }
+button, input, select, textarea { min-height: 32px; border: var(--cr-border); border-radius: var(--cr-radius-control); }
 button { padding: 6px 10px; color: var(--text); background: var(--panel-2); cursor: pointer; }
 button:hover { border-color: var(--accent); }
-button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 button.primary { color: var(--cr-ink-950); border-color: var(--accent); background: var(--accent); font-weight: 700; }
-input, select { width: 100%; padding: 6px 8px; color: var(--text); background: var(--canvas); }
+input, select, textarea { width: 100%; padding: 6px 8px; color: var(--text); background: var(--canvas); }
+textarea { min-height: 72px; resize: vertical; }
 
 .p3-shell {
   display: grid;
@@ -98,6 +99,8 @@ input, select { width: 100%; padding: 6px 8px; color: var(--text); background: v
 .group-hull__chrome small { margin-left: auto; }
 
 .generic-node {
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   border: var(--cr-border);
   border-radius: var(--cr-radius-panel);
@@ -110,15 +113,38 @@ input, select { width: 100%; padding: 6px 8px; color: var(--text); background: v
 .generic-node__chrome div { display: grid; min-width: 0; gap: 2px; }
 .generic-node__chrome strong { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: var(--cr-text-body); }
 .generic-node__chrome small { color: var(--muted); font: var(--cr-text-xs) var(--mono); }
-.generic-node__body { display: grid; gap: 4px; min-height: 64px; padding: 10px 12px; }
-.generic-node__body span { color: var(--muted); font-size: var(--cr-text-sm); }
-.generic-node__body b { font: var(--cr-text-xs)/1.4 var(--mono); }
+.generic-node__chrome em { margin-left: auto; }
+.generic-node__body { display: grid; gap: 6px; height: 64px; overflow: auto; padding: 10px 12px; }
+.generic-node__body > span { color: var(--muted); font-size: var(--cr-text-sm); }
+.generic-node__body > b { font: var(--cr-text-xs)/1.4 var(--mono); }
+.resource-state { padding: 3px 5px; border: var(--cr-border); border-radius: var(--cr-radius-compact); font: 700 var(--cr-text-xs) var(--mono); text-transform: uppercase; }
+.resource-state--connected { color: var(--success); }
+.resource-state--reconnecting, .resource-state--stale { color: var(--warning); }
+.resource-state--missing, .resource-state--error { color: var(--danger); }
+.resource-facts { display: grid; gap: 3px; margin: 0; min-width: 0; }
+.resource-facts div { display: grid; grid-template-columns: 66px minmax(0, 1fr); gap: 6px; }
+.resource-facts dt { color: var(--muted); font-size: var(--cr-text-xs); }
+.resource-facts dd { overflow: hidden; margin: 0; text-overflow: ellipsis; white-space: nowrap; font: var(--cr-text-xs) var(--mono); }
+.conversation { display: grid; gap: 4px; padding-top: 5px; border-top: var(--cr-border); }
+.conversation > span { color: var(--muted); font-size: var(--cr-text-xs); }
+.conversation-event { border: var(--cr-border); border-radius: var(--cr-radius-compact); background: var(--canvas); }
+.conversation-event summary { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 5px; padding: 4px 6px; cursor: pointer; font-size: var(--cr-text-xs); }
+.conversation-event summary b { color: var(--accent); font: 700 var(--cr-text-xs) var(--mono); }
+.conversation-event summary span { overflow: hidden; color: var(--text); text-overflow: ellipsis; white-space: nowrap; }
+.conversation-event pre { max-height: 64px; margin: 0; overflow: auto; padding: 5px 6px; border-top: var(--cr-border); color: var(--muted); font: var(--cr-text-xs)/1.35 var(--mono); white-space: pre-wrap; }
 
 .command-panel { overflow: auto; border-left: var(--cr-border); }
 .command-panel section { display: grid; gap: 9px; padding: 14px; border-bottom: var(--cr-border); }
 .command-panel h2 { margin: 0 0 2px; font-size: var(--cr-text-body); }
 .command-panel label { display: grid; gap: 4px; color: var(--muted); font-size: var(--cr-text-sm); }
 .button-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+.paseo-status-panel ul { display: grid; gap: 5px; margin: 0; padding: 0; list-style: none; }
+.paseo-status-panel li { display: grid; gap: 2px; padding: 5px 6px; border: var(--cr-border); border-radius: var(--cr-radius-compact); color: var(--muted); font: var(--cr-text-xs)/1.35 var(--mono); }
+.paseo-status-panel li b { color: var(--text); }
+.paseo-status-panel li[data-state='available'] { border-left-color: var(--success); }
+.paseo-status-panel li[data-state='unavailable'], .paseo-status-panel li[data-state='error'] { border-left-color: var(--warning); }
+.paseo-status-panel li small { color: var(--muted); }
+.connection-error { margin: 0; color: var(--danger); font-size: var(--cr-text-xs); }
 .command-error { margin: 12px; padding: 10px; border: 1px solid var(--danger); border-radius: var(--cr-radius-control); color: var(--danger); background: rgb(240 120 120 / 8%); font-size: var(--cr-text-sm); }
 .loading-shell { display: grid; width: 100%; height: 100%; place-items: center; color: var(--muted); }
 
