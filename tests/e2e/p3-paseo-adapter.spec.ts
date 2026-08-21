@@ -549,6 +549,73 @@ test('maps checkout operations through the same opaque-workspace daemon driver',
   })
 })
 
+test('preserves base-branch HEAD for status and successful commits', async () => {
+  let committed = false
+  const cwd = '/opaque/workspace-checkout'
+  const driver = {
+    fetchWorkspaces: async () => ({
+      requestId: 'workspaces',
+      entries: [publicWorkspace({ ...workspace('workspace-checkout'), branch: 'main' })],
+      pageInfo: { nextCursor: null, prevCursor: null, hasMore: false }
+    }),
+    getCheckoutStatus: async () => ({
+      cwd,
+      requestId: 'status',
+      error: null,
+      upstreamRef: 'origin/main',
+      isGit: true as const,
+      isPaseoOwnedWorktree: false as const,
+      repoRoot: cwd,
+      mainRepoRoot: null,
+      currentBranch: 'main',
+      isDirty: false,
+      baseRef: 'origin/main',
+      aheadBehind: { ahead: 0, behind: 0 },
+      aheadOfOrigin: 0,
+      behindOfOrigin: 0,
+      hasRemote: true,
+      remoteUrl: 'git@github.com:skflowne/spade-fixture.git'
+    }),
+    getCheckoutDiff: async () => ({
+      cwd,
+      requestId: 'diff',
+      error: null,
+      diffTooLarge: false,
+      files: []
+    }),
+    listCheckoutCommits: async () => ({
+      baseRef: null,
+      commits: [{
+        sha: committed ? 'base-revision-after-commit' : 'base-revision-before-commit',
+        shortSha: committed ? 'base-after' : 'base-before',
+        subject: 'Base commit',
+        authorName: 'SPADE',
+        authorDate: '2026-08-21T01:00:00Z',
+        isOnRemote: !committed,
+        isOnBase: true,
+        files: []
+      }]
+    }),
+    checkoutCommit: async () => {
+      committed = true
+      return { cwd, requestId: 'commit', success: true, error: null }
+    }
+  } as unknown as PaseoDaemonDriver
+  const adapter = new SpadePaseoAdapter({
+    url: 'ws://127.0.0.1:7677/ws',
+    driver,
+    pollIntervalMs: 0
+  })
+
+  await expect(adapter.checkoutStatus('workspace-checkout')).resolves.toMatchObject({
+    branch: 'main',
+    headRevision: 'base-revision-before-commit'
+  })
+  await expect(adapter.checkoutCommit('workspace-checkout', 'Base commit')).resolves.toEqual({
+    revision: 'base-revision-after-commit'
+  })
+})
+
 test('classifies missing workspaces and daemon checkout failures', async () => {
   const missingAdapter = new SpadePaseoAdapter({
     url: 'ws://127.0.0.1:7677/ws',

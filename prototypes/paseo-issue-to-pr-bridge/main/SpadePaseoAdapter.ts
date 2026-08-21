@@ -560,7 +560,7 @@ function requireCheckoutMutation(
 function latestCheckoutRevision(
   commits: readonly { sha: string; isOnBase?: boolean }[]
 ): string | null {
-  return commits.find(({ isOnBase }) => isOnBase !== true)?.sha ?? null
+  return commits[0]?.sha ?? null
 }
 
 function parseGitHubPullRequest(
