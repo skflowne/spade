@@ -115,7 +115,8 @@ test('runs the generic P3 shell through narrow IPC and restores the exact ledger
 
     await window.getByLabel('New group name').fill('Second task')
     await window.getByLabel('Work item task').fill('Exercise generic creation')
-    await window.getByRole('button', { name: 'Create WorkItem' }).click()
+    await window.getByRole('heading', { name: 'Create containers' }).locator('..')
+      .getByRole('button', { name: 'Create WorkItem' }).click()
     await expect(activity.getByRole('button')).toHaveCount(2)
 
     await window.getByLabel('Target group').fill('Issue 17 · Generic shell')

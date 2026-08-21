@@ -13,6 +13,7 @@ import {
 } from '../../prototypes/paseo-issue-to-pr-bridge/shared/githubReconciliation'
 import {
   isPrototypeLedger,
+  PROTOTYPE_LEDGER_VERSION,
   type PrototypeLedger
 } from '../../prototypes/paseo-issue-to-pr-bridge/shared/model'
 
@@ -181,7 +182,7 @@ test('rejects PR reconciliation from a node that is not an agent or workspace', 
   )).toThrow(`No workspace or agent node has stable ID “${issueResult.nodeId}”.`)
 })
 
-test('keeps version-1 placeholder ledgers valid while accepting native GitHub nodes', () => {
+test('keeps the current Paseo ledger valid while accepting native GitHub nodes', () => {
   let placeholderLedger = createInitialLedger('project-1', 'Fixture project')
   placeholderLedger = apply(placeholderLedger, { type: 'create-group', name: 'Existing group' })
   placeholderLedger = apply(placeholderLedger, {
@@ -192,7 +193,7 @@ test('keeps version-1 placeholder ledgers valid while accepting native GitHub no
     resourceRef: { provider: 'placeholder', kind: 'agent', id: 'agent-1', revision: null }
   })
 
-  expect(placeholderLedger.version).toBe(1)
+  expect(placeholderLedger.version).toBe(PROTOTYPE_LEDGER_VERSION)
   expect(isPrototypeLedger(structuredClone(placeholderLedger))).toBe(true)
   expect(isPrototypeLedger(
     structuredClone(reconcileGitHubIssue(placeholderLedger, issue).ledger)
