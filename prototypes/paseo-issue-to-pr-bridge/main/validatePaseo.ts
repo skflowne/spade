@@ -28,8 +28,8 @@ export async function runPaseoValidation(
   const cwd = requiredEnvironment(environment, 'SPADE_P3_VALIDATION_CWD')
   const provider = requiredEnvironment(environment, 'SPADE_P3_VALIDATION_PROVIDER')
   const model = requiredEnvironment(environment, 'SPADE_P3_VALIDATION_MODEL')
-  const rootPrompt = requiredEnvironment(environment, 'SPADE_P3_VALIDATION_ROOT_PROMPT')
-  const childPrompt = requiredEnvironment(environment, 'SPADE_P3_VALIDATION_CHILD_PROMPT')
+  const rootPrompt = requiredPrompt(environment, 'SPADE_P3_VALIDATION_ROOT_PROMPT')
+  const childPrompt = requiredPrompt(environment, 'SPADE_P3_VALIDATION_CHILD_PROMPT')
   const timeoutMs = Number(environment.SPADE_P3_VALIDATION_TIMEOUT_MS ?? 180_000)
   const outputPath = environment.SPADE_P3_VALIDATION_OUTPUT
   if (!Number.isFinite(timeoutMs) || timeoutMs <= 0) {
@@ -192,6 +192,12 @@ function sortedWorkspaceIds(snapshot: PaseoAuthoritativeSnapshot): string[] {
 function requiredEnvironment(environment: NodeJS.ProcessEnv, name: string): string {
   const value = environment[name]?.trim()
   if (!value) throw new Error(`${name} is required.`)
+  return value
+}
+
+function requiredPrompt(environment: NodeJS.ProcessEnv, name: string): string {
+  const value = environment[name]
+  if (!value?.trim()) throw new Error(`${name} is required.`)
   return value
 }
 

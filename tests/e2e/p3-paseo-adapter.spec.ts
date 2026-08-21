@@ -99,8 +99,8 @@ const validationEnvironment: NodeJS.ProcessEnv = {
   SPADE_P3_VALIDATION_CWD: '/opaque/checkout',
   SPADE_P3_VALIDATION_PROVIDER: 'codex',
   SPADE_P3_VALIDATION_MODEL: 'model-1',
-  SPADE_P3_VALIDATION_ROOT_PROMPT: 'Caller root prompt',
-  SPADE_P3_VALIDATION_CHILD_PROMPT: 'Caller child prompt'
+  SPADE_P3_VALIDATION_ROOT_PROMPT: '  Caller root prompt\n',
+  SPADE_P3_VALIDATION_CHILD_PROMPT: '\tCaller child prompt  '
 }
 
 type ValidationFixtureOptions = {
@@ -157,7 +157,7 @@ test('forwards caller-selected validation prompts and completes reverse cleanup'
 
   await runPaseoValidation(validationEnvironment, () => fixture.adapter)
 
-  expect(fixture.calls.prompts).toEqual(['Caller root prompt', 'Caller child prompt'])
+  expect(fixture.calls.prompts).toEqual(['  Caller root prompt\n', '\tCaller child prompt  '])
   expect(fixture.calls.archivedAgentIds).toEqual(['validation-child', 'validation-root'])
   expect(fixture.calls.close).toBe(1)
 })
