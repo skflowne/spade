@@ -19,7 +19,7 @@ Run window: 2026-08-21T02:23:25Z–2026-08-21T03:08:59Z. All timestamps use UTC 
 | Fixture base | `199bced07fd3a626d795135bb144b25cbd262ca3` | Git and GitHub |
 | Fixture PR head | `32a9778e25e849ff5ff3d332ae86053b4ea6e3fb` | GitHub PR #7 |
 
-`npm ci` installed 298 packages with zero vulnerabilities. npm 12 did not run Electron's downloader because of the repository script allowlist; the exact installed package's `install.js` was invoked directly, yielding Electron `v43.4.0`. Authentication was the existing `skflowne` GitHub account. The artifact records account, protocol, and scope names only; token material is redacted.
+`npm ci` installed 298 packages with zero vulnerabilities. npm 12 did not run Electron's downloader because of the repository script allowlist; the exact installed package's `install.js` was invoked directly, yielding Electron `v43.4.0`. Authentication was the existing `skflowne` GitHub account. The artifact records account, protocol, and scope names only; the masked `gho_************************************` authentication output was explicitly allowlisted as non-secret evidence, and usable token material is absent.
 
 ## Launch and native resources
 
@@ -31,7 +31,7 @@ P3 opened `/home/skflowne/projects/spade-fixture` as Paseo project `prj_fb81b9fb
 /skill:paseo-issue-to-pr https://github.com/skflowne/spade-fixture/issues/1
 ```
 
-The workflow completed without a controller prompt or skill modification and created open, unmerged fixture PR <https://github.com/skflowne/spade-fixture/pull/7>. P3 linked it through the generic selected-workspace PR-status action and rendered native PullRequest node `node-14`, exact identity `github / pull-request / skflowne/spade-fixture#7`, with `derived` edge `edge-15` from implementation workspace node `node-11`.
+The unchanged workflow reached its published handoff without a controller prompt or skill modification and created open, unmerged fixture PR <https://github.com/skflowne/spade-fixture/pull/7>. Its workflow/scope result is unresolved because a published review finding remains unfixed, as detailed under “Native GitHub evidence and fixture result.” P3 linked the PR through the generic selected-workspace PR-status action and rendered native PullRequest node `node-14`, exact identity `github / pull-request / skflowne/spade-fixture#7`, with `derived` edge `edge-15` from implementation workspace node `node-11`.
 
 ## Managed agents and opaque workspaces
 
@@ -55,7 +55,7 @@ The 40 value is the requested projected-tail limit, not proof of a complete conv
 | `wks_f27cf54214571eef` | `aa1f78f1…` | `feature/issue-1-vue-scaffold-1` | `node-12` |
 | `wks_2f5fe20b3713f228` | `cc7f3107…` | `feature/issue-1-vue-scaffold-2` | `node-13` |
 
-The canvas presents the workspaces as opaque facts; it contains no implementation/review/fix type or lane.
+The ledger preserves all five opaque workspace identities without an implementation/review/fix type or lane. The final canvas presentation has a gap: workspace `node-13` and PullRequest `node-14` both occupy `{x: 156, y: 976}`, so the PR visually covers the fifth workspace in `02-canvas-before-restart.png`. This collision does not remove or duplicate the underlying workspace identity.
 
 ## Provider-native capability gap
 
@@ -71,7 +71,7 @@ Immediately after root creation, P3 persisted root node `node-9` and its binding
 Agent not found: fe107baf-4b33-4442-9040-9183efa738da
 ```
 
-The failure reproduced on manual refresh, SPADE restart, and Paseo reconnect. At the same times, Paseo CLI 0.4 `ls`, `inspect`, `logs`, workspace RPCs, and a read-only CLI-client diagnostic returned all five managed agents, explicit parents, workspaces, and timeline tails. Source inspection records a call-shape mismatch: integrated `SpadePaseoAdapter` calls internal `DaemonClient.fetchAgent(agentId)`, while the 0.4 CLI calls `fetchAgent({ agentId })`. No adapter change or alternate reconciliation path was added in issue #20.
+The failure reproduced on manual refresh, SPADE restart, and Paseo reconnect. At the same times, Paseo CLI 0.4 `ls`, `inspect`, `logs`, workspace RPCs, and a read-only CLI-client diagnostic returned all five managed agents, explicit parents, workspaces, and timeline tails. The root cause remains unresolved: installed `@getpaseo/client` 0.4.0 supports and normalizes both the string and object `fetchAgent` call shapes, so call shape does not explain the discrepancy. No adapter change or alternate reconciliation path was added in issue #20.
 
 Because recursive refresh aborted at exact-root fetch, P3 retained the root and did not create the four managed descendant agent nodes or delegated edges. To exercise factual workspace and native PR presentation, the operator used P3's existing generic `Attach Paseo workspace` action for each of the four exact descendant workspace IDs from durable Paseo parent/workspace records. This was a recorded manual intervention, not stage inference. Complete managed-descendant presentation remains unresolved.
 
@@ -103,11 +103,11 @@ Timeline identity did not survive. Every managed agent received a new epoch and 
 
 See `identities-before-paseo-restart.json`, `identities-after-paseo-restart.json`, screenshots `04`/`07`, and the numbered timelines.
 
-## Native GitHub evidence and fixture acceptance
+## Native GitHub evidence and fixture result
 
 Native Issue and PR surfaces exposed the source body/state/URL, PR open state, base/head/revision, no configured checks, two review records, one workflow result comment, and `Open on GitHub`.
 
-PR #7 satisfies fixture issue #1 at exact head `32a9778…`:
+PR #7 at exact head `32a9778…` contains the requested runnable application evidence:
 
 - the diff contains a Vue 3 TypeScript Vite scaffold and committed npm lockfile;
 - `src/App.vue` renders `SPADE workflow fixture` and `This repository exercises an agent issue-to-PR workflow.`;
@@ -116,7 +116,9 @@ PR #7 satisfies fixture issue #1 at exact head `32a9778…`:
 - independent clean clone validation repeated `npm install` (48 packages, zero vulnerabilities), `npm run build` (Vite 8.2.2, 12 modules), `git diff --check`, and native browser rendering with no console/page errors;
 - PR #7 is open and unmerged.
 
-Evidence: `10-implementation-timeline.txt`, `13-fixture-pr.json`, `14-fixture-diff.patch`, `15-fixture-validation.txt`, `16-fixture-render.png`, and `17-fixture-browser-qa.json`.
+Workflow/scope acceptance is nevertheless **unresolved**. Published review round 1 required removal of `.codegraph-evals/20260821T023509Z-issue-1-vue-scaffold.md` as unrelated agent-internal evidence. The file remains in the unchanged PR head, while round 2 and the workflow result subsequently reported no findings and a clear handoff without resolving it. This record therefore does not classify PR #7 as satisfying fixture issue #1 or the workflow as clear.
+
+Evidence: `10-implementation-timeline.txt`, `11-review-round-1-timeline.txt`, `12-review-round-2-timeline.txt`, `13-fixture-pr.json`, `14-fixture-diff.patch`, `15-fixture-validation.txt`, `16-fixture-render.png`, and `17-fixture-browser-qa.json`.
 
 ## API inventory
 
@@ -126,7 +128,7 @@ Evidence: `10-implementation-timeline.txt`, `13-fixture-pr.json`, `14-fixture-di
 | providers/server readiness | internal driver provider snapshot/server-info | root spawn readiness passed | stable readiness API |
 | open project/workspace reads | internal driver; generic P3 commands | five exact workspaces | public project/workspace facade with IDs and subscriptions |
 | create root agent | internal driver through P3 | root created and ran unchanged prompt | public create API must preserve explicit caller/parent identity |
-| list/exact agent, parent, workspace, timeline | internal driver in P3; CLI public RPC diagnostic | CLI facts available; integrated exact fetch failed | stable typed exact-agent call and compatibility tests |
+| list/exact agent, parent, workspace, timeline | internal driver in P3; CLI public RPC diagnostic | CLI facts available; integrated exact fetch failed for an unresolved reason | stable exact-agent reconciliation contract and cross-client diagnostics |
 | provider-native discovery | no integrated operation | unavailable/unresolved | stable provider-native child identity and lifecycle API |
 | timeline tail | CLI public RPC diagnostic; integrated internal driver intended | bounded tails available externally; integrated reconciliation aborted | stable normalized tail and identity semantics across restart |
 | subscriptions | internal driver | transport stale/reconnect notifications observed | stable agent/workspace/reconnect subscription contract |
