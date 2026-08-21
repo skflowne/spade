@@ -1,0 +1,162 @@
+Cleanup started: 2026-08-21T05:08:28+02:00
+
+Pre-cleanup owned processes:
+/tmp/spade20-electron.pid=822392
+/tmp/spade20-renderer-server.pid=673564
+/tmp/spade20-fixture-preview.pid=841193
+/tmp/spade20-paseo.pid=830514
+ 673564     655 Fri Aug 21 04:26:52 2026 python3 -m http.server 41730 --bind 127.0.0.1 --directory /home/skflowne/.paseo/worktrees/10i7tcr5/spade-20-full-fixture/prototypes/paseo-issue-to-pr-bridge/out/renderer
+ 822392     655 Fri Aug 21 05:01:32 2026 /home/skflowne/.paseo/worktrees/10i7tcr5/spade-20-full-fixture/node_modules/electron/dist/electron --remote-debugging-address=127.0.0.1 --remote-debugging-port=17700 --user-data-dir=/tmp/spade20-electron-profile /tmp/spade20-electron-app
+ 822443  822405 Fri Aug 21 05:01:32 2026 /home/skflowne/.paseo/worktrees/10i7tcr5/spade-20-full-fixture/node_modules/electron/dist/electron --type=gpu-process --ozone-platform=x11 --enable-crash-reporter=a04c973b-67a9-4396-9a5e-1cce9f2966d1,no_channel --user-data-dir=/tmp/spade20-electron-profile --gpu-preferences=WAAAAAAAAAAgAQAEAAAAAAAAAAAAAGAAQAAAAAAAAAABAAAAAAAAAAAAAAAAAAAAAgAAAAAAAAAAAAAAAAAAACAAAAAAAAAAIAAAAAAAAAABAAAAAAAAAAgAAAAAAAAACAAAAAAAAAAIAAAAAAAAAA== --shared-files --field-trial-handle=3,i,1084070443449125300,17226356610162633705,262144 --enable-features=GlobalShortcutsPortalPreferredTrigger,PdfUseShowSaveFilePicker --disable-features=DropInputEventsWhilePaintHolding,LocalNetworkAccessChecks,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TraceSiteInstanceGetProcessCreation --variations-seed-version --pseudonymization-salt-handle=7,i,9572559923378936022,11172187065271249271,4 --trace-process-track-uuid=3190708988185955192
+ 822454  822392 Fri Aug 21 05:01:32 2026 /home/skflowne/.paseo/worktrees/10i7tcr5/spade-20-full-fixture/node_modules/electron/dist/electron --type=utility --utility-sub-type=network.mojom.NetworkService --lang=en-US --service-sandbox-type=none --enable-crash-reporter=a04c973b-67a9-4396-9a5e-1cce9f2966d1,no_channel --user-data-dir=/tmp/spade20-electron-profile --shared-files=v8_context_snapshot_data:100 --field-trial-handle=3,i,1084070443449125300,17226356610162633705,262144 --enable-features=GlobalShortcutsPortalPreferredTrigger,PdfUseShowSaveFilePicker --disable-features=DropInputEventsWhilePaintHolding,LocalNetworkAccessChecks,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TraceSiteInstanceGetProcessCreation --variations-seed-version --pseudonymization-salt-handle=7,i,9572559923378936022,11172187065271249271,4 --trace-process-track-uuid=3190708989122997041
+ 822542  822414 Fri Aug 21 05:01:32 2026 /home/skflowne/.paseo/worktrees/10i7tcr5/spade-20-full-fixture/node_modules/electron/dist/electron --type=renderer --enable-crash-reporter=a04c973b-67a9-4396-9a5e-1cce9f2966d1,no_channel --user-data-dir=/tmp/spade20-electron-profile --app-path=/tmp/spade20-electron-app --enable-sandbox --remote-debugging-port=17700 --ozone-platform=x11 --lang=en-US --num-raster-threads=4 --enable-main-frame-before-activation --renderer-client-id=4 --time-ticks-at-unix-epoch=-1787267354169164 --launch-time-ticks=13938821420 --shared-files=v8_context_snapshot_data:100 --field-trial-handle=3,i,1084070443449125300,17226356610162633705,262144 --enable-features=GlobalShortcutsPortalPreferredTrigger,PdfUseShowSaveFilePicker --disable-features=DropInputEventsWhilePaintHolding,LocalNetworkAccessChecks,ScreenAIOCREnabled,SpareRendererForSitePerProcess,TraceSiteInstanceGetProcessCreation --variations-seed-version --pseudonymization-salt-handle=7,i,9572559923378936022,11172187065271249271,4 --trace-process-track-uuid=3190708990060038890
+ 830514     655 Fri Aug 21 05:03:37 2026 node --disable-warning=DEP0040 /tmp/spade20-paseo-cli/node_modules/.bin/paseo start --home /tmp/spade20-paseo-0.4-home --listen 127.0.0.1:17680 --foreground --no-relay --no-mcp --no-inject-mcp --no-web-ui
+ 830703  830621 Fri Aug 21 05:03:39 2026 /home/skflowne/.nvm/versions/node/v24.18.0/bin/node /tmp/spade20-paseo-cli/node_modules/@getpaseo/server/dist/server/terminal/terminal-worker-process.js
+ 841193     655 Fri Aug 21 05:06:02 2026 npm run preview --host 127.0.0.1 --port 41731
+ 841213  841193 Fri Aug 21 05:06:02 2026 sh -c vite preview --host 127.0.0.1 --port 41731
+ 841214  841213 Fri Aug 21 05:06:02 2026 node /tmp/spade20-fixture-validation/node_modules/.bin/vite preview --host 127.0.0.1 --port 41731
+
+Paseo agent final pre-stop state:
+[
+  {
+    "id": "cc7f3107-330c-489b-a538-ca9257e5b768",
+    "shortId": "cc7f310",
+    "name": "Preflight PR 7 review round 2",
+    "provider": "pi/openai-codex/gpt-5.6-sol",
+    "thinking": "medium",
+    "status": "idle",
+    "cwd": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/pr-7-review-r2-a557b80a",
+    "created": "19 minutes ago"
+  },
+  {
+    "id": "aa1f78f1-c5a2-466f-b01f-26bfb10ae93b",
+    "shortId": "aa1f78f",
+    "name": "Preflight PR 7 review round 1",
+    "provider": "pi/openai-codex/gpt-5.6-sol",
+    "thinking": "medium",
+    "status": "idle",
+    "cwd": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/pr-7-review-r1-a557b80a",
+    "created": "25 minutes ago"
+  },
+  {
+    "id": "838484d7-8180-4595-b071-ddc92b5743a7",
+    "shortId": "838484d",
+    "name": "Implement issue 1",
+    "provider": "pi/openai-codex/gpt-5.6-sol",
+    "thinking": "medium",
+    "status": "idle",
+    "cwd": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-implementation-a557b80a",
+    "created": "35 minutes ago"
+  },
+  {
+    "id": "d5124f66-52d8-4714-90e2-9f0646271483",
+    "shortId": "d5124f6",
+    "name": "Discover issue 1",
+    "provider": "pi/openai-codex/gpt-5.6-sol",
+    "thinking": "medium",
+    "status": "idle",
+    "cwd": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-discovery-a557b80a",
+    "created": "38 minutes ago"
+  },
+  {
+    "id": "fe107baf-4b33-4442-9040-9183efa738da",
+    "shortId": "fe107ba",
+    "name": "/skill:paseo-issue-to-pr https://github.com/skflowne/spade-f",
+    "provider": "pi/openai-codex/gpt-5.6-sol",
+    "thinking": "medium",
+    "status": "idle",
+    "cwd": "~/projects/spade-fixture",
+    "created": "39 minutes ago"
+  }
+]
+
+Paseo workspace final pre-stop state:
+[
+  {
+    "workspaceId": "wks_2f5fe20b3713f228",
+    "project": "spade-fixture",
+    "name": "feature/issue-1-vue-scaffold-2",
+    "isolation": "worktree",
+    "cwd": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/pr-7-review-r2-a557b80a"
+  },
+  {
+    "workspaceId": "wks_7055e4e4aa6c4080",
+    "project": "spade-fixture",
+    "name": "feature/issue-1-vue-scaffold",
+    "isolation": "worktree",
+    "cwd": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-implementation-a557b80a"
+  },
+  {
+    "workspaceId": "wks_bc966044af2bfedd",
+    "project": "spade-fixture",
+    "name": "paseo/issue-1-discovery-a557b80a",
+    "isolation": "worktree",
+    "cwd": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-discovery-a557b80a"
+  },
+  {
+    "workspaceId": "wks_dede527f1d2385de",
+    "project": "spade-fixture",
+    "name": "main",
+    "isolation": "local",
+    "cwd": "/home/skflowne/projects/spade-fixture"
+  },
+  {
+    "workspaceId": "wks_f27cf54214571eef",
+    "project": "spade-fixture",
+    "name": "feature/issue-1-vue-scaffold-1",
+    "isolation": "worktree",
+    "cwd": "/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/pr-7-review-r1-a557b80a"
+  }
+]
+
+Workflow-workspace live process scan:
+
+Workflow worktree states:
+--- /tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-discovery-a557b80a ---
+## paseo/issue-1-discovery-a557b80a
+199bced07fd3a626d795135bb144b25cbd262ca3
+--- /tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-implementation-a557b80a ---
+## feature/issue-1-vue-scaffold...origin/feature/issue-1-vue-scaffold
+32a9778e25e849ff5ff3d332ae86053b4ea6e3fb
+--- /tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/pr-7-review-r1-a557b80a ---
+## feature/issue-1-vue-scaffold-1...origin/feature/issue-1-vue-scaffold
+32a9778e25e849ff5ff3d332ae86053b4ea6e3fb
+--- /tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/pr-7-review-r2-a557b80a ---
+## feature/issue-1-vue-scaffold-2...origin/feature/issue-1-vue-scaffold
+32a9778e25e849ff5ff3d332ae86053b4ea6e3fb
+
+SPADE Electron 822392 stopped gracefully; ledger retained at /tmp/spade20-p3-ledger.json sha256=e09156a7f25cf2b1b328a873153e1a45b22b1e8f73dd5c68867aa63a955886ec
+Renderer evidence server 673564 stopped; port41730=0
+Fixture validation preview 841193 stopped; port41731=1
+Temporary validation checkout removed=yes
+
+Isolated Paseo graceful stop:
+{
+  "action": "stopped",
+  "home": "/tmp/spade20-paseo-0.4-home",
+  "pid": "830584",
+  "forced": false,
+  "usedLifecycleRpc": true,
+  "reason": "lifecycle_shutdown_rpc",
+  "message": "Daemon stopped gracefully"
+}
+Paseo port 17680 stopped; isolated home retained=yes path=/tmp/spade20-paseo-0.4-home
+
+Retained evidence/resource dispositions:
+SPADE ledger retained: /tmp/spade20-p3-ledger.json
+Paseo home/workspaces/closed agents retained: /tmp/spade20-paseo-0.4-home
+Fixture source checkout retained: /home/skflowne/projects/spade-fixture
+## main...origin/main
+Fixture remote branch retained: feature/issue-1-vue-scaffold at 32a9778e25e849ff5ff3d332ae86053b4ea6e3fb
+{"headRefOid":"32a9778e25e849ff5ff3d332ae86053b4ea6e3fb","isDraft":false,"mergeStateStatus":"CLEAN","number":7,"state":"OPEN","url":"https://github.com/skflowne/spade-fixture/pull/7"}
+Fixture PR disposition: retained OPEN and unmerged for human review.
+
+Post-cleanup owned process/listener scan:
+ 841214     655 S node /tmp/spade20-fixture-validation/node_modules/.bin/vite preview --host 127.0.0.1 --port 41731
+LISTEN 0      511         127.0.0.1:41731      0.0.0.0:*
+Cleanup completed: 2026-08-21T05:08:34+02:00
+
+Cleanup correction at 2026-08-21T05:08:59+02:00:
+Observed workflow-owned preview child PID 841214 surviving parent SIGTERM; terminating exact recorded child.
+preview_child_841214=stopped port41731=0 validation_checkout_removed=yes
+Final owned listener scan:

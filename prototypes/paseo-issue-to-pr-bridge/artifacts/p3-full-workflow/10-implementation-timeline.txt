@@ -1,0 +1,247 @@
+[User] <skill name="portolan-forge" location="/home/skflowne/.agents/skills/portolan-forge/SKILL.md">
+References are relative to /home/skflowne/.agents/skills/portolan-forge.
+
+# Portolan Forge
+
+Follow repository instructions. They own engineering, testing, validation, and handoff rules. Do not invoke another forge skill.
+
+## Plan ownership before delegation
+
+Inspect issue state and discussion, linked work, relevant implementation and tests, repository boundaries and extension points, and related branches, worktrees, commits, and PRs. Use proportional read-only scouts for distinct evidence gaps, but synthesize their concise findings before planning.
+
+Define the smallest complete remaining change and assign every invariant, shared concept, cross-cutting decision, and edit one end-to-end owner. Split by independently verifiable concerns, never arbitrary files or layers. Foundational owners precede dependents.
+
+Choose the topology:
+
+- **One implementer:** implement directly; do not create an implementation child.
+- **Multiple implementers:** only plan, delegate, supervise, and integrate. Each child receives the original boundary, repository constraints, scope and non-goals, ownership and interfaces, dependencies, base ref, acceptance evidence, and validation. Isolate concurrent writers; serialize overlapping invariants.
+
+Apply the same rule recursively only when a delegated concern genuinely needs multiple owners. Never create a coordinator with one implementation child merely to reproduce this workflow.
+
+## Monitoring advisor
+
+Each implementer works alongside one persistent fresh read-only advisor that periodically inspects recent activity, the evolving diff, and validation. It stays silent unless continuing the current direction is likely to cause material rework, incorrect behavior, poor user experience, architectural damage, or substantial wasted effort; the concern has concrete evidence and high confidence; a practical alternative exists; intervening now is materially more useful than leaving it to final review; and the implementer is not already addressing it. Normal exploration, temporary scaffolding, isolated failures, stylistic preferences, equivalent choices, and issues cheaply handled in final review do not justify interruption.
+
+Every intervention is a brief, non-directive suggestion: state the observation and relevant evidence, then offer one practical alternative using language such as “Consider…”. Do not command, gate progress, repeat an unchanged point, take ownership, or require a response. The implementer remains free to accept or disregard the suggestion. This advisor is separate from, and shares no rationale with, the independent final reviewers.
+
+## Implementer contract
+
+Each implementer owns all code and test edits for its concern, reuses established mechanisms, validates proportionally, and then launches exactly three independent fresh read-only reviewers. Every reviewer prompt begins `/skill:pr-review` and contains only the original task boundary, target refs, repository profile, raw validation, one lens below, and no implementation rationale or other report:
+
+- **Tests:** repository testing strategy and whether changed evidence proves required behavior through a useful real path.
+- **Architecture:** invariant ownership, dependency direction, extension points, shared concepts, duplication, bypass, and leaked internals.
+- **Maintainability:** smallest necessary diff, local clarity, established patterns, hidden coupling, obsolete code, and documentation accuracy.
+
+The canonical review skill owns scope, isolation, evidence, test usefulness, failure scenarios, and fix verification. Lens prompts add focus only and must not restate or weaken it. Run reviewers in parallel and keep reports isolated until all finish.
+
+The implementer verifies every finding against the task, fixes valid issues at the owning seam, reruns invalidated checks, and reuses the same reviewers until clear. It returns its commits or diff, invariant and scope outcome, validation, surviving findings, residual risks, and integration notes. Collapse an all-clear reviewer trio to `Review: clear`; do not repeat three empty reports.
+
+## Integration and handoff
+
+Integrate independently cleared concerns in dependency order and validate the assembled result without repeating implementer reviews. Route behavior-bearing conflict or integration edits to one explicit implementer with its own reviewer trio; the coordinator must not silently author them. Return implemented concerns, base/head and commits, assembled validation, surviving findings, material decisions, and residual risks; omit empty sections and repeated clear verdicts.
+</skill>
+
+Implement https://github.com/skflowne/spade-fixture/issues/1 end to end from exact base 199bced07fd3a626d795135bb144b25cbd262ca3 on branch feature/issue-1-vue-scaffold. Discovery found an empty committed tree, no existing implementation or tests, no issue-specific branch or PR, and no relevant work to adopt; closed PRs #2-#6 are disposable unrelated validation artifacts. The issue itself is the complete semantic task and outer scope boundary. Validate every acceptance criterion from a clean checkout-equivalent install and production build, plus rendered required copy. There are no repository protected files or existing conventions. Push this issue branch and open or update its single discovered PR; do not merge or enable auto-merge. Implementation and review decisions are preauthorized: do not pause for direction; choose the strongest safe reversible option and record material choices, alternatives, trade-offs, and assumptions in the decision log. Tell every Portolan implementer to read and apply the codegraph-evaluation skill and commit the resulting CodeGraph report. Required final handoff: branch, PR URL, validation and reviewer evidence, decision log, committed CodeGraph report path and commit, exact head SHA, and scope outcome. If required work exceeds the issue boundary, stop and report that expansion before continuing. Paseo has already created the dedicated worktree and branch. Use this workspace; do not create a nested worktree.
+[Thought] **Inspecting repository and agent status**
+[Shell] git status --short --branch && git rev-parse HEAD && git worktree list --porcelain && git remote -v && ls -la && find .. -maxdepth 2 -name .codegraph -type d -print
+[Read] /home/skflowne/.agents/skills/codegraph-evaluation/SKILL.md
+[Subagent]
+[Thought] **Planning GitHub issue retrieval**
+
+**Evaluating scope against issue boundaries**
+[Shell] gh issue view 1 --repo skflowne/spade-fixture --comments --json number,title,body,state,url,comments,labels,assignees && gh pr list --repo skflowne/spade-fixture --state all --json number,title,sta...
+[Shell] find /home/skflowne/projects -maxdepth 3 -path '*/paseo.json' -print 2>/dev/null | head -50
+[Shell] git -C /tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-discovery-a557b80a status --short --branch && git -C /tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-discovery-a557b80a log --on...
+[Thought] **Planning async advisor for indexing inspection**
+[Read] /home/skflowne/.pi/agent/git/github.com/skflowne/pi-subagents/skills/pi-subagents/SKILL.md
+[Thought] **Planning asynchronous advisor launch**
+[advisor] You are the persistent monitoring advisor for a single-implementer Portolan Forge task in /tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-implementation-a557b80a. Fresh/read-only; do not edi...
+Async: advisor [7da02913-e3e4-465e-8cc8-2e216787d6cf]
+
+The async run is detached and running in the background.
+You are in an interactive session. By default, return control to the user now; Pi will wake you on completion when the run finishes or needs attention. Do NOT call subagent_wait() merely to wait, and do not run sleep/polling loops to wait for it.
+Override that default and call subagent_wait() before ending the turn only when the current request is run-to-completion — for example, the user asked you to report results back here before continuing, or a skill must finish in one turn. In that case, call subagent_wait() to block until the run completes so its results are delivered in this turn instead of deferred.
+Otherwise, continue any independent work or return control to the user. Use subagent({ action: "status", id: "..." }) for a one-shot status/result or to inspect a blocked/stale run, never as a wait loop.
+[Thought] **Evaluating Vue 3 scaffold setup**
+[Codegraph Codegraph Explore]
+[Thought] **Checking npm and Node version compatibility**
+[Shell] node --version && npm --version && npm view create-vite version && npm view vite version && npm view vue version
+[Read] /home/skflowne/projects/locus/paseo.json
+[Read] /home/skflowne/projects/ai-usage/paseo.json
+[Thought] **Deciding against adding paseo.json**
+[Shell] npm create vite@latest . -- --template vue-ts
+Subagent progress update.
+Run: 7da02913-e3e4-465e-8cc8-2e216787d6cf
+Agent: advisor
+Child index: 0
+Child intercom target: subagent-advisor-7da02913-e3e4-465e-8cc8-2e216787d6cf-1
+
+Observation: CodeGraph binary is available (`/home/skflowne/.local/bin/codegraph`), but this fresh worktree has no `.codegraph/codegraph.db` (base tree is empty). The required skill says not to claim evaluation without an index and directs durable worktree setup changes to `main`; that conflicts with this issue branch/scope. Consider recording the unavailable/unindexed state accurately in the required `.codegraph-evals/` report rather than claiming successful calls, unless you intentionally choose the broader setup change.
+[Thought] **Planning safe Vite project scaffolding**
+[Shell] tmpdir="$(mktemp -d)" && cd "$tmpdir" && npm create vite@latest spade-fixture -- --template vue-ts && cp -a spade-fixture/. /tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-implementation-a55...
+[Thought] **Inspecting targeted files manually**
+[Read] package.json
+[Read] src/App.vue
+[Read] src/style.css
+[Read] src/main.ts
+[Read] README.md
+[Shell] git status --short && find . -maxdepth 3 -type f -not -path './.git/*' -print | sort
+[Thought] **Planning gitignore and cleanup for untracked artifacts**
+[Read] index.html
+[Read] src/components/HelloWorld.vue
+[Read] .gitignore
+[Read] vite.config.ts
+[Read] tsconfig.app.json
+Background task completed: **advisor**
+
+advisor:
+Inherited decisions:
+- Minimal Vue/Vite scaffold only; include lockfile, README commands, validations, and CodeGraph report.
+
+Diagnosis:
+- Fresh worktree remains at base with no implementation files yet.
+
+Drift / contradiction check:
+- **Medium:** `.codegraph/codegraph.db` is absent while `codegraph` is installed. The required skill prohibits claiming a successful evaluation without an index.
+
+Recommendation:
+- Consider accurately documenting the tool-available/repository-unindexed state in the required CodeGraph report unless the coordinator deliberately expands scope to durable worktree setup.
+
+Risks:
+- Remaining implementation and validations were not yet available to review.
+
+Need from main agent:
+- None.
+
+Suggested execution prompt:
+- No handoff warranted.
+
+Session file: /home/skflowne/.pi/agent/sessions/--tmp-spade20-paseo-0.4-home-worktrees-1irtwnun-issue-1-implementation-a557b80a--/2026-08-21T02-32-48-321Z_01a02229-edc1-713c-a3c5-5a09187d49af/0e5e778f/run-0/session.jsonl
+[Thought] **Planning decision log format**
+
+**Implementing minimal scaffold with preview**
+[Edit] src/App.vue
+[Write] src/style.css
+[Edit] README.md
+[Edit] index.html
+[Shell] rm -rf src/components src/assets public && npm install
+[Thought] **Deciding CodeGraph report approach**
+[Shell] date -u +%Y%m%dT%H%M%SZ && command -v codegraph && test -f .codegraph/codegraph.db; printf 'index_status=%s\n' "$?" && git status --short
+[Write] .codegraph-evals/20260821T023509Z-issue-1-vue-scaffold.md
+[Thought] **Planning clean install and build verification**
+[Shell] rm -rf node_modules dist && npm install && npm run build
+[Thought] **Configuring preview server with nohup**
+[Shell] (npm run preview -- --host 127.0.0.1 > /tmp/spade-fixture-preview.log 2>&1 & echo $! > /tmp/spade-fixture-preview.pid) && for i in $(seq 1 50); do curl -fsS http://127.0.0.1:4173 >/dev/null && exit...
+[Agent Browser]
+[Agent Browser]
+[Thought] **Leveraging agent_browser to read active tab DOM**
+[Agent Browser]
+[Thought] **Planning clean checkout testing**
+[Shell] if [ -f /tmp/spade-fixture-preview.pid ]; then kill "$(cat /tmp/spade-fixture-preview.pid)" 2>/dev/null || true; fi rm -rf .pi-subagents git status --short git diff --stat -- . ':!package-lock.json...
+[Read] package-lock.json
+[Read] tsconfig.json
+[Read] tsconfig.node.json
+[Read] .vscode/extensions.json
+[Thought] **Staging changes for advisor inspection**
+
+**Preparing staged changes for initial commit**
+[Shell] git add .codegraph-evals .gitignore .vscode README.md index.html package-lock.json package.json src tsconfig.app.json tsconfig.json tsconfig.node.json vite.config.ts && git diff --cached --check &&...
+[Subagent]
+[Thought] **Waiting advisor response before committing**
+[Subagent Wait]
+[Subagent]
+Background task failed: **advisor**
+
+advisor:
+Clear. Staged scaffold matches the requested minimal scope and rendered copy; no high-confidence issue found.
+
+Session file: /home/skflowne/.pi/agent/sessions/--tmp-spade20-paseo-0.4-home-worktrees-1irtwnun-issue-1-implementation-a557b80a--/2026-08-21T02-32-48-321Z_01a02229-edc1-713c-a3c5-5a09187d49af/0e5e778f/run-0/session.jsonl
+[Thought] **Committing changes despite identity issue**
+[Shell] git commit -m "Scaffold Vue workflow fixture" && git rev-parse HEAD && git status --short --branch
+[Thought] **Recreating independent reviewer prompts**
+
+**Validating pr-review prompt contents**
+[Shell] rm -rf .pi-subagents && git status --short --branch
+[Thought] **Reviewing acceptance and budget status**
+[Subagent]
+[Thought] **Retrying launch without reviewers**
+[Subagent]
+[Thought] **Preparing PR body and validation plan**
+[Subagent Wait]
+[Thought] **Reviewing parallel run status**
+[Subagent]
+Background task completed: **parallel:reviewer+reviewer+reviewer**
+
+reviewer:
+## Review
+- **Correct:** No findings. `src/main.ts:1-5` mounts the real Vue application, and `src/App.vue:3-4` renders the exact required copy. The supplied clean install, production build, and native-browser preview evidence exercises the real production path.
+- **Correct:** `package.json:7-9`, `package-lock.json`, and `README.md:5-20` satisfy dependency locking and command documentation requirements.
+- **Correct:** `.codegraph-evals/20260821T023509Z-issue-1-vue-scaffold.md:3-19` accurately reports the available but unindexed CodeGraph state, independently confirmed during review.
+- **Note:** No automated tests or test script are committed. For this six-line static presentation, the attested production-preview browser check is proportionate current evidence, but future copy regressions would rely on repeating that manual validation.
+
+reviewer:
+No findings.
+
+Validation: `npm run build`, `npm ls --depth=0`, and `git diff --check` passed. `src/main.ts:1-5` remains the sole composition root, while `src/App.vue:1-6` owns the required presentation without unnecessary routing, state, backend, or abstraction layers. Supplied browser validation confirms the exact rendered copy.
+
+Limitations: Clean installation and browser rendering rely on the supplied attestation; they were not repeated during this review.
+
+reviewer:
+No findings.
+
+Validation: `npm install`, `npm run build`, lockfile consistency, `git diff --check`, and staged-file checks passed. `src/App.vue:3-4` contains the exact required copy; `README.md:5-20` documents development and production-build commands.
+
+Limitations: Rendered-copy validation relies on the supplied native-browser attestation rather than an independent browser rerun.
+
+Session file: /home/skflowne/.pi/agent/sessions/--tmp-spade20-paseo-0.4-home-worktrees-1irtwnun-issue-1-implementation-a557b80a--/2026-08-21T02-32-48-321Z_01a02229-edc1-713c-a3c5-5a09187d49af/6e50758f/run-0/session.jsonl
+[Thought] **Preparing artifacts and pushing branch**
+[Shell] rm -rf .pi-subagents && git status --short --branch && git rev-parse HEAD && git log --oneline --decorate 199bced07fd3a626d795135bb144b25cbd262ca3..HEAD
+[Shell] gh pr list --repo skflowne/spade-fixture --head feature/issue-1-vue-scaffold --state all --json number,title,state,url,body,headRefOid,baseRefName
+[Shell] git push --set-upstream origin feature/issue-1-vue-scaffold
+[Thought] **Finalizing PR body and decisions**
+
+**Specifying PR body link format**
+[Write] /tmp/spade-fixture-pr-body.md
+[Shell] gh pr create --repo skflowne/spade-fixture --base main --head feature/issue-1-vue-scaffold --title "Scaffold Vue 3 TypeScript application" --body-file /tmp/spade-fixture-pr-body.md
+[Thought] **Verifying pull request status and commits**
+[Shell] git status --short --branch && git rev-parse HEAD && git rev-parse origin/feature/issue-1-vue-scaffold && git merge-base HEAD 199bced07fd3a626d795135bb144b25cbd262ca3 && git show --stat --oneline -...
+[Shell] gh pr view 7 --repo skflowne/spade-fixture --json number,title,state,url,isDraft,baseRefName,headRefName,headRefOid,mergeStateStatus,body,commits
+[Shell] git show --format='%H %s' --no-patch 32a9778e25e849ff5ff3d332ae86053b4ea6e3fb && git ls-tree -r --name-only 32a9778e25e849ff5ff3d332ae86053b4ea6e3fb | grep '^.codegraph-evals/'
+Implemented issue #1 end to end.
+
+- **Branch:** `feature/issue-1-vue-scaffold`
+- **PR:** https://github.com/skflowne/spade-fixture/pull/7
+- **Head SHA:** `32a9778e25e849ff5ff3d332ae86053b4ea6e3fb`
+- **Commit:** `32a9778 Scaffold Vue workflow fixture`
+- **PR state:** Open, clean, not merged or auto-merged
+
+### Validation
+
+- Clean-equivalent `npm install`: passed, 0 vulnerabilities
+- `npm run build`: passed with Vite 8.2.2
+- Native browser production preview rendered:
+  - `SPADE workflow fixture`
+  - `This repository exercises an agent issue-to-PR workflow.`
+- `git diff --check`: passed
+- Three independent tests, architecture, and maintainability reviews: **clear**
+
+### CodeGraph
+
+- **Report:** `.codegraph-evals/20260821T023509Z-issue-1-vue-scaffold.md`
+- **Committed in:** `32a9778e25e849ff5ff3d332ae86053b4ea6e3fb`
+- CodeGraph was available but the empty repository was unindexed; the report accurately records 0/1 successful calls and fallback inspection.
+
+### Decision log
+
+Recorded in the PR description. Key choices:
+
+- Used the current official Vue TypeScript Vite scaffold.
+- Removed all unused starter components and assets.
+- Used production-preview browser validation rather than adding out-of-scope test infrastructure.
+- Kept styling minimal and responsive.
+- Did not add unrelated Paseo/CodeGraph setup configuration outside issue #1.
+
+### Scope outcome
+
+Complete within the issue boundary. No router, state library, backend, test framework, or unrelated functionality was added.
+[Thought] **Compiling final handoff summary**

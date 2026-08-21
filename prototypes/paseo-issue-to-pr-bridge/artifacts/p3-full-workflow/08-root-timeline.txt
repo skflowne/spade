@@ -1,0 +1,176 @@
+[User] <skill name="paseo-issue-to-pr" location="/home/skflowne/.agents/skills/paseo-issue-to-pr/SKILL.md">
+References are relative to /home/skflowne/.agents/skills/paseo-issue-to-pr.
+
+# Paseo Issue to PR
+
+Read and apply [Paseo](../paseo/SKILL.md) and the canonical [issue-to-PR loop](../paseo/references/issue-to-pr-loop.md). Do not preload execution leaf skills; dispatch them through first-token `/skill:` prompts with task facts and the profile deltas below. Read supporting publication or decision skills only when the controller reaches the action that needs them.
+
+## Workflow profile
+
+- **Implementation and fix skill:** `/skill:portolan-forge`.
+- **Supporting skill:** tell each Portolan implementer to read and apply `codegraph-evaluation`; the controller does not need its body.
+- **Review and publication:** `/skill:drift-review-duo` and `github-pr-review` under the recovery protocol below.
+- **Issue implementation mutation authority:** push the issue branch and open or update its single discovered PR.
+- **Fix mutation authority:** push the cleared temporary branch only; do not open or edit a PR, merge, or integrate other chunks.
+- **Required implementation handoff additions:** branch, PR URL, decision log, and committed CodeGraph report.
+- **Required fixer handoff additions:** committed CodeGraph report and scope outcome.
+
+If Portolan reports that required work exceeds the workflow boundary, stop that implementation and adjudicate the expansion before continuing.
+
+The user preauthorizes implementation and review decisions. When repository evidence does not dictate direction, read and apply `trade-off-analysis`, but override its user-decision handoff: choose the strongest option, continue, and record the choice, alternatives, material trade-offs, and assumptions. Prefer the safest reversible option when evidence remains unavailable.
+
+Only findings introduced by the branch or required by the issue are eligible for dispatch. Eligible bugs are worthwhile. Issue-owned wrong-seam refactors are current-PR chunks when strongly likely to make the requested work safer, overriding the duo's default follow-up handoff. Apply the autonomous trade-off rule to other eligible findings.
+
+Stop early only for a hard external blocker: unavailable credentials for both reviewer and controller, inaccessible remote, unsafe irreversible action outside the requested lifecycle, unresolved live-writer ambiguity, or infrastructure failure that survives the recovery below.
+
+## Review publication recovery
+
+For every round, create a unique recovery-artifact directory outside Git worktrees and record it in the Paseo ledger. The review agent atomically writes JSON containing the PR number, exact reviewed `headRefOid`, round, `event: "COMMENT"`, complete body, and body SHA-256 before publication. Its body begins `## Automated drift review — Round <n>/4`. The artifact is publication recovery data, never a findings handoff.
+
+Create the review workspace from the exact fetched PR head with a collision-resistant review-only slug. Verify its clean canonical path is unique and separate from every writer workspace. Quarantine ambiguous path collisions rather than using or deleting them.
+
+Use the least-privileged provider mode that permits authenticated GitHub access (`full-access` for Codex). Before consuming the round, have that same agent run `gh auth status`, `gh api user`, and a PR-head read. Use reviewer-publish mode when child access succeeds, controller-publish mode when only controller access succeeds, and stop before substantive review when both fail.
+
+The substantive duo task receives only the canonical review inputs plus the round heading, publication mode, artifact path, and these overrides: publishing is preauthorized; keep dropped candidates internal; after the required round heading, use the canonical concise output (`No findings.` when clear); return only the verified permalink on child success or `PUBLISH_RECOVERY_REQUIRED <artifact-path> <error-category>` otherwise.
+
+After the agent idles, query GitHub by the unique round heading:
+
+1. If exactly one review exists, verify its body, hash, permalink, author, and reviewed head, then use it.
+2. If duplicates exist, do not post again; preserve evidence and stop.
+3. If none exists, validate the artifact schema, hash, PR, round, event, and head against the ledger and current PR. A moved head goes back to the same reviewer for reassessment and artifact replacement.
+4. Recheck controller authentication and review absence immediately before posting. Then read and apply `github-pr-review` to post the artifact's exact `{event, body}`; never edit it.
+5. Treat an ambiguous post as unknown. Query by heading and body hash, and retry only after proving absence.
+6. Verify exactly one landed review and delete the recovery artifact during final cleanup.
+
+A child publication failure never authorizes a replacement reviewer. Stop as a hard publication blocker only when the finalized artifact cannot be recovered or neither reviewer nor controller can publish and verify it.
+
+## Profile-specific final report
+
+Add a CodeGraph or review-publication recovery artifact only when it supports a reported failure, blocker, or actionable residual risk. A justified refactor is reportable only when it meets the canonical material-decision threshold.
+</skill>
+
+https://github.com/skflowne/spade-fixture/issues/1
+[Thought] **Planning file inspection and agent review**
+[Read] /home/skflowne/.agents/skills/paseo/SKILL.md
+[Read] /home/skflowne/.agents/skills/paseo/references/issue-to-pr-loop.md
+[Shell] git status --short --branch && git remote -v && git worktree list --porcelain && printf '\nPASEO?\n' && command -v paseo || true
+[Subagent]
+[Thought] **Initializing ledger and inspecting issue**
+[Shell] paseo status --json && printf '\n--- LS ---\n' && paseo ls --json && printf '\n--- RUN HELP ---\n' && paseo run --help && printf '\n--- ENV ---\n' && printf 'PI_PROVIDER=%s\nPI_MODEL=%s\nPI_REASONI...
+[Shell] gh auth status && gh api user --jq '{login,id}' && gh issue view 1 --repo skflowne/spade-fixture --json number,url,state,title --jq .
+[Shell] find .. -maxdepth 2 -name paseo.json -o -name .codegraph -type d 2>/dev/null | sort
+[Thought] **Planning discovery workspace setup**
+
+**Generating collision-resistant ledger entries**
+[Shell] set -euo pipefail git fetch origin --prune BASE_SHA=$(git rev-parse origin/main) RUN_ID="issue-1-$(date -u +%Y%m%dT%H%M%SZ)-$(python3 - <<'PY' import secrets print(secrets.token_hex(4)) PY )" RUN_D...
+[Thought] **Planning unique branch and workspace setup**
+[Shell] paseo run --background --json \ --title "Discover issue 1" \ --provider pi/openai-codex/gpt-5.6-sol \ --new-workspace worktree \ --worktree-mode branch-off \ --worktree-slug issue-1-discovery-a557b...
+[Thought] **Adding ledger functionality in Python**
+[Shell] python3 - <<'PY' import json from pathlib import Path p=Path('/tmp/spade-fixture-paseo/issue-1-20260821T022934Z-a557b80a/ledger.json') d=json.loads(p.read_text()) d['agents'].append({ 'id':'d5124f6...
+[Thought] **Inspecting output and logs**
+[Shell] paseo inspect d5124f66-52d8-4714-90e2-9f0646271483 --json && printf '\n--- LOGS ---\n' && paseo logs d5124f66-52d8-4714-90e2-9f0646271483
+[Shell] ps -eo pid=,ppid=,cwd=,args= | grep -F '/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-discovery-a557b80a' | grep -v grep || true printf '\nSTATUS\n'; git -C /tmp/spade20-paseo-0.4-home/wor...
+[Thought] **Planning final handoff request**
+[Shell] paseo send d5124f66-52d8-4714-90e2-9f0646271483 "Return the requested compact final discovery handoff now."
+[Shell] paseo wait d5124f66-52d8-4714-90e2-9f0646271483 --json && paseo inspect d5124f66-52d8-4714-90e2-9f0646271483 --json && paseo logs d5124f66-52d8-4714-90e2-9f0646271483 | tail -80
+[Thought] **Retiring idle process and updating ledger**
+[Shell] set -euo pipefail paseo stop d5124f66-52d8-4714-90e2-9f0646271483 sleep 1 paseo inspect d5124f66-52d8-4714-90e2-9f0646271483 --json printf '\nPROCESSES\n' ps -eo pid=,ppid=,cwd=,args= | grep -F '/t...
+[Thought] **Planning branch selection and PR setup**
+
+**Confirming preauthorized implementation decisions**
+[Shell] python3 - <<'PY' import json from pathlib import Path p=Path('/tmp/spade-fixture-paseo/issue-1-20260821T022934Z-a557b80a/ledger.json') d=json.loads(p.read_text()) a=d['agents'][0] a.update(state='r...
+[Thought] **Adding ledger wait mechanism**
+[Shell] python3 - <<'PY' import json from pathlib import Path p=Path('/tmp/spade-fixture-paseo/issue-1-20260821T022934Z-a557b80a/ledger.json') d=json.loads(p.read_text()) d['agents'].append({ 'id':'838484d...
+[Thought] **Inspecting agent idle status**
+[Shell] paseo inspect 838484d7-8180-4595-b071-ddc92b5743a7 --json && paseo logs 838484d7-8180-4595-b071-ddc92b5743a7 | tail -120
+[Shell] git -C /tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-implementation-a557b80a status --short --branch && ps -eo pid=,ppid=,cwd=,args= | grep -F '/tmp/spade20-paseo-0.4-home/worktrees/1irtwn...
+[Thought] **Inspecting async child process handling**
+[Shell] paseo wait 838484d7-8180-4595-b071-ddc92b5743a7 --json
+[Thought] **Sending continue command to agent**
+[Shell] paseo send 838484d7-8180-4595-b071-ddc92b5743a7 "Continue the run-to-completion implementation from the advisor result and complete the requested final handoff."
+[Shell] paseo wait 838484d7-8180-4595-b071-ddc92b5743a7 --json
+[Thought] **Evaluating error handling approach**
+[Shell] paseo inspect 838484d7-8180-4595-b071-ddc92b5743a7 --json && paseo logs 838484d7-8180-4595-b071-ddc92b5743a7 | tail -80
+[Thought] **Verifying user receipt despite errors**
+[Shell] paseo wait 838484d7-8180-4595-b071-ddc92b5743a7 --json
+[Thought] **Inspecting commit wait logs**
+[Shell] paseo wait 838484d7-8180-4595-b071-ddc92b5743a7 --json
+[Shell] paseo wait 838484d7-8180-4595-b071-ddc92b5743a7 --json
+[Thought] **Inspecting parent process status**
+[Shell] paseo inspect 838484d7-8180-4595-b071-ddc92b5743a7 --json && paseo logs 838484d7-8180-4595-b071-ddc92b5743a7 | tail -140
+[Shell] git -C /tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-implementation-a557b80a status --short --branch && git -C /tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-implementation-a557b80...
+[Thought] **Planning agent cleanup implementation**
+[Shell] paseo wait 838484d7-8180-4595-b071-ddc92b5743a7 --json
+[Thought] **Killing scoped process and preparing review workspace**
+
+**Planning review agent authentication and provider mode**
+
+**Defining review task inputs and preflight workflow****Planning preflight and skill expansion workflow**
+
+**Designing preflight agent lifecycle and workspace setup**
+[Shell] set -euo pipefail WS=/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-implementation-a557b80a # Stop only the workflow-owned preview process rooted in this workspace. PIDS=$(ps -eo pid=,cwd=,...
+[Thought] **Planning precise process termination**
+[Shell] set -euo pipefail WS=/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-implementation-a557b80a mapfile -t PIDS < <(ps -eo pid=,args= | awk -v needle="$WS/node_modules/.bin/vite preview --host ...
+[Thought] **Verifying process termination success**
+[Shell] ps -eo pid=,ppid=,cwd=,args= | grep -F '/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-implementation-a557b80a' | grep -v grep || true
+[Thought] **Creating unique review artifact directory**
+[Shell] set -euo pipefail RUN_DIR=/tmp/spade-fixture-paseo/issue-1-20260821T022934Z-a557b80a HEAD_SHA=$(gh pr view 7 --repo skflowne/spade-fixture --json headRefOid --jq .headRefOid) git fetch origin pull/...
+[Thought] **Creating unique writable branch path**
+[Shell] python3 - <<'PY' import json from pathlib import Path p=Path('/tmp/spade-fixture-paseo/issue-1-20260821T022934Z-a557b80a/ledger.json') d=json.loads(p.read_text()) d['agents'].append({'id':'aa1f78f1...
+[Thought] **Planning atomic JSON write before publication**
+
+**Implementing first-token send with ledger mark**
+[Shell] python3 - <<'PY' import json from pathlib import Path p=Path('/tmp/spade-fixture-paseo/issue-1-20260821T022934Z-a557b80a/ledger.json') d=json.loads(p.read_text()) d['agents'][-1]['state']='round-1-...
+[Thought] **Inspecting contract logs before retrying**
+[Shell] paseo inspect aa1f78f1-c5a2-466f-b01f-26bfb10ae93b --json && paseo logs aa1f78f1-c5a2-466f-b01f-26bfb10ae93b | tail -80
+[Shell] gh api repos/skflowne/spade-fixture/pulls/7/reviews --paginate --jq '.[] | select(.body | startswith("## Automated drift review — Round 1/4")) | {id,html_url,user:.user.login,commit_id,body}' && pr...
+[Shell] paseo wait aa1f78f1-c5a2-466f-b01f-26bfb10ae93b --json
+[Thought] **Verifying GitHub controller artifact**
+[Shell] set -euo pipefail ART=/tmp/spade-fixture-paseo/issue-1-20260821T022934Z-a557b80a/reviews/round-1-20260821T024228Z-4fdf9a8e/review.json python3 - <<'PY' import hashlib,json,subprocess,sys from pathl...
+[Thought] **Resolving eligibility conflict for findings**
+
+**Adjudicating finding eligibility amid profile conflict**
+
+**Preparing for second review round with profile update****Finalizing canonical workflow profile**
+[Shell] set -euo pipefail WS=/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/pr-7-review-r1-a557b80a paseo stop aa1f78f1-c5a2-466f-b01f-26bfb10ae93b || true printf 'PROCESSES\n' ps -eo pid=,ppid=,cwd=,args=...
+[Thought] **Launching preflight workspace with artifact**
+[Shell] set -euo pipefail RUN_DIR=/tmp/spade-fixture-paseo/issue-1-20260821T022934Z-a557b80a HEAD_SHA=$(gh pr view 7 --repo skflowne/spade-fixture --json headRefOid --jq .headRefOid) git fetch origin pull/...
+[Thought] **Adding ledger wait functionality**
+[Shell] python3 - <<'PY' import json from pathlib import Path p=Path('/tmp/spade-fixture-paseo/issue-1-20260821T022934Z-a557b80a/ledger.json') d=json.loads(p.read_text()) d['agents'].append({'id':'cc7f3107...
+[Thought] **Finalizing prompt content for round2**
+[Shell] python3 - <<'PY' import json from pathlib import Path p=Path('/tmp/spade-fixture-paseo/issue-1-20260821T022934Z-a557b80a/ledger.json') d=json.loads(p.read_text()) d['agents'][-1]['state']='round-2-...
+[Thought] **Inspecting query after timeout**
+[Shell] paseo inspect cc7f3107-330c-489b-a538-ca9257e5b768 --json && paseo logs cc7f3107-330c-489b-a538-ca9257e5b768 | tail -60
+[Shell] gh api repos/skflowne/spade-fixture/pulls/7/reviews --paginate --jq '.[] | select(.body | startswith("## Automated drift review — Round 2/4")) | {id,html_url,user:.user.login,commit_id,body}' && pr...
+[Thought] **Preparing to continue aggregation**
+[Shell] paseo send cc7f3107-330c-489b-a538-ca9257e5b768 "Continue this same round: aggregate, write the required recovery artifact atomically, publish and verify exactly one review, then return only the re...
+[Shell] paseo wait cc7f3107-330c-489b-a538-ca9257e5b768 --json
+[Thought] **Verifying uniqueness**
+[Shell] set -euo pipefail python3 - <<'PY' import hashlib,json,subprocess from pathlib import Path art=Path('/tmp/spade-fixture-paseo/issue-1-20260821T022934Z-a557b80a/reviews/round-2-20260821T024845Z-2a42...
+[Thought] **Composing concise final PR comment**
+
+**Acquiring GitHub PR review read skill**
+[Read] /home/skflowne/.agents/skills/github-pr-review/SKILL.md
+[Thought] **Planning final PR comment posting**
+
+**Verifying CI requirements and preparing final comment**
+
+**Completing cleanup before posting final comment****Updating ledger and adding checks**
+[Shell] set -euo pipefail WS=/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/pr-7-review-r2-a557b80a paseo stop cc7f3107-330c-489b-a538-ca9257e5b768 || true printf 'PROCESSES\n' ps -eo pid=,ppid=,cwd=,args=...
+[Thought] **Posting final verification comment**
+[Shell] python3 - <<'PY' import json,subprocess repo='skflowne/spade-fixture'; issue='7' heading='## Paseo issue-to-PR result' body='''## Paseo issue-to-PR result Status: Verified clear and ready for human...
+[Thought] **Verifying processes before cleanup**
+
+**Confirming no active child processes**
+[Shell] set -euo pipefail RUN_DIR=/tmp/spade-fixture-paseo/issue-1-20260821T022934Z-a557b80a printf '%s\n' '--- AGENTS ---' for id in d5124f66-52d8-4714-90e2-9f0646271483 838484d7-8180-4595-b071-ddc92b5743...
+[Thought] **Planning process scan excluding self**
+[Shell] set -euo pipefail printf '%s\n' '--- WORKFLOW PROCESSES ---' python3 - <<'PY' import subprocess paths=[ '/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-discovery-a557b80a', '/tmp/spade20-pa...
+[Thought] **Planning process exclusion by ancestor PIDs**
+[Shell] set -euo pipefail python3 - <<'PY' import os,subprocess paths=[ '/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-discovery-a557b80a', '/tmp/spade20-paseo-0.4-home/worktrees/1irtwnun/issue-1-...
+Status: Verified clear and ready for human review.
+
+PR: https://github.com/skflowne/spade-fixture/pull/7
+
+- [Round 1/4 review](https://github.com/skflowne/spade-fixture/pull/7#pullrequestreview-4989275980)
+- [Round 2/4 review](https://github.com/skflowne/spade-fixture/pull/7#pullrequestreview-4989294247)
+[Thought] **Composing concise PR review comment**
