@@ -217,6 +217,50 @@ test('rejects duplicate identities and collision-prone sequence state', () => {
   for (const invalid of invalidLedgers) expect(isPrototypeLedger(invalid)).toBe(false)
 })
 
+test('rejects duplicate opaque roots across WorkItem bindings', () => {
+  const ledger = {
+    ...createInitialLedger('project-1', 'Prototype project'),
+    nextSequence: 3,
+    groups: [
+      {
+        id: 'work-item-1',
+        kind: 'work-item' as const,
+        projectId: 'project-1',
+        name: 'First',
+        position: { x: 100, y: 100 },
+        task: 'First owner',
+        sourceRef: null,
+        status: 'active' as const
+      },
+      {
+        id: 'work-item-2',
+        kind: 'work-item' as const,
+        projectId: 'project-1',
+        name: 'Second',
+        position: { x: 600, y: 100 },
+        task: 'Second owner',
+        sourceRef: null,
+        status: 'active' as const
+      }
+    ],
+    paseo: {
+      ...createInitialLedger('project-1', 'Prototype project').paseo,
+      bindings: [
+        { workItemId: 'work-item-1', rootAgentId: 'root-a' },
+        { workItemId: 'work-item-2', rootAgentId: 'root-b' }
+      ]
+    }
+  }
+  expect(isPrototypeLedger(ledger)).toBe(true)
+  expect(isPrototypeLedger({
+    ...ledger,
+    paseo: {
+      ...ledger.paseo,
+      bindings: ledger.paseo.bindings.map((binding) => ({ ...binding, rootAgentId: 'root-a' }))
+    }
+  })).toBe(false)
+})
+
 test('migrates a valid version 1 ledger without changing stable identities', async () => {
   await withTemporaryDirectory(async (directory) => {
     const path = join(directory, 'ledger.json')

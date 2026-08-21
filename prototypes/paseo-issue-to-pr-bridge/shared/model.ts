@@ -383,7 +383,8 @@ function isPaseoAdapterState(value: unknown): value is PaseoAdapterState {
     hasUniqueValues(value.capabilities.map(({ name }) => name)) &&
     Array.isArray(value.bindings) &&
     value.bindings.every(isWorkItemBinding) &&
-    hasUniqueValues(value.bindings.map(({ workItemId }) => workItemId))
+    hasUniqueValues(value.bindings.map(({ workItemId }) => workItemId)) &&
+    hasUniqueValues(value.bindings.map(({ rootAgentId }) => rootAgentId))
   )
 }
 

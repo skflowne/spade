@@ -50,8 +50,10 @@ export class PrototypeCommandService {
   private executionQueue: Promise<void> = Promise.resolve()
   private readonly listeners = new Set<(ledger: PrototypeLedger) => void>()
   private unsubscribeAdapter: (() => void) | null = null
-  private acceptAdapterNotifications = false
+  private initializingAdapter = false
+  private refreshRequested = false
   private refreshQueued = false
+  private closed = false
 
   constructor(
     private readonly store: PrototypeLedgerStore,
@@ -65,8 +67,10 @@ export class PrototypeCommandService {
     this.ledger = initial
 
     if (this.adapter) {
+      this.initializingAdapter = true
       this.unsubscribeAdapter = this.adapter.subscribe((notification) => {
-        if (this.acceptAdapterNotifications) this.handleAdapterNotification(notification)
+        if (notification.type === 'refresh') this.requestAuthoritativeRefresh()
+        else if (!this.initializingAdapter) this.handleConnectionNotification(notification)
       })
       try {
         await this.adapter.connect()
@@ -82,8 +86,10 @@ export class PrototypeCommandService {
           errorMessage(error)
         )
         await this.store.save(this.ledger)
+      } finally {
+        this.initializingAdapter = false
+        this.scheduleAuthoritativeRefresh()
       }
-      this.acceptAdapterNotifications = true
     }
 
     return this.snapshot()
@@ -111,97 +117,69 @@ export class PrototypeCommandService {
   }
 
   async close(): Promise<void> {
-    this.acceptAdapterNotifications = false
+    this.closed = true
     this.unsubscribeAdapter?.()
     this.unsubscribeAdapter = null
     await this.adapter?.close()
   }
 
-  private executePaseoCommand(
+  private async executePaseoCommand(
     ledger: PrototypeLedger,
     command: PaseoCommand
   ): Promise<PrototypeLedger> {
     if (!this.adapter) throw new Error('The Paseo adapter is not configured.')
 
-    return this.executePaseoOperation(ledger, async () => {
-      switch (command.type) {
-        case 'select-project-checkout': {
-          const workItemId = requireWorkItem(ledger, command.targetGroup)
-          const workspace = await this.adapter!.openProjectCheckout(command.cwd)
-          return putWorkspace(ledger, workItemId, workspace)
-        }
-        case 'create-workspace': {
-          const workItemId = requireWorkItem(ledger, command.targetGroup)
-          const workspace = await this.adapter!.createWorkspace(command.cwd, command.title)
-          return putWorkspace(ledger, workItemId, workspace)
-        }
-        case 'attach-workspace': {
-          const workItemId = requireWorkItem(ledger, command.targetGroup)
-          const workspace = await this.adapter!.attachWorkspace(command.workspaceId)
-          if (!workspace) throw new Error(`Paseo workspace ${command.workspaceId} is missing.`)
-          return putWorkspace(ledger, workItemId, workspace)
-        }
-        case 'spawn-agent': {
-          const workItemId = requireWorkItem(ledger, command.targetGroup)
-          const agent = await this.adapter!.spawnAgent({
-            workspaceId: command.workspaceId,
-            cwd: command.cwd,
-            provider: command.provider,
-            model: command.model,
-            prompt: command.prompt,
-            title: command.title
-          })
-          return this.bindAndRefresh(putManagedAgent(ledger, workItemId, agent), workItemId, agent.id)
-        }
-        case 'attach-agent': {
-          const workItemId = requireWorkItem(ledger, command.targetGroup)
-          const agent = await this.adapter!.attachAgent(command.agentId)
-          if (!agent) throw new Error(`Paseo agent ${command.agentId} is missing.`)
-          return this.bindAndRefresh(putManagedAgent(ledger, workItemId, agent), workItemId, agent.id)
-        }
-        case 'refresh-paseo': {
-          const binding = requireBinding(ledger, command.workItemId)
-          return this.refreshBinding(ledger, binding)
-        }
+    switch (command.type) {
+      case 'select-project-checkout': {
+        const workItemId = requireWorkItem(ledger, command.targetGroup)
+        const workspace = await this.adapter.openProjectCheckout(command.cwd)
+        return putWorkspace(ledger, workItemId, workspace)
       }
-    })
-  }
-
-  private async executePaseoOperation(
-    ledger: PrototypeLedger,
-    operation: () => Promise<PrototypeLedger>
-  ): Promise<PrototypeLedger> {
-    try {
-      return await operation()
-    } catch (error) {
-      const failed = setConnectionState(
-        ledger,
-        'error',
-        this.adapter?.url ?? ledger.paseo.daemonUrl,
-        errorMessage(error)
-      )
-      await this.persistAndPublish(failed)
-      throw error
-    }
-  }
-
-  private async bindAndRefresh(
-    ledger: PrototypeLedger,
-    workItemId: string,
-    rootAgentId: string
-  ): Promise<PrototypeLedger> {
-    const binding = { workItemId, rootAgentId }
-    const bound = {
-      ...ledger,
-      paseo: {
-        ...ledger.paseo,
-        bindings: [
-          ...ledger.paseo.bindings.filter((candidate) => candidate.workItemId !== workItemId),
-          binding
-        ]
+      case 'create-workspace': {
+        const workItemId = requireWorkItem(ledger, command.targetGroup)
+        const workspace = await this.adapter.createWorkspace(command.cwd, command.title)
+        return putWorkspace(ledger, workItemId, workspace)
+      }
+      case 'attach-workspace': {
+        const workItemId = requireWorkItem(ledger, command.targetGroup)
+        const workspace = await this.adapter.attachWorkspace(command.workspaceId)
+        if (!workspace) throw new Error(`Paseo workspace ${command.workspaceId} is missing.`)
+        return putWorkspace(ledger, workItemId, workspace)
+      }
+      case 'spawn-agent': {
+        const workItemId = requireWorkItem(ledger, command.targetGroup)
+        const agent = await this.adapter.spawnAgent({
+          workspaceId: command.workspaceId,
+          cwd: command.cwd,
+          provider: command.provider,
+          model: command.model,
+          prompt: command.prompt,
+          title: command.title
+        })
+        const bound = bindRootAgent(
+          putManagedAgent(ledger, workItemId, agent),
+          workItemId,
+          agent.id
+        )
+        await this.persistAndPublish(bound.ledger)
+        return this.refreshBinding(bound.ledger, bound.binding)
+      }
+      case 'attach-agent': {
+        const workItemId = requireWorkItem(ledger, command.targetGroup)
+        const agent = await this.adapter.attachAgent(command.agentId)
+        if (!agent) throw new Error(`Paseo agent ${command.agentId} is missing.`)
+        const bound = bindRootAgent(
+          putManagedAgent(ledger, workItemId, agent),
+          workItemId,
+          agent.id
+        )
+        return this.refreshBinding(bound.ledger, bound.binding)
+      }
+      case 'refresh-paseo': {
+        const binding = requireBinding(ledger, command.workItemId)
+        return this.refreshBinding(ledger, binding)
       }
     }
-    return this.refreshBinding(bound, binding)
   }
 
   private async refreshAllBindings(ledger: PrototypeLedger): Promise<PrototypeLedger> {
@@ -248,46 +226,64 @@ export class PrototypeCommandService {
     return reconcilePaseoWorkItem(ledger, binding.workItemId, authoritative)
   }
 
-  private handleAdapterNotification(notification: PaseoAdapterNotification): void {
-    if (notification.type === 'connection') {
-      void this.enqueue(async () => {
-        let next = setConnectionState(
-          this.snapshot(),
-          notification.state,
-          this.adapter?.url ?? null,
-          notification.error
-        )
-        if (notification.state === 'connected') {
-          try {
-            next = await this.refreshAllBindings(next)
-          } catch (error) {
-            next = setConnectionState(next, 'error', this.adapter?.url ?? null, errorMessage(error))
-          }
+  private handleConnectionNotification(
+    notification: Extract<PaseoAdapterNotification, { type: 'connection' }>
+  ): void {
+    void this.enqueue(async () => {
+      let next = setConnectionState(
+        this.snapshot(),
+        notification.state,
+        this.adapter?.url ?? null,
+        notification.error
+      )
+      if (notification.state === 'connected') {
+        try {
+          next = await this.refreshAllBindings(next)
+        } catch (error) {
+          next = setConnectionState(next, 'error', this.adapter?.url ?? null, errorMessage(error))
         }
-        await this.persistAndPublish(next)
-        return undefined
-      })
+      }
+      await this.persistAndPublish(next)
+      if (notification.state === 'connected') this.scheduleAuthoritativeRefresh()
+      return undefined
+    })
+  }
+
+  private requestAuthoritativeRefresh(): void {
+    this.refreshRequested = true
+    this.scheduleAuthoritativeRefresh()
+  }
+
+  private scheduleAuthoritativeRefresh(): void {
+    if (
+      this.initializingAdapter ||
+      this.closed ||
+      !this.refreshRequested ||
+      this.refreshQueued ||
+      !this.ledger ||
+      this.ledger.paseo.connection !== 'connected'
+    ) {
       return
     }
 
-    this.queueAuthoritativeRefresh()
-  }
-
-  private queueAuthoritativeRefresh(): void {
-    if (this.refreshQueued) return
     this.refreshQueued = true
     void this.enqueue(async () => {
-      this.refreshQueued = false
-      const current = this.snapshot()
-      if (current.paseo.connection !== 'connected') return undefined
       try {
-        await this.persistAndPublish(await this.refreshAllBindings(current))
-      } catch (error) {
-        await this.persistAndPublish(
-          setConnectionState(current, 'error', this.adapter?.url ?? null, errorMessage(error))
-        )
+        const current = this.snapshot()
+        if (current.paseo.connection !== 'connected') return undefined
+        this.refreshRequested = false
+        try {
+          await this.persistAndPublish(await this.refreshAllBindings(current))
+        } catch (error) {
+          await this.persistAndPublish(
+            setConnectionState(current, 'error', this.adapter?.url ?? null, errorMessage(error))
+          )
+        }
+        return undefined
+      } finally {
+        this.refreshQueued = false
+        if (this.refreshRequested) this.scheduleAuthoritativeRefresh()
       }
-      return undefined
     })
   }
 
@@ -305,6 +301,29 @@ export class PrototypeCommandService {
     this.ledger = ledger
     const snapshot = this.snapshot()
     for (const listener of this.listeners) listener(snapshot)
+  }
+}
+
+function bindRootAgent(
+  ledger: PrototypeLedger,
+  workItemId: string,
+  rootAgentId: string
+): { ledger: PrototypeLedger; binding: PaseoWorkItemBinding } {
+  const binding = { workItemId, rootAgentId }
+  return {
+    ledger: {
+      ...ledger,
+      paseo: {
+        ...ledger.paseo,
+        bindings: [
+          ...ledger.paseo.bindings.filter((candidate) =>
+            candidate.workItemId !== workItemId && candidate.rootAgentId !== rootAgentId
+          ),
+          binding
+        ]
+      }
+    },
+    binding
   }
 }
 

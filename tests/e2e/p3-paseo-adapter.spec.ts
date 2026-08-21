@@ -269,6 +269,11 @@ class FakeAdapter implements PaseoAdapterPort {
   readonly url = 'ws://127.0.0.1:7677/ws'
   fetchCount = 0
   missingChild = false
+  failNextFetch = false
+  refreshOnConnect = false
+  refreshDuringFetches = new Set<number>()
+  missingAgentIds = new Set<string>()
+  expectPersistedReferences = true
   attachWorkspaceIds: string[] = []
   private listener: ((notification: PaseoAdapterNotification) => void) | null = null
 
@@ -281,7 +286,9 @@ class FakeAdapter implements PaseoAdapterPort {
     this.listener?.(notification)
   }
 
-  async connect(): Promise<void> {}
+  async connect(): Promise<void> {
+    if (this.refreshOnConnect) this.emit({ type: 'refresh' })
+  }
   async close(): Promise<void> {}
   pollConnectionState(): 'connected' { return 'connected' }
   async openProjectCheckout(): Promise<PaseoWorkspaceSnapshot> { return workspace('workspace-root') }
@@ -294,7 +301,7 @@ class FakeAdapter implements PaseoAdapterPort {
     return agent('root', null, 'workspace-root')
   }
   async attachAgent(id: string): Promise<PaseoAgentSnapshot | null> {
-    return agent(id, null, 'workspace-root')
+    return this.missingAgentIds.has(id) ? null : agent(id, null, 'workspace-root')
   }
   async fetchAuthoritative(
     rootAgentId: string,
@@ -302,7 +309,12 @@ class FakeAdapter implements PaseoAdapterPort {
   ): Promise<PaseoAuthoritativeSnapshot> {
     this.fetchCount += 1
     expect(rootAgentId).toBe('root')
-    if (this.fetchCount > 1) {
+    if (this.refreshDuringFetches.has(this.fetchCount)) this.emit({ type: 'refresh' })
+    if (this.failNextFetch) {
+      this.failNextFetch = false
+      throw new Error('injected authoritative refresh failure')
+    }
+    if (this.fetchCount > 1 && this.expectPersistedReferences) {
       expect(references.agentIds).toContain('root')
       expect(references.workspaceIds).toContain('workspace-root')
     }
@@ -376,9 +388,123 @@ test('serializes root binding, restart refetch, missing preservation, and coales
 
   secondAdapter.emit({ type: 'connection', state: 'stale', error: 'restart' })
   secondAdapter.emit({ type: 'refresh' })
+  secondAdapter.emit({ type: 'refresh' })
   secondAdapter.emit({ type: 'connection', state: 'connected', error: null })
+  await restarted.execute({ type: 'set-work-item-status', workItemId: 'work-item-1', status: 'blocked' })
   await restarted.execute({ type: 'set-work-item-status', workItemId: 'work-item-1', status: 'active' })
   expect(restarted.snapshot().paseo.connection).toBe('connected')
-  expect(secondAdapter.fetchCount).toBe(2)
+  expect(secondAdapter.fetchCount).toBe(3)
   await restarted.close()
+})
+
+test('buffers initialization activity and refreshes again after the authoritative snapshot', async () => {
+  let ledger = createInitialLedger('project-1', 'Prototype project')
+  ledger = applyPrototypeCommand(ledger, {
+    type: 'create-work-item',
+    name: 'Issue 18',
+    task: 'Integrate Paseo'
+  }).ledger
+  ledger = {
+    ...ledger,
+    paseo: {
+      ...ledger.paseo,
+      bindings: [{ workItemId: 'work-item-1', rootAgentId: 'root' }]
+    }
+  }
+  const adapter = new FakeAdapter()
+  adapter.refreshOnConnect = true
+  adapter.refreshDuringFetches.add(1)
+  const service = new PrototypeCommandService({
+    load: async () => null,
+    save: async () => undefined
+  }, adapter)
+
+  await service.initialize(ledger)
+  await service.execute({ type: 'set-work-item-status', workItemId: 'work-item-1', status: 'active' })
+
+  expect(adapter.fetchCount).toBe(2)
+  await service.close()
+})
+
+test('persists a spawned opaque identity before refresh and keeps command failures local', async () => {
+  let ledger = createInitialLedger('project-1', 'Prototype project')
+  ledger = applyPrototypeCommand(ledger, {
+    type: 'create-work-item',
+    name: 'Issue 18',
+    task: 'Integrate Paseo'
+  }).ledger
+  const state: { stored: PrototypeLedger | null } = { stored: null }
+  const adapter = new FakeAdapter()
+  const service = new PrototypeCommandService({
+    load: async () => state.stored,
+    save: async (next) => { state.stored = structuredClone(next) }
+  }, adapter)
+  await service.initialize(ledger)
+
+  adapter.failNextFetch = true
+  await expect(service.execute({
+    type: 'spawn-agent',
+    targetGroup: 'work-item-1',
+    workspaceId: 'workspace-root',
+    cwd: '/opaque/root',
+    provider: 'claude',
+    model: 'model-1',
+    prompt: 'Caller prompt'
+  })).rejects.toThrow('injected authoritative refresh failure')
+
+  expect(service.snapshot().paseo.bindings).toEqual([
+    { workItemId: 'work-item-1', rootAgentId: 'root' }
+  ])
+  expect(service.snapshot().nodes.find(({ resourceRef }) => resourceRef.id === 'root')).toBeDefined()
+  expect(state.stored).toEqual(service.snapshot())
+  expect(service.snapshot().paseo).toMatchObject({ connection: 'connected', error: null })
+
+  await expect(service.execute({
+    type: 'attach-agent',
+    targetGroup: 'missing-work-item',
+    agentId: 'root'
+  })).rejects.toThrow('No group matches')
+  expect(service.snapshot().paseo).toMatchObject({ connection: 'connected', error: null })
+
+  adapter.missingAgentIds.add('missing-root')
+  await expect(service.execute({
+    type: 'attach-agent',
+    targetGroup: 'work-item-1',
+    agentId: 'missing-root'
+  })).rejects.toThrow('Paseo agent missing-root is missing')
+  expect(service.snapshot().paseo).toMatchObject({ connection: 'connected', error: null })
+  await service.close()
+})
+
+test('transfers one opaque root binding between WorkItems without leaving a duplicate owner', async () => {
+  let ledger = createInitialLedger('project-1', 'Prototype project')
+  for (const name of ['First', 'Second']) {
+    ledger = applyPrototypeCommand(ledger, {
+      type: 'create-work-item',
+      name,
+      task: `Own ${name}`
+    }).ledger
+  }
+  const adapter = new FakeAdapter()
+  adapter.expectPersistedReferences = false
+  const service = new PrototypeCommandService({
+    load: async () => null,
+    save: async () => undefined
+  }, adapter)
+  await service.initialize(ledger)
+
+  await service.execute({ type: 'attach-agent', targetGroup: 'work-item-1', agentId: 'root' })
+  const transferred = await service.execute({
+    type: 'attach-agent',
+    targetGroup: 'work-item-2',
+    agentId: 'root'
+  })
+
+  expect(transferred.paseo.bindings).toEqual([
+    { workItemId: 'work-item-2', rootAgentId: 'root' }
+  ])
+  expect(transferred.nodes.find(({ resourceRef }) => resourceRef.id === 'root')?.workItemId).toBe(
+    'work-item-2'
+  )
+  await service.close()
 })
