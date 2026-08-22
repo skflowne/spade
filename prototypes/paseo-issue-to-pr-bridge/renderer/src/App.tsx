@@ -537,7 +537,10 @@ export function App(): React.JSX.Element {
       message: commitMessage
     })
     if (response?.type === 'checkout-commit') {
-      setNotice(`Committed ${response.result.revision.slice(0, 12)}.`)
+      setNotice(response.result
+        ? `Committed ${response.result.revision.slice(0, 12)}.`
+        : 'Committed checkout; resulting revision is unavailable.')
+      if (response.warning) setError(`partial: commit succeeded, but refresh failed: ${response.warning.message}`)
       await refreshCheckout()
     }
   }
@@ -545,7 +548,10 @@ export function App(): React.JSX.Element {
   const pushCheckout = async (): Promise<void> => {
     const response = await integrate({ type: 'checkout-push', workspaceNodeId })
     if (response?.type === 'checkout-push') {
-      setNotice(`Pushed ${response.result.remote ? `${response.result.remote}/` : ''}${response.result.branch}.`)
+      setNotice(response.result
+        ? `Pushed ${response.result.remote ? `${response.result.remote}/` : ''}${response.result.branch}.`
+        : 'Pushed checkout; resulting remote branch is unavailable.')
+      if (response.warning) setError(`partial: push succeeded, but refresh failed: ${response.warning.message}`)
     }
   }
 

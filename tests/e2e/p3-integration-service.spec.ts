@@ -2,7 +2,10 @@ import { expect, test } from '@playwright/test'
 import { PrototypeCommandService } from '../../prototypes/paseo-issue-to-pr-bridge/main/commandService'
 import { P3IntegrationService } from '../../prototypes/paseo-issue-to-pr-bridge/main/integrationService'
 import { GitHubAdapterError } from '../../prototypes/paseo-issue-to-pr-bridge/main/spadeGitHubAdapter'
-import type { SpadePaseoCheckoutAdapter } from '../../prototypes/paseo-issue-to-pr-bridge/main/spadePaseoCheckout'
+import {
+  CheckoutAdapterError,
+  type SpadePaseoCheckoutAdapter
+} from '../../prototypes/paseo-issue-to-pr-bridge/main/spadePaseoCheckout'
 import {
   applyPrototypeCommand,
   createInitialLedger
@@ -93,8 +96,8 @@ async function commandService(ledger = fixtureLedger()): Promise<PrototypeComman
 function checkoutAdapter(overrides: Partial<SpadePaseoCheckoutAdapter> = {}): SpadePaseoCheckoutAdapter {
   return {
     checkoutStatus: async () => checkoutStatus,
-    checkoutCommit: async () => ({ revision: 'commit-1' }),
-    checkoutPush: async () => ({ remote: 'origin', branch: 'spade-fixture' }),
+    checkoutCommit: async () => ({ result: { revision: 'commit-1' }, warning: null }),
+    checkoutPush: async () => ({ result: { remote: 'origin', branch: 'spade-fixture' }, warning: null }),
     checkoutCreatePullRequest: async () => ({
       repository: pullRequest.repository,
       number: pullRequest.number,
@@ -148,11 +151,11 @@ test('passes only the selected opaque workspace ID to generic checkout methods',
     },
     checkoutCommit: async (workspaceId, message) => {
       calls.push({ method: 'commit', workspaceId, value: message })
-      return { revision: 'commit-1' }
+      return { result: { revision: 'commit-1' }, warning: null }
     },
     checkoutPush: async (workspaceId) => {
       calls.push({ method: 'push', workspaceId })
-      return { remote: 'origin', branch: 'spade-fixture' }
+      return { result: { remote: 'origin', branch: 'spade-fixture' }, warning: null }
     }
   })
   const integrations = new P3IntegrationService(
@@ -175,6 +178,36 @@ test('passes only the selected opaque workspace ID to generic checkout methods',
     { method: 'commit', workspaceId: 'workspace-opaque-1', value: 'Build fixture' },
     { method: 'push', workspaceId: 'workspace-opaque-1' }
   ])
+})
+
+test('reports provider-confirmed commit and push observation failures as partial success', async () => {
+  const service = await commandService()
+  const integrations = new P3IntegrationService(
+    service,
+    { getIssue: async () => issue, getPullRequest: async () => pullRequest },
+    checkoutAdapter({
+      checkoutCommit: async () => ({
+        result: null,
+        warning: new CheckoutAdapterError('check', 'Paseo committed the checkout, but SPADE could not read the resulting revision: unavailable')
+      }),
+      checkoutPush: async () => ({
+        result: null,
+        warning: new CheckoutAdapterError('check', 'Paseo pushed the checkout, but SPADE could not read the resulting remote branch: unavailable')
+      })
+    }),
+    async () => undefined
+  )
+
+  await expect(integrations.execute({
+    type: 'checkout-commit', workspaceNodeId: 'node-3', message: 'Fixture commit'
+  })).resolves.toMatchObject({
+    ok: true,
+    value: { type: 'checkout-commit', result: null, warning: { kind: 'check' } }
+  })
+  await expect(integrations.execute({ type: 'checkout-push', workspaceNodeId: 'node-3' })).resolves.toMatchObject({
+    ok: true,
+    value: { type: 'checkout-push', result: null, warning: { kind: 'check' } }
+  })
 })
 
 test('rejects checkout status returned for a different opaque workspace', async () => {

@@ -241,11 +241,11 @@ test('validates the disposable checkout sequence through one adapter', async () 
     },
     checkoutCommit: async () => {
       calls.push('commit')
-      return { revision: 'revision-after' }
+      return { result: { revision: 'revision-after' }, warning: null }
     },
     checkoutPush: async () => {
       calls.push('push')
-      return { remote: 'origin', branch: 'spade-19-validation' }
+      return { result: { remote: 'origin', branch: 'spade-19-validation' }, warning: null }
     },
     checkoutCreatePullRequest: async () => {
       calls.push('pr-create')
@@ -599,11 +599,12 @@ test('maps checkout operations through the same opaque-workspace daemon driver',
     conflicts: null
   })
   await expect(adapter.checkoutCommit('workspace-checkout', 'Fixture commit')).resolves.toEqual({
-    revision: 'revision-after-commit'
+    result: { revision: 'revision-after-commit' },
+    warning: null
   })
   await expect(adapter.checkoutPush('workspace-checkout')).resolves.toEqual({
-    remote: 'origin',
-    branch: 'spade-19-checkout'
+    result: { remote: 'origin', branch: 'spade-19-checkout' },
+    warning: null
   })
   await expect(adapter.checkoutCreatePullRequest('workspace-checkout', {
     title: 'Fixture PR',
@@ -698,7 +699,8 @@ test('preserves base-branch HEAD for status and successful commits', async () =>
     headRevision: 'base-revision-before-commit'
   })
   await expect(adapter.checkoutCommit('workspace-checkout', 'Base commit')).resolves.toEqual({
-    revision: 'base-revision-after-commit'
+    result: { revision: 'base-revision-after-commit' },
+    warning: null
   })
 })
 
@@ -741,6 +743,34 @@ test('classifies missing workspaces and daemon checkout failures', async () => {
     kind: 'mutation',
     message: 'push rejected'
   } satisfies Partial<CheckoutAdapterError>)
+})
+
+test('preserves confirmed commit and push success when follow-up observations fail', async () => {
+  const cwd = '/opaque/workspace-checkout'
+  const adapter = new SpadePaseoAdapter({
+    url: 'ws://127.0.0.1:7677/ws',
+    driver: {
+      fetchWorkspaces: async () => ({
+        requestId: 'workspaces',
+        entries: [publicWorkspace(workspace('workspace-checkout'))],
+        pageInfo: { nextCursor: null, prevCursor: null, hasMore: false }
+      }),
+      checkoutCommit: async () => ({ cwd, requestId: 'commit', success: true, error: null }),
+      checkoutPush: async () => ({ cwd, requestId: 'push', success: true, error: null }),
+      listCheckoutCommits: async () => { throw new Error('timeline unavailable') },
+      getCheckoutStatus: async () => { throw new Error('status unavailable') }
+    } as unknown as PaseoDaemonDriver,
+    pollIntervalMs: 0
+  })
+
+  await expect(adapter.checkoutCommit('workspace-checkout', 'Fixture commit')).resolves.toEqual({
+    result: null,
+    warning: expect.objectContaining({ kind: 'check', message: expect.stringContaining('committed') })
+  })
+  await expect(adapter.checkoutPush('workspace-checkout')).resolves.toEqual({
+    result: null,
+    warning: expect.objectContaining({ kind: 'check', message: expect.stringContaining('pushed') })
+  })
 })
 
 test('rejects mismatched pull-request identities and unknown states from the daemon', async () => {
