@@ -1003,6 +1003,36 @@ test('persists a spawned opaque identity before refresh and keeps command failur
   await service.close()
 })
 
+test('persists an attached opaque identity before refresh failure', async () => {
+  let ledger = createInitialLedger('project-1', 'Prototype project')
+  ledger = applyPrototypeCommand(ledger, {
+    type: 'create-work-item',
+    name: 'Issue 18',
+    task: 'Integrate Paseo'
+  }).ledger
+  const state: { stored: PrototypeLedger | null } = { stored: null }
+  const adapter = new FakeAdapter()
+  const service = new PrototypeCommandService({
+    load: async () => state.stored,
+    save: async (next) => { state.stored = structuredClone(next) }
+  }, adapter)
+  await service.initialize(ledger)
+
+  adapter.failNextFetch = true
+  await expect(service.execute({
+    type: 'attach-agent',
+    targetGroup: 'work-item-1',
+    agentId: 'root'
+  })).rejects.toThrow('injected authoritative refresh failure')
+
+  expect(service.snapshot().paseo.bindings).toEqual([
+    { workItemId: 'work-item-1', rootAgentId: 'root' }
+  ])
+  expect(service.snapshot().nodes.find(({ resourceRef }) => resourceRef.id === 'root')).toBeDefined()
+  expect(state.stored).toEqual(service.snapshot())
+  await service.close()
+})
+
 test('composes the concrete adapter from the configured daemon URL', async () => {
   expect(createConfiguredPaseoAdapter({ SPADE_P3_DISABLE_PASEO: '1' })).toBeUndefined()
   const adapter = createConfiguredPaseoAdapter({
