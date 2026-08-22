@@ -123,6 +123,43 @@ test('reattaching a resource places it in the destination Group while preserving
   })
 })
 
+test('repeated attachment within a Group preserves every member position', () => {
+  let ledger = createInitialLedger('project-1', 'Prototype project')
+  ledger = apply(ledger, { type: 'create-group', name: 'Review cluster' })
+  const secondAgentRef: ExternalResourceReference = {
+    provider: 'placeholder',
+    kind: 'agent',
+    id: 'agent-external-2',
+    revision: null
+  }
+  ledger = apply(ledger, {
+    type: 'attach-placeholder',
+    targetGroup: 'Review cluster',
+    nodeKind: 'agent',
+    title: 'First agent',
+    resourceRef: agentRef
+  })
+  ledger = apply(ledger, {
+    type: 'attach-placeholder',
+    targetGroup: 'Review cluster',
+    nodeKind: 'agent',
+    title: 'Second agent',
+    resourceRef: secondAgentRef
+  })
+  const positionsBefore = ledger.nodes.map(({ position }) => position)
+
+  ledger = apply(ledger, {
+    type: 'attach-placeholder',
+    targetGroup: 'Review cluster',
+    nodeKind: 'agent',
+    title: 'First agent',
+    resourceRef: agentRef
+  })
+
+  expect(ledger.nodes.map(({ position }) => position)).toEqual(positionsBefore)
+  expect(ledger.nodes[0].position).not.toEqual(ledger.nodes[1].position)
+})
+
 test('rejects reattaching a resource with a different node kind', () => {
   let ledger = createInitialLedger('project-1', 'Prototype project')
   ledger = apply(ledger, { type: 'create-work-item', name: 'Issue 17', task: 'Build shell' })
