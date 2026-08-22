@@ -13,6 +13,7 @@ import type {
 
 const DEFAULT_TIMEOUT_MS = 15_000
 const MAX_OUTPUT_BYTES = 4 * 1024 * 1024
+const DELETED_GITHUB_ACTOR = 'Deleted user'
 
 export type GitHubAdapterErrorKind =
   | 'auth'
@@ -182,7 +183,6 @@ export function parsePullRequest(
     ['OPEN', 'CLOSED', 'MERGED'] as const,
     'GitHub pull request state'
   )
-  const author = requireRecord(record.author, 'GitHub pull request author')
   requireResourceIdentity(record.url, target, 'pull', pullRequestNumber, responseNumber)
 
   return {
@@ -190,7 +190,7 @@ export function parsePullRequest(
     number: responseNumber,
     title: requireString(record.title, 'GitHub pull request title'),
     state: state satisfies GitHubPullRequestState,
-    author: requireString(author.login, 'GitHub pull request author login'),
+    author: parseActor(record.author, 'GitHub pull request author'),
     url: requireString(record.url, 'GitHub pull request URL'),
     baseBranch: requireString(record.baseRefName, 'GitHub pull request base branch'),
     headBranch: requireString(record.headRefName, 'GitHub pull request head branch'),
@@ -233,10 +233,7 @@ function parseReviews(value: unknown): GitHubReview[] {
   return requireArray(value, 'GitHub pull request reviews').map((item, index) => {
     const review = requireRecord(item, `GitHub review ${index + 1}`)
     return {
-      author: requireString(
-        requireRecord(review.author, `GitHub review ${index + 1} author`).login,
-        'GitHub review author login'
-      ),
+      author: parseActor(review.author, `GitHub review ${index + 1} author`),
       state: requireString(review.state, 'GitHub review state'),
       body: requireString(review.body, 'GitHub review body', true),
       submittedAt: requireTimestamp(review.submittedAt, 'GitHub review submission timestamp')
@@ -248,10 +245,7 @@ function parseComments(value: unknown): GitHubComment[] {
   return requireArray(value, 'GitHub pull request comments').map((item, index) => {
     const comment = requireRecord(item, `GitHub pull request comment ${index + 1}`)
     return {
-      author: requireString(
-        requireRecord(comment.author, `GitHub pull request comment ${index + 1} author`).login,
-        'GitHub pull request comment author login'
-      ),
+      author: parseActor(comment.author, `GitHub pull request comment ${index + 1} author`),
       body: requireString(comment.body, 'GitHub pull request comment body', true),
       createdAt: requireTimestamp(comment.createdAt, 'GitHub pull request comment creation timestamp')
     }
@@ -267,15 +261,17 @@ function parseReviewComments(serialized: string): GitHubReviewComment[] {
   return comments.map((item, index) => {
     const comment = requireRecord(item, `GitHub review comment ${index + 1}`)
     return {
-      author: requireString(
-        requireRecord(comment.user, `GitHub review comment ${index + 1} author`).login,
-        'GitHub review comment author login'
-      ),
+      author: parseActor(comment.user, `GitHub review comment ${index + 1} author`),
       body: requireString(comment.body, 'GitHub review comment body', true),
       path: requireString(comment.path, 'GitHub review comment path'),
       createdAt: requireTimestamp(comment.created_at, 'GitHub review comment creation timestamp')
     }
   })
+}
+
+function parseActor(value: unknown, label: string): string {
+  if (value === null) return DELETED_GITHUB_ACTOR
+  return requireString(requireRecord(value, label).login, `${label} login`)
 }
 
 function checkRunState(status: string, conclusion: string | null): GitHubCheckState {

@@ -150,6 +150,39 @@ test('keeps PR checks, reviews, conversation comments, and inline review comment
   })
 })
 
+test('represents deleted PR actors without discarding the remaining PR state', () => {
+  const response = JSON.parse(pullRequestResponse) as {
+    author: unknown
+    reviews: Array<{ author: unknown }>
+    comments: Array<{ author: unknown }>
+  }
+  response.author = null
+  response.reviews[0].author = null
+  response.comments[0].author = null
+  const reviewComments = JSON.parse(reviewCommentsResponse) as Array<Array<Record<string, unknown>>>
+  reviewComments[0][0].user = null
+
+  const pullRequest = parsePullRequest(
+    JSON.stringify(response),
+    JSON.stringify(reviewComments),
+    'skflowne/spade-fixture',
+    7
+  )
+
+  expect(pullRequest.author).toBe('Deleted user')
+  expect(pullRequest.reviews[0].author).toBe('Deleted user')
+  expect(pullRequest.comments[0].author).toBe('Deleted user')
+  expect(pullRequest.reviewComments[0].author).toBe('Deleted user')
+  expect(pullRequest.state).toBe('OPEN')
+  expect(pullRequest.checks[0]).toMatchObject({ name: 'build', state: 'passed' })
+  expect(pullRequest.reviews[0]).toMatchObject({ state: 'CHANGES_REQUESTED' })
+  expect(pullRequest.comments[0]).toMatchObject({ body: 'General PR comment.' })
+  expect(pullRequest.reviewComments[0]).toMatchObject({
+    body: 'Inline review comment.',
+    path: 'src/App.vue'
+  })
+})
+
 test('builds separate structured PR detail and inline-review-comment commands', async () => {
   const calls: string[][] = []
   const runner: GhCommandRunner = async (arguments_) => {
