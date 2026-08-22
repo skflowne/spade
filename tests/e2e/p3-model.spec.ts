@@ -95,6 +95,94 @@ test('moving a WorkItem member into an ordinary Group preserves semantic members
   expect(ledger.nodes[0]).toMatchObject({ groupId: 'group-2', workItemId: 'work-item-1' })
 })
 
+test('reattaching a resource places it in the destination Group while preserving WorkItem membership', () => {
+  let ledger = createInitialLedger('project-1', 'Prototype project')
+  ledger = apply(ledger, { type: 'create-work-item', name: 'Issue 17', task: 'Build shell' })
+  ledger = apply(ledger, { type: 'create-group', name: 'Review cluster' })
+  ledger = apply(ledger, {
+    type: 'attach-placeholder',
+    targetGroup: 'Issue 17',
+    nodeKind: 'agent',
+    title: 'Root agent',
+    resourceRef: agentRef
+  })
+
+  ledger = apply(ledger, {
+    type: 'attach-placeholder',
+    targetGroup: 'Review cluster',
+    nodeKind: 'agent',
+    title: 'Root agent',
+    resourceRef: agentRef
+  })
+
+  expect(ledger.nodes).toHaveLength(1)
+  expect(ledger.nodes[0]).toMatchObject({
+    groupId: 'group-2',
+    workItemId: 'work-item-1',
+    position: { x: 716, y: 196 }
+  })
+})
+
+test('repeated attachment within a Group preserves every member position', () => {
+  let ledger = createInitialLedger('project-1', 'Prototype project')
+  ledger = apply(ledger, { type: 'create-group', name: 'Review cluster' })
+  const secondAgentRef: ExternalResourceReference = {
+    provider: 'placeholder',
+    kind: 'agent',
+    id: 'agent-external-2',
+    revision: null
+  }
+  ledger = apply(ledger, {
+    type: 'attach-placeholder',
+    targetGroup: 'Review cluster',
+    nodeKind: 'agent',
+    title: 'First agent',
+    resourceRef: agentRef
+  })
+  ledger = apply(ledger, {
+    type: 'attach-placeholder',
+    targetGroup: 'Review cluster',
+    nodeKind: 'agent',
+    title: 'Second agent',
+    resourceRef: secondAgentRef
+  })
+  const positionsBefore = ledger.nodes.map(({ position }) => position)
+
+  ledger = apply(ledger, {
+    type: 'attach-placeholder',
+    targetGroup: 'Review cluster',
+    nodeKind: 'agent',
+    title: 'First agent',
+    resourceRef: agentRef
+  })
+
+  expect(ledger.nodes.map(({ position }) => position)).toEqual(positionsBefore)
+  expect(ledger.nodes[0].position).not.toEqual(ledger.nodes[1].position)
+})
+
+test('rejects reattaching a resource with a different node kind', () => {
+  let ledger = createInitialLedger('project-1', 'Prototype project')
+  ledger = apply(ledger, { type: 'create-work-item', name: 'Issue 17', task: 'Build shell' })
+  ledger = apply(ledger, {
+    type: 'attach-placeholder',
+    targetGroup: 'Issue 17',
+    nodeKind: 'agent',
+    title: 'Root agent',
+    resourceRef: agentRef
+  })
+
+  expect(() =>
+    apply(ledger, {
+      type: 'attach-placeholder',
+      targetGroup: 'Issue 17',
+      nodeKind: 'workspace',
+      title: 'Incorrect workspace',
+      resourceRef: agentRef
+    })
+  ).toThrow('Resource “placeholder:agent:agent-external-1” is already attached as agent, not workspace.')
+  expect(ledger.nodes[0]).toMatchObject({ kind: 'agent', title: 'Root agent' })
+})
+
 test('placeholder reconciliation and provenance connections are idempotent', () => {
   let ledger = createInitialLedger('project-1', 'Prototype project')
   ledger = apply(ledger, { type: 'create-work-item', name: 'Issue 17', task: 'Build shell' })

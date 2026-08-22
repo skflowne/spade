@@ -188,11 +188,24 @@ function putPlaceholder(
     sameResourceIdentity(resourceRef, command.resourceRef)
   )
   if (existing) {
+    if (existing.kind !== command.nodeKind) {
+      throw new Error(
+        `Resource “${command.resourceRef.provider}:${command.resourceRef.kind}:${command.resourceRef.id}” is already attached as ${existing.kind}, not ${command.nodeKind}.`
+      )
+    }
+    const members = ledger.nodes.filter(({ id, groupId }) => id !== existing.id && groupId === group.id).length
     const updated = {
       ...existing,
       groupId: group.id,
       workItemId: group.kind === 'work-item' ? group.id : existing.workItemId,
       title: requiredText(command.title, 'Placeholder title'),
+      position:
+        existing.groupId === group.id
+          ? existing.position
+          : {
+              x: group.position.x + 36 + (members % 2) * 244,
+              y: group.position.y + 76 + Math.floor(members / 2) * 140
+            },
       resourceRef: command.resourceRef
     }
     return {

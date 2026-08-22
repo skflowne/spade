@@ -1,6 +1,6 @@
 import { type ConnectionState, type PaseoAgent, type PaseoWorkspace } from '@getpaseo/client'
 import { DaemonClient } from '@getpaseo/client/internal/daemon-client'
-import { CheckoutAdapterError } from './spadePaseoCheckout'
+import { CheckoutAdapterError, type CheckoutMutationOutcome } from './spadePaseoCheckout'
 import type {
   CheckoutCommitResult,
   CheckoutPullRequestIdentity,
@@ -203,9 +203,9 @@ export class SpadePaseoAdapter {
     const workspaceById = new Map(workspacePages.flat().map((workspace) => [workspace.id, workspace]))
 
     for (const agentId of new Set([rootAgentId, ...references.agentIds])) {
+      if (agentById.has(agentId)) continue
       const result = await this.driver.fetchAgent(agentId)
       if (result) agentById.set(agentId, toAgentSnapshot(result.agent))
-      else agentById.delete(agentId)
     }
     for (const workspaceId of new Set(references.workspaceIds)) {
       const workspace = await this.fetchWorkspaceById(workspaceId)
@@ -280,33 +280,42 @@ export class SpadePaseoAdapter {
     }
   }
 
-  async checkoutCommit(workspaceId: string, message: string): Promise<CheckoutCommitResult> {
+  async checkoutCommit(workspaceId: string, message: string): Promise<CheckoutMutationOutcome<CheckoutCommitResult>> {
     const cwd = (await this.requireWorkspace(workspaceId)).workspaceDirectory
     const trimmedMessage = message.trim()
     if (!trimmedMessage) throw new CheckoutAdapterError('mutation', 'Commit message is required.')
     const result = await this.driver.checkoutCommit(cwd, { message: trimmedMessage, addAll: true })
     requireCheckoutMutation(result, cwd)
-    const commits = await this.driver.listCheckoutCommits(cwd)
-    const revision = latestCheckoutRevision(commits.commits)
-    if (!revision) {
-      throw new CheckoutAdapterError('mutation', 'Paseo committed the checkout but returned no revision.')
+    try {
+      const commits = await this.driver.listCheckoutCommits(cwd)
+      const revision = latestCheckoutRevision(commits.commits)
+      if (!revision) throw new Error('Paseo returned no revision.')
+      return { result: { revision }, warning: null }
+    } catch (error) {
+      return { result: null, warning: checkoutObservationWarning('committed', 'revision', error) }
     }
-    return { revision }
   }
 
-  async checkoutPush(workspaceId: string): Promise<CheckoutPushResult> {
+  async checkoutPush(workspaceId: string): Promise<CheckoutMutationOutcome<CheckoutPushResult>> {
     const cwd = (await this.requireWorkspace(workspaceId)).workspaceDirectory
     const result = await this.driver.checkoutPush(cwd)
     requireCheckoutMutation(result, cwd)
-    const status = await this.driver.getCheckoutStatus(cwd)
-    requireCheckoutCwd(status.cwd, cwd, 'mutation')
-    if (status.error) throw new CheckoutAdapterError('mutation', status.error.message)
-    if (!status.isGit || !status.currentBranch) {
-      throw new CheckoutAdapterError('mutation', 'Paseo pushed the checkout but returned no branch.')
-    }
-    return {
-      remote: upstreamRemote(status.upstreamRef),
-      branch: status.currentBranch
+    try {
+      const status = await this.driver.getCheckoutStatus(cwd)
+      requireCheckoutCwd(status.cwd, cwd, 'check')
+      if (status.error) throw new CheckoutAdapterError('check', status.error.message)
+      if (!status.isGit || !status.currentBranch) {
+        throw new CheckoutAdapterError('check', 'Paseo returned no pushed branch.')
+      }
+      return {
+        result: {
+          remote: upstreamRemote(status.upstreamRef),
+          branch: status.currentBranch
+        },
+        warning: null
+      }
+    } catch (error) {
+      return { result: null, warning: checkoutObservationWarning('pushed', 'remote branch', error) }
     }
   }
 
@@ -546,6 +555,18 @@ function requireCheckoutCwd(
   if (actual !== expected) {
     throw new CheckoutAdapterError(kind, 'Paseo returned checkout data for a different directory.')
   }
+}
+
+function checkoutObservationWarning(
+  action: string,
+  detail: string,
+  error: unknown
+): CheckoutAdapterError {
+  const message = error instanceof Error ? error.message : 'Paseo returned an invalid response.'
+  return new CheckoutAdapterError(
+    'check',
+    `Paseo ${action} the checkout, but SPADE could not read the resulting ${detail}: ${message}`
+  )
 }
 
 function requireCheckoutMutation(

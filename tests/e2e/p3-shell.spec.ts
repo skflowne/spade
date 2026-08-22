@@ -340,6 +340,16 @@ test('renders persisted native GitHub Issue and PullRequest nodes with shared ch
     await application.evaluate(({ ipcMain }, channel) => {
       ipcMain.removeHandler(channel)
       ipcMain.handle(channel, (_event, request: { type?: string }) => {
+        if (request.type === 'checkout-commit') {
+          return {
+            ok: true,
+            value: {
+              type: 'checkout-commit',
+              result: null,
+              warning: { kind: 'check', message: 'revision observation unavailable' }
+            }
+          }
+        }
         if (request.type !== 'checkout-status') {
           return { ok: false, error: { kind: 'invalid-request', message: 'UI evidence fixture.' } }
         }
@@ -383,6 +393,11 @@ test('renders persisted native GitHub Issue and PullRequest nodes with shared ch
     await expect(window.getByLabel('Checkout summary')).toContainText('spade-19-validation')
     await expect(window.getByLabel('Checkout summary')).toContainText('e1dbd2b6a7ec')
     await expect(window.getByRole('button', { name: 'Create/link PR' })).toBeVisible()
+    await window.getByRole('button', { name: 'Commit' }).click()
+    await expect(window.getByRole('status')).toContainText('Committed checkout; resulting revision is unavailable.')
+    await expect(window.getByRole('alert')).toContainText(
+      'partial: commit succeeded, but refresh failed: revision observation unavailable'
+    )
     await window.screenshot({ path: test.info().outputPath('p3-native-github-shell.png') })
   } finally {
     await application.close()

@@ -34,8 +34,16 @@ export type P3IntegrationSuccess =
   | { type: 'github-issue-create-work-item'; ledger: PrototypeLedger }
   | { type: 'github-pull-request-refresh'; ledger: PrototypeLedger }
   | { type: 'checkout-status'; status: CheckoutStatus }
-  | { type: 'checkout-commit'; result: CheckoutCommitResult }
-  | { type: 'checkout-push'; result: CheckoutPushResult }
+  | {
+      type: 'checkout-commit'
+      result: CheckoutCommitResult | null
+      warning: P3IntegrationError | null
+    }
+  | {
+      type: 'checkout-push'
+      result: CheckoutPushResult | null
+      warning: P3IntegrationError | null
+    }
   | {
       type: 'checkout-create-pull-request'
       pullRequest: CheckoutPullRequestIdentity
