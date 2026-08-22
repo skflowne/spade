@@ -288,7 +288,7 @@ test('validates the disposable checkout sequence through one adapter', async () 
   ])
 })
 
-test('uses one daemon driver while exhausting pages and refetching exact opaque references', async () => {
+test('uses listed agent snapshots when exact lookup disagrees and probes absent references', async () => {
   const calls = {
     connect: 0,
     close: 0,
@@ -336,7 +336,8 @@ test('uses one daemon driver while exhausting pages and refetching exact opaque 
     createWorkspace: async () => ({ workspace: publicWorkspace(workspaces[1]), error: null }),
     fetchAgent: async (id: string) => {
       calls.agentRefreshes.push(id)
-      const snapshot = [...agents, createdAgent].find((candidate) => candidate.id === id)
+      if (id === 'root' || id === 'child') throw new Error('Agent not found')
+      const snapshot = createdAgent.id === id ? createdAgent : undefined
       return snapshot ? { agent: publicAgent(snapshot), project: null } : null
     },
     archiveAgent: async (id: string) => {
@@ -391,7 +392,7 @@ test('uses one daemon driver while exhausting pages and refetching exact opaque 
   expect((await adapter.attachAgent('created'))?.id).toBe('created')
   expect(await adapter.archiveAgent('created')).toBe('2026-08-20T10:02:00Z')
   const snapshot = await adapter.fetchAuthoritative('root', {
-    agentIds: ['child'],
+    agentIds: ['child', 'missing-agent'],
     workspaceIds: ['workspace-b']
   })
   for (const type of ['agent_update', 'workspace_update', 'providers_snapshot_update']) {
@@ -405,7 +406,7 @@ test('uses one daemon driver while exhausting pages and refetching exact opaque 
   expect(calls.workspaceLists.some((options) =>
     (options as { page?: { cursor?: string } }).page?.cursor === 'workspaces-2'
   )).toBe(true)
-  expect(calls.agentRefreshes).toEqual(['created', 'root', 'child'])
+  expect(calls.agentRefreshes).toEqual(['created', 'missing-agent'])
   expect(calls.agentArchives).toEqual(['created'])
   expect(calls.providerReadyCwds).toEqual(['/opaque/workspace-a'])
   expect(calls.spawnOptions).toEqual([{
@@ -421,6 +422,7 @@ test('uses one daemon driver while exhausting pages and refetching exact opaque 
   }])
   expect(calls.timelines.sort()).toEqual(['child', 'root'])
   expect(snapshot.agentPages[0].map(({ id }) => id).sort()).toEqual(['child', 'root'])
+  expect(snapshot.agentPages[0]).not.toContainEqual(expect.objectContaining({ id: 'missing-agent' }))
   expect(snapshot.providerSubagents).toEqual([])
   expect(notifications.filter(({ type }) => type === 'refresh')).toHaveLength(3)
 })

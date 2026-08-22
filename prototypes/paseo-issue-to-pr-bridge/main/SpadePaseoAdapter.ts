@@ -203,9 +203,9 @@ export class SpadePaseoAdapter {
     const workspaceById = new Map(workspacePages.flat().map((workspace) => [workspace.id, workspace]))
 
     for (const agentId of new Set([rootAgentId, ...references.agentIds])) {
+      if (agentById.has(agentId)) continue
       const result = await this.driver.fetchAgent(agentId)
       if (result) agentById.set(agentId, toAgentSnapshot(result.agent))
-      else agentById.delete(agentId)
     }
     for (const workspaceId of new Set(references.workspaceIds)) {
       const workspace = await this.fetchWorkspaceById(workspaceId)
