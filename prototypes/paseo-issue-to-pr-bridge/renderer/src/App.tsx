@@ -537,11 +537,11 @@ export function App(): React.JSX.Element {
       message: commitMessage
     })
     if (response?.type === 'checkout-commit') {
+      await refreshCheckout()
       setNotice(response.result
         ? `Committed ${response.result.revision.slice(0, 12)}.`
         : 'Committed checkout; resulting revision is unavailable.')
       if (response.warning) setError(`partial: commit succeeded, but refresh failed: ${response.warning.message}`)
-      await refreshCheckout()
     }
   }
 
