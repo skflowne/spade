@@ -202,10 +202,7 @@ function putPlaceholder(
       position:
         existing.groupId === group.id
           ? existing.position
-          : {
-              x: group.position.x + 36 + (members % 2) * 244,
-              y: group.position.y + 76 + Math.floor(members / 2) * 140
-            },
+          : groupMemberPosition(group, members),
       resourceRef: command.resourceRef
     }
     return {
@@ -233,10 +230,7 @@ function putPlaceholder(
           workItemId: group.kind === 'work-item' ? group.id : null,
           kind: command.nodeKind,
           title: requiredText(command.title, 'Placeholder title'),
-          position: {
-            x: group.position.x + 36 + (members % 2) * 244,
-            y: group.position.y + 76 + Math.floor(members / 2) * 140
-          },
+          position: groupMemberPosition(group, members),
           resourceRef: command.resourceRef,
           paseo: null
         }
@@ -298,6 +292,13 @@ function setWorkItemStatus(
 
 function requireNode(ledger: PrototypeLedger, id: string): void {
   if (!ledger.nodes.some((node) => node.id === id)) throw new Error(`No node has stable ID “${id}”.`)
+}
+
+export function groupMemberPosition(group: PrototypeGroup, memberIndex: number): { x: number; y: number } {
+  return {
+    x: group.position.x + 36 + (memberIndex % 2) * 244,
+    y: group.position.y + 76 + Math.floor(memberIndex / 2) * 140
+  }
 }
 
 function groupPosition(index: number): { x: number; y: number } {

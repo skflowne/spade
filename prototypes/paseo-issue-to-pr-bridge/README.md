@@ -27,7 +27,7 @@ The renderer exposes generic controls to select/open a checkout, create or attac
 
 - `main/SpadePaseoAdapter.ts` is the only `@getpaseo/client` boundary. It owns one exported internal `DaemonClient` because checkout RPCs are absent from the public 0.4 facade; lifecycle and checkout operations share that one connection.
 - `main/commandService.ts` serializes commands, persistence, adapter notifications, startup restoration, reconnect refetch, and publication. Refresh notifications are buffered/coalesced through initialization and reconnect; a reconnect snapshot completes before one pending post-authoritative refresh.
-- A successful external spawn persists its exact opaque identity and root binding before the fallible authoritative fetch.
+- A successful external spawn or attach persists its exact opaque identity and root binding before the fallible authoritative fetch.
 - One opaque root belongs to at most one WorkItem. Rebinding transfers ownership; persisted duplicate roots are rejected.
 - `shared/paseoReconciliation.ts` owns recursive explicit-parent closure, actual-parent `delegated` edges, workspace dedupe, missing-resource preservation, managed/provider-native identity separation, and bounded timeline normalization.
 - Main forwards one `PrototypeCommandService.subscribe()` stream per window. Command-specific sends do not exist, so command and adapter-originated snapshots have one publication authority and window cleanup.
@@ -65,7 +65,7 @@ Automated fixtures cover:
 - sequenced, unsequenced, shuffled, duplicate, mixed, and bounded timeline events;
 - v1-to-v2 migration and malformed/duplicate ledger rejection;
 - startup/reconnect buffering and post-authoritative refresh ordering;
-- successful-spawn durability before failed refresh;
+- successful-spawn and attach durability before failed refresh;
 - global root-binding transfer and caller/resource failure classification;
 - one concrete adapter/daemon-driver composition, exact workspace-to-directory resolution, checkout result/error mapping, and one disposable exactly-once snapshot publication path;
 - live renderer states, capability failures, exact resource facts, conversations, expansion defaults/user changes, IPC guards, sandboxing, and relaunch persistence.
@@ -208,8 +208,8 @@ Main injects the same concrete `SpadePaseoAdapter` instance into `PrototypeComma
 | Checkout action DTOs and selection binding | `shared/checkout.ts` | status/diff totals, mutation results, PR identity/status, stale-response guard |
 | Renderer bridge | `shared/ipc.ts`, `shared/integration.ts` | narrow channels, requests/results, runtime validation |
 | GitHub provider adapter | `main/spadeGitHubAdapter.ts` | structured `gh` reads and classified errors |
-| Checkout provider port | `main/spadePaseoCheckout.ts` | five small opaque-workspace methods for #18's adapter |
-| Integration orchestration | `main/integrationService.ts` | provider calls, partial PR state, durable reconciliation |
+| Checkout provider port | `main/spadePaseoCheckout.ts` | five small opaque-workspace methods for #18's adapter; commit/push return a `CheckoutMutationOutcome` that stays successful once the provider confirms the mutation, carrying a warning when the follow-up observation fails |
+| Integration orchestration | `main/integrationService.ts` | provider calls, partial commit/push/PR state, durable reconciliation |
 | Persistence | `main/ledgerStore.ts`, `main/commandService.ts` | validated atomic replacement and serialized publication |
 
 ## Direct validation record
