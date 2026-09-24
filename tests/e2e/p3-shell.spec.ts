@@ -390,6 +390,58 @@ test('renders persisted native GitHub Issue and PullRequest nodes with shared ch
   }
 })
 
+test('reports provider-confirmed commit and push as partial success when observation fails', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'spade-p3-checkout-partial-'))
+  const ledgerPath = join(directory, 'ledger.json')
+  let ledger = applyPrototypeCommand(createInitialLedger('project-p3', 'Fixture project'), {
+    type: 'create-work-item',
+    name: 'Fixture checkout',
+    task: 'Commit and push the fixture.',
+    status: 'active'
+  }).ledger
+  ledger = applyPrototypeCommand(ledger, {
+    type: 'attach-placeholder',
+    targetGroup: 'work-item-1',
+    nodeKind: 'workspace',
+    title: 'Fixture checkout',
+    resourceRef: { provider: 'paseo', kind: 'workspace', id: 'workspace-opaque-1', revision: null }
+  }).ledger
+  await writeFile(ledgerPath, `${JSON.stringify(ledger, null, 2)}\n`, 'utf8')
+
+  const application = await launch(ledgerPath)
+  try {
+    const window = await application.firstWindow()
+    await application.evaluate(({ ipcMain }, channel) => {
+      ipcMain.removeHandler(channel)
+      ipcMain.handle(channel, (_event, request: { type?: string }) => {
+        const warning = { kind: 'check', message: 'observation unavailable' }
+        if (request.type === 'checkout-commit') {
+          return { ok: true, value: { type: 'checkout-commit', result: null, warning } }
+        }
+        if (request.type === 'checkout-push') {
+          return { ok: true, value: { type: 'checkout-push', result: null, warning } }
+        }
+        return { ok: false, error: { kind: 'check', message: 'status unavailable' } }
+      })
+    }, P3_INTEGRATION_CHANNEL)
+
+    await window.getByRole('button', { name: 'Commit' }).click()
+    await expect(window.getByRole('status')).toContainText('Committed checkout; resulting revision is unavailable.')
+    await expect(window.getByRole('alert')).toContainText(
+      'partial: commit succeeded, but refresh failed: observation unavailable'
+    )
+
+    await window.getByRole('button', { name: 'Push' }).click()
+    await expect(window.getByRole('status')).toContainText('Pushed checkout; resulting remote branch is unavailable.')
+    await expect(window.getByRole('alert')).toContainText(
+      'partial: push succeeded, but refresh failed: observation unavailable'
+    )
+  } finally {
+    await application.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 test('rejects malformed renderer commands at runtime', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'spade-p3-ipc-'))
   const ledgerPath = join(directory, 'ledger.json')

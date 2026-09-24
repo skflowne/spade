@@ -1,4 +1,4 @@
-import { applyPrototypeCommand, type CommandResult } from './commands'
+import { applyPrototypeCommand, groupMemberPosition, type CommandResult } from './commands'
 import { githubResourceId, type GitHubIssue, type GitHubPullRequest } from './github'
 import {
   sameResourceIdentity,
@@ -77,7 +77,10 @@ export function reconcileGitHubIssue(
     workItemId,
     kind: 'github-issue',
     title: issue.title,
-    position: { x: group.position.x + 36, y: group.position.y + 76 },
+    position: groupMemberPosition(
+      group,
+      next.nodes.filter(({ groupId }) => groupId === group.id).length
+    ),
     resourceRef: reference,
     paseo: null,
     issue

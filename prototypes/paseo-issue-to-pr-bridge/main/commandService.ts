@@ -180,6 +180,7 @@ export class PrototypeCommandService {
           workItemId,
           agent.id
         )
+        await this.persistAndPublish(bound.ledger)
         return this.refreshBinding(bound.ledger, bound.binding)
       }
       case 'refresh-paseo': {

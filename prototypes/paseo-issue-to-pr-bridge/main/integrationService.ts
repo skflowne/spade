@@ -71,17 +71,31 @@ export class P3IntegrationService {
           return { ok: true, value: { type: request.type, status } }
         }
         case 'checkout-commit': {
-          const result = await this.requireCheckout().checkoutCommit(
+          const outcome = await this.requireCheckout().checkoutCommit(
             this.workspaceId(request.workspaceNodeId),
             request.message.trim()
           )
-          return { ok: true, value: { type: request.type, result } }
+          return {
+            ok: true,
+            value: {
+              type: request.type,
+              result: outcome.result,
+              warning: outcome.warning ? integrationError(outcome.warning, 'check') : null
+            }
+          }
         }
         case 'checkout-push': {
-          const result = await this.requireCheckout().checkoutPush(
+          const outcome = await this.requireCheckout().checkoutPush(
             this.workspaceId(request.workspaceNodeId)
           )
-          return { ok: true, value: { type: request.type, result } }
+          return {
+            ok: true,
+            value: {
+              type: request.type,
+              result: outcome.result,
+              warning: outcome.warning ? integrationError(outcome.warning, 'check') : null
+            }
+          }
         }
         case 'checkout-create-pull-request': {
           const pullRequest = validatePullRequestIdentity(

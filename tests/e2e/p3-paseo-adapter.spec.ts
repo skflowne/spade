@@ -241,11 +241,11 @@ test('validates the disposable checkout sequence through one adapter', async () 
     },
     checkoutCommit: async () => {
       calls.push('commit')
-      return { revision: 'revision-after' }
+      return { result: { revision: 'revision-after' }, warning: null }
     },
     checkoutPush: async () => {
       calls.push('push')
-      return { remote: 'origin', branch: 'spade-19-validation' }
+      return { result: { remote: 'origin', branch: 'spade-19-validation' }, warning: null }
     },
     checkoutCreatePullRequest: async () => {
       calls.push('pr-create')
@@ -288,7 +288,7 @@ test('validates the disposable checkout sequence through one adapter', async () 
   ])
 })
 
-test('uses one daemon driver while exhausting pages and refetching exact opaque references', async () => {
+test('uses listed agent snapshots when exact lookup disagrees and probes absent references', async () => {
   const calls = {
     connect: 0,
     close: 0,
@@ -336,7 +336,8 @@ test('uses one daemon driver while exhausting pages and refetching exact opaque 
     createWorkspace: async () => ({ workspace: publicWorkspace(workspaces[1]), error: null }),
     fetchAgent: async (id: string) => {
       calls.agentRefreshes.push(id)
-      const snapshot = [...agents, createdAgent].find((candidate) => candidate.id === id)
+      if (id === 'root' || id === 'child') throw new Error('Agent not found')
+      const snapshot = createdAgent.id === id ? createdAgent : undefined
       return snapshot ? { agent: publicAgent(snapshot), project: null } : null
     },
     archiveAgent: async (id: string) => {
@@ -391,7 +392,7 @@ test('uses one daemon driver while exhausting pages and refetching exact opaque 
   expect((await adapter.attachAgent('created'))?.id).toBe('created')
   expect(await adapter.archiveAgent('created')).toBe('2026-08-20T10:02:00Z')
   const snapshot = await adapter.fetchAuthoritative('root', {
-    agentIds: ['child'],
+    agentIds: ['child', 'missing-agent'],
     workspaceIds: ['workspace-b']
   })
   for (const type of ['agent_update', 'workspace_update', 'providers_snapshot_update']) {
@@ -405,7 +406,7 @@ test('uses one daemon driver while exhausting pages and refetching exact opaque 
   expect(calls.workspaceLists.some((options) =>
     (options as { page?: { cursor?: string } }).page?.cursor === 'workspaces-2'
   )).toBe(true)
-  expect(calls.agentRefreshes).toEqual(['created', 'root', 'child'])
+  expect(calls.agentRefreshes).toEqual(['created', 'missing-agent'])
   expect(calls.agentArchives).toEqual(['created'])
   expect(calls.providerReadyCwds).toEqual(['/opaque/workspace-a'])
   expect(calls.spawnOptions).toEqual([{
@@ -421,6 +422,7 @@ test('uses one daemon driver while exhausting pages and refetching exact opaque 
   }])
   expect(calls.timelines.sort()).toEqual(['child', 'root'])
   expect(snapshot.agentPages[0].map(({ id }) => id).sort()).toEqual(['child', 'root'])
+  expect(snapshot.agentPages[0]).not.toContainEqual(expect.objectContaining({ id: 'missing-agent' }))
   expect(snapshot.providerSubagents).toEqual([])
   expect(notifications.filter(({ type }) => type === 'refresh')).toHaveLength(3)
 })
@@ -599,11 +601,12 @@ test('maps checkout operations through the same opaque-workspace daemon driver',
     conflicts: null
   })
   await expect(adapter.checkoutCommit('workspace-checkout', 'Fixture commit')).resolves.toEqual({
-    revision: 'revision-after-commit'
+    result: { revision: 'revision-after-commit' },
+    warning: null
   })
   await expect(adapter.checkoutPush('workspace-checkout')).resolves.toEqual({
-    remote: 'origin',
-    branch: 'spade-19-checkout'
+    result: { remote: 'origin', branch: 'spade-19-checkout' },
+    warning: null
   })
   await expect(adapter.checkoutCreatePullRequest('workspace-checkout', {
     title: 'Fixture PR',
@@ -698,7 +701,8 @@ test('preserves base-branch HEAD for status and successful commits', async () =>
     headRevision: 'base-revision-before-commit'
   })
   await expect(adapter.checkoutCommit('workspace-checkout', 'Base commit')).resolves.toEqual({
-    revision: 'base-revision-after-commit'
+    result: { revision: 'base-revision-after-commit' },
+    warning: null
   })
 })
 
@@ -741,6 +745,34 @@ test('classifies missing workspaces and daemon checkout failures', async () => {
     kind: 'mutation',
     message: 'push rejected'
   } satisfies Partial<CheckoutAdapterError>)
+})
+
+test('preserves confirmed commit and push success when follow-up observations fail', async () => {
+  const cwd = '/opaque/workspace-checkout'
+  const adapter = new SpadePaseoAdapter({
+    url: 'ws://127.0.0.1:7677/ws',
+    driver: {
+      fetchWorkspaces: async () => ({
+        requestId: 'workspaces',
+        entries: [publicWorkspace(workspace('workspace-checkout'))],
+        pageInfo: { nextCursor: null, prevCursor: null, hasMore: false }
+      }),
+      checkoutCommit: async () => ({ cwd, requestId: 'commit', success: true, error: null }),
+      checkoutPush: async () => ({ cwd, requestId: 'push', success: true, error: null }),
+      listCheckoutCommits: async () => { throw new Error('timeline unavailable') },
+      getCheckoutStatus: async () => { throw new Error('status unavailable') }
+    } as unknown as PaseoDaemonDriver,
+    pollIntervalMs: 0
+  })
+
+  await expect(adapter.checkoutCommit('workspace-checkout', 'Fixture commit')).resolves.toEqual({
+    result: null,
+    warning: expect.objectContaining({ kind: 'check', message: expect.stringContaining('committed') })
+  })
+  await expect(adapter.checkoutPush('workspace-checkout')).resolves.toEqual({
+    result: null,
+    warning: expect.objectContaining({ kind: 'check', message: expect.stringContaining('pushed') })
+  })
 })
 
 test('rejects mismatched pull-request identities and unknown states from the daemon', async () => {
@@ -1000,6 +1032,36 @@ test('persists a spawned opaque identity before refresh and keeps command failur
     agentId: 'missing-root'
   })).rejects.toThrow('Paseo agent missing-root is missing')
   expect(service.snapshot().paseo).toMatchObject({ connection: 'connected', error: null })
+  await service.close()
+})
+
+test('persists an attached opaque identity before refresh failure', async () => {
+  let ledger = createInitialLedger('project-1', 'Prototype project')
+  ledger = applyPrototypeCommand(ledger, {
+    type: 'create-work-item',
+    name: 'Issue 18',
+    task: 'Integrate Paseo'
+  }).ledger
+  const state: { stored: PrototypeLedger | null } = { stored: null }
+  const adapter = new FakeAdapter()
+  const service = new PrototypeCommandService({
+    load: async () => state.stored,
+    save: async (next) => { state.stored = structuredClone(next) }
+  }, adapter)
+  await service.initialize(ledger)
+
+  adapter.failNextFetch = true
+  await expect(service.execute({
+    type: 'attach-agent',
+    targetGroup: 'work-item-1',
+    agentId: 'root'
+  })).rejects.toThrow('injected authoritative refresh failure')
+
+  expect(service.snapshot().paseo.bindings).toEqual([
+    { workItemId: 'work-item-1', rootAgentId: 'root' }
+  ])
+  expect(service.snapshot().nodes.find(({ resourceRef }) => resourceRef.id === 'root')).toBeDefined()
+  expect(state.stored).toEqual(service.snapshot())
   await service.close()
 })
 

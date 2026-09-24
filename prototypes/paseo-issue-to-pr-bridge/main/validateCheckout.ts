@@ -63,16 +63,19 @@ export async function runCheckoutValidation(
       throw new Error('Checkout validation requires at least one disposable file change.')
     }
 
-    const commit = await adapter.checkoutCommit(workspace.id, commitMessage)
+    const commitOutcome = await adapter.checkoutCommit(workspace.id, commitMessage)
+    if (!commitOutcome.result) throw new Error(`Checkout committed but revision refresh failed: ${commitOutcome.warning?.message}`)
     const afterCommit = await adapter.checkoutStatus(workspace.id)
-    if (afterCommit.headRevision !== commit.revision) {
+    if (afterCommit.headRevision !== commitOutcome.result.revision) {
       throw new Error('Checkout validation status did not return the committed HEAD revision.')
     }
     if (afterCommit.changedFiles !== 0) {
       throw new Error('Checkout validation commit left disposable file changes behind.')
     }
 
-    const push = await adapter.checkoutPush(workspace.id)
+    const pushOutcome = await adapter.checkoutPush(workspace.id)
+    if (!pushOutcome.result) throw new Error(`Checkout pushed but branch refresh failed: ${pushOutcome.warning?.message}`)
+    const push = pushOutcome.result
     if (push.remote !== remote || push.branch !== afterCommit.branch) {
       throw new Error('Checkout validation push returned a different remote or branch.')
     }
@@ -106,7 +109,7 @@ export async function runCheckoutValidation(
         additions: beforeCommit.additions,
         deletions: beforeCommit.deletions
       },
-      commitRevision: commit.revision,
+      commitRevision: commitOutcome.result.revision,
       afterCommit: {
         headRevision: afterCommit.headRevision,
         changedFiles: afterCommit.changedFiles

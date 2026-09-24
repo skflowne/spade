@@ -17,10 +17,15 @@ export class CheckoutAdapterError extends Error {
 }
 
 // The single SpadePaseoAdapter introduced by #18 implements this checkout-only surface.
+export type CheckoutMutationOutcome<Result> = {
+  result: Result | null
+  warning: CheckoutAdapterError | null
+}
+
 export type SpadePaseoCheckoutAdapter = {
   checkoutStatus(workspaceId: string): Promise<CheckoutStatus>
-  checkoutCommit(workspaceId: string, message: string): Promise<CheckoutCommitResult>
-  checkoutPush(workspaceId: string): Promise<CheckoutPushResult>
+  checkoutCommit(workspaceId: string, message: string): Promise<CheckoutMutationOutcome<CheckoutCommitResult>>
+  checkoutPush(workspaceId: string): Promise<CheckoutMutationOutcome<CheckoutPushResult>>
   checkoutCreatePullRequest(
     workspaceId: string,
     input: CreateCheckoutPullRequestInput
