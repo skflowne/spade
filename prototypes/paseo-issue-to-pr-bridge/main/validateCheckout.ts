@@ -1,4 +1,4 @@
-import { SpadePaseoAdapter } from './SpadePaseoAdapter'
+import { PASEO_CLIENT_APP_VERSION, SpadePaseoAdapter } from './SpadePaseoAdapter'
 import {
   emitValidationResult,
   errorMessage,
@@ -6,7 +6,7 @@ import {
   requiredEnvironment
 } from './validationSupport'
 
-const CLIENT_VERSION = '0.4.0'
+const CLIENT_VERSION = PASEO_CLIENT_APP_VERSION
 
 type CheckoutValidationAdapter = Pick<
   SpadePaseoAdapter,
