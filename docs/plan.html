@@ -30,7 +30,7 @@
         <p>Product direction, proposed capabilities, prototypes, and open decisions.</p>
       </header>
       <article class="docs-content">
-<p><em>Last updated: 2026-08-21</em></p>
+<p><em>Last updated: 2026-09-24</em></p>
 <h2 id="1-product-vision">1. Product vision</h2>
 <p>SPADE (Spatial Agent Development Environment) is a desktop, graph/canvas-based development environment built around a spatial representation of agent work.</p>
 <p>The canvas is a <strong>mind map of ongoing work</strong>, not an executable dataflow engine. Nodes represent live resources and durable artifacts: agent conversations, terminals, workspaces, diffs, browsers, files, whiteboards, and later task boards. Directed connections record where work came from, what it references, and how it branched over time.</p>
@@ -115,7 +115,7 @@
 </tr>
 <tr>
 <td>Whiteboard node</td>
-<td>Deferred until the core workflow proves a real need; tldraw production use would require a commercial/hobby license key</td>
+<td>Deferred until the core workflow proves a real need</td>
 </tr>
 <tr>
 <td>Agent control plane</td>
@@ -605,7 +605,6 @@ const defaultConversationExpansion = {
 <li>Persist the tldraw document, not the live editor instance.</li>
 <li>Allow project or work-item scope; bind it to a workspace only when useful.</li>
 <li>Give agents a textual/shape summary or explicit export instead of automatically attaching the complete scene.</li>
-<li>Production deployment would require a tldraw production license key under its current source-available license.</li>
 </ul>
 <h3 id="7-7-task-board-later">7.7 Task board, later</h3>
 <p>A Trello-style board is a SPADE-owned structured entity:</p>
@@ -851,56 +850,7 @@ const defaultConversationExpansion = {
 <p>Keep Electron as the baseline and prototype <code>&lt;webview&gt;</code> inside one transformed React Flow node. Tauri does not solve the defining problem, so do not switch shells before this result. If <code>&lt;webview&gt;</code> fails, compare bounds-synchronized selected-node overlays in Electron and Tauri only if Tauri's footprint/system-webview trade-off is otherwise valuable.</p>
 <p>The exact browser-node implementation remains blocked on this prototype.</p>
 <h2 id="17-licensing">17. Licensing</h2>
-<h3 id="paseo-agpl-3-0">Paseo AGPL-3.0</h3>
-<p>Paseo is licensed AGPL-3.0. AGPL does not prohibit charging for software or hosting, but it affects source obligations.</p>
-<p>Practical models:</p>
-<ol>
-<li>
-<p><strong>Open-source/AGPL-compatible SPADE</strong></p>
-<ul>
-<li>The simplest licensing alignment when importing Paseo client/protocol code.</li>
-<li>Paid hosting, support and distribution remain possible.</li>
-</ul>
-</li>
-<li>
-<p><strong>Paid desktop bundle with Paseo component</strong></p>
-<ul>
-<li>Shipping an AGPL-covered daemon requires preserving notices/license and providing corresponding source as required.</li>
-<li>Whether a proprietary frontend remains legally separate is implementation- and jurisdiction-dependent.</li>
-</ul>
-</li>
-<li>
-<p><strong>Hosted service using an unmodified separate Paseo daemon</strong></p>
-<ul>
-<li>Cleaner than modifying or embedding Paseo.</li>
-<li>If the daemon is modified and remote users interact with it, AGPL section 13 requires a prominent source offer for the deployed corresponding source.</li>
-</ul>
-</li>
-<li>
-<p><strong>Proprietary SPADE importing <code>@getpaseo/client</code> or protocol code</strong></p>
-<ul>
-<li>High legal uncertainty and conservative copyleft risk because the frontend bundles/links AGPL-covered code.</li>
-<li>A process or WebSocket boundary is not automatically a guaranteed legal separation.</li>
-</ul>
-</li>
-</ol>
-<h3 id="licensing-gate">Licensing gate</h3>
-<p>Before importing Paseo packages into a product intended to remain proprietary, bundling Paseo, or operating a modified hosted daemon:</p>
-<ul>
-<li>Ask Paseo whether a commercial license/exception is available.</li>
-<li>Verify the exact package/version licenses.</li>
-<li>Obtain qualified legal advice on combined-work and source scope.</li>
-</ul>
-<p>This document records license facts and risks, not legal advice.</p>
-<h3 id="tldraw">tldraw</h3>
-<p>The current tldraw SDK is source-available rather than permissively open source:</p>
-<ul>
-<li>Internal development/testing is allowed.</li>
-<li>Production use is prohibited without a trial, hobby, or commercial license key.</li>
-<li>The license includes technical enforcement and license-compliance usage reporting provisions.</li>
-<li>Current commercial pricing is value-based and requires contacting tldraw; startup discounts and a hobby path are advertised.</li>
-</ul>
-<p>Using tldraw in prototypes is permitted, but shipping it is a product-cost and licensing decision. Pin and re-check the exact package license before release.</p>
+<p>Licensing is out of scope for now. The priority is a SPADE that works, so Paseo and tldraw license terms do not gate prototypes, integration, or architecture decisions.</p>
 <h2 id="18-paseo-versus-emdash">18. Paseo versus Emdash</h2>
 <p>Current public evidence does <strong>not</strong> establish that Paseo is based on or forked from Emdash.</p>
 <ul>
@@ -1068,8 +1018,6 @@ const defaultConversationExpansion = {
 </ol>
 <h2 id="21-open-decisions">21. Open decisions</h2>
 <ol>
-<li>Must SPADE remain proprietary-compatible, or is AGPL-compatible open source acceptable?</li>
-<li>Can Paseo provide a commercial license for its client/protocol packages?</li>
 <li>Does Electron <code>&lt;webview&gt;</code> survive transformed-node interaction tests, or must browser content use a selected overlay/window?</li>
 <li>Is a base diff pinned to creation revision or tracked through merge-base with a moving base branch?</li>
 <li>Does spawning an issue agent always create a new worktree, or offer existing checkout/new worktree choices?</li>
@@ -1077,7 +1025,6 @@ const defaultConversationExpansion = {
 <li>How should non-resumable provider-native subagents be represented?</li>
 <li>What is the acceptable active-node budget for terminal/editor/browser renderers?</li>
 <li>What causes the P3 exact-agent reconciliation failure despite compatible client call shapes?</li>
-<li>If whiteboards become useful, is a tldraw production license and its value-based commercial pricing acceptable?</li>
 </ol>
 <h2 id="22-principal-risks">22. Principal risks</h2>
 <table>
@@ -1089,11 +1036,6 @@ const defaultConversationExpansion = {
 </tr>
 </thead>
 <tbody>
-<tr>
-<td>Paseo AGPL conflicts with proprietary product model</td>
-<td>Blocker before product distribution</td>
-<td>Commercial license or legal review; keep daemon unmodified and boundary isolated meanwhile</td>
-</tr>
 <tr>
 <td>Browser cannot behave like a normal transformed React Flow node</td>
 <td>High</td>
@@ -1140,7 +1082,7 @@ const defaultConversationExpansion = {
 <td>Typed actions and projections; stabilize through prototypes</td>
 </tr>
 <tr>
-<td>tldraw production license cost/terms or nested interaction limitations</td>
+<td>tldraw nested interaction limitations</td>
 <td>Deferred</td>
 <td>Do not integrate until workflow evidence justifies it</td>
 </tr>
@@ -1152,7 +1094,6 @@ const defaultConversationExpansion = {
 <li>Paseo architecture: <a href="https://github.com/getpaseo/paseo/blob/main/docs/architecture.md">https://github.com/getpaseo/paseo/blob/main/docs/architecture.md</a></li>
 <li>Paseo data model: <a href="https://github.com/getpaseo/paseo/blob/main/docs/data-model.md">https://github.com/getpaseo/paseo/blob/main/docs/data-model.md</a></li>
 <li>Paseo plugins: <a href="https://github.com/getpaseo/paseo/blob/main/docs/plugins.md">https://github.com/getpaseo/paseo/blob/main/docs/plugins.md</a></li>
-<li>Paseo license: <a href="https://github.com/getpaseo/paseo/blob/main/LICENSE">https://github.com/getpaseo/paseo/blob/main/LICENSE</a></li>
 <li>Emdash repository: <a href="https://github.com/generalaction/emdash">https://github.com/generalaction/emdash</a></li>
 <li>React Flow sub-flows/groups: <a href="https://reactflow.dev/learn/layouting/sub-flows">https://reactflow.dev/learn/layouting/sub-flows</a></li>
 <li>React Flow instance/navigation: <a href="https://reactflow.dev/api-reference/types/react-flow-instance">https://reactflow.dev/api-reference/types/react-flow-instance</a></li>
@@ -1163,10 +1104,6 @@ const defaultConversationExpansion = {
 <li>Electron WebContentsView: <a href="https://www.electronjs.org/docs/latest/api/web-contents-view">https://www.electronjs.org/docs/latest/api/web-contents-view</a></li>
 <li>Tauri Webview API: <a href="https://v2.tauri.app/reference/javascript/api/namespacewebview/">https://v2.tauri.app/reference/javascript/api/namespacewebview/</a></li>
 <li>Electron webview tag warning: <a href="https://www.electronjs.org/docs/latest/api/webview-tag">https://www.electronjs.org/docs/latest/api/webview-tag</a></li>
-<li>tldraw license: <a href="https://github.com/tldraw/tldraw/blob/main/LICENSE.md">https://github.com/tldraw/tldraw/blob/main/LICENSE.md</a></li>
-<li>tldraw pricing: <a href="https://tldraw.dev/pricing">https://tldraw.dev/pricing</a></li>
-<li>GNU AGPLv3: <a href="https://www.gnu.org/licenses/agpl-3.0.en.html">https://www.gnu.org/licenses/agpl-3.0.en.html</a></li>
-<li>GNU GPL FAQ: <a href="https://www.gnu.org/licenses/gpl-faq.html">https://www.gnu.org/licenses/gpl-faq.html</a></li>
 </ul>
         <footer class="docs-footer">SPADE documentation</footer>
       </article>
