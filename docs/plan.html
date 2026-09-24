@@ -550,7 +550,7 @@ const defaultConversationExpansion = {
 <li>Managed subagents appear as collapsed connected conversation nodes with <code>delegated</code> edges.</li>
 <li>Expanding follows or centers the linked node.</li>
 <li>The parent/subagent structure is a view over normal canvas nodes and edges, not a second graph model.</li>
-<li>Provider-native subagents that are not independently resumable may need a lighter virtual node. Prototype Paseo identity/event behavior before fixing this model.</li>
+<li>Provider-native subagents collapse into their parent agent node as a subagent list. Each entry can open its conversation on demand as a <code>delegated</code> node; they are not placed on the canvas by default.</li>
 </ul>
 <h3 id="7-2-terminal">7.2 Terminal</h3>
 <ul>
@@ -623,15 +623,15 @@ const defaultConversationExpansion = {
 <li>User selects a Project or WorkItem in the activity sidebar and SPADE jumps to its container. A missing Project is opened from an explicit host and root folder.</li>
 <li>User opens a native GitHub Issue entity, or creates an ad-hoc objective.</li>
 <li>A typed command creates a WorkItem with explicit task, source, and status.</li>
-<li>A separate typed command creates or attaches a workspace and spawns or attaches a root agent into that exact WorkItem ID with caller-selected cwd, provider, model, and prompt.</li>
+<li>A separate typed command creates or attaches a workspace and spawns or attaches a root agent into that exact WorkItem ID with caller-selected cwd, provider, model, and prompt. A spawned agent runs either in the local checkout or in a new worktree; the caller chooses.</li>
 <li>SPADE persists returned opaque agent/workspace identities and the root binding before fallible authoritative refresh.</li>
 <li>Managed descendants join the same WorkItem only through explicit durable parent identity; additional workspaces remain opaque facts.</li>
 <li>The WorkItem hull and activity-sidebar row project semantic membership without requiring manual canvas grouping.</li>
 </ol>
-<p>This contract does not require SPADE to understand <code>paseo-issue-to-pr</code> or any implementation/review/fix stages. The P3 run exercised root creation but left complete descendant presentation unresolved because exact-agent reconciliation failed.</p>
+<p>This contract does not require SPADE to understand <code>paseo-issue-to-pr</code> or any implementation/review/fix stages. The P3 run exercised root creation but did not present descendants: the adapter identified itself with a non-semver <code>appVersion</code>, and Paseo 0.4 hides agents from providers other than claude/codex/opencode from such clients, and every agent in the run used the <code>pi</code> provider. The adapter now sends a semver <code>appVersion</code>; the full tree has not been re-run since.</p>
 <h3 id="8-2-paseo-workflow-skill-behavior">8.2 Paseo workflow skill behavior</h3>
 <p>The unchanged bounded workflow produced one managed root, four managed descendants, and five opaque workspaces. Every descendant exposed the root's explicit durable parent ID, and every agent referenced one exact workspace. SPADE must preserve those facts without deriving roles or stages from titles, branches, paths, prompts, skill names, or ordering.</p>
-<p>P3 did not establish a complete tree in the integrated UI: exact-root refresh failed for an unresolved reason, provider-native discovery was unavailable, and four descendant workspaces required the existing generic attach action for presentation. Future SDK work should expose stable exact-agent reconciliation diagnostics and provider-native child identities; it should not add skill-specific stage metadata as a prerequisite for grouping.</p>
+<p>P3 did not establish a complete tree in the integrated UI: exact-root refresh returned <code>Agent not found</code> because the daemon's provider-visibility gate hid the <code>pi</code> agents from SPADE's session, provider-native discovery was unavailable, and four descendant workspaces required the existing generic attach action for presentation. SPADE requires provider-native child identities from Paseo; it does not add skill-specific stage metadata as a prerequisite for grouping.</p>
 <h3 id="8-3-diff-semantics">8.3 Diff semantics</h3>
 <p>At creation, retain:</p>
 <ul>
@@ -644,7 +644,7 @@ const defaultConversationExpansion = {
 <h3 id="8-4-logical-grouping-and-workspace-presentation">8.4 Logical grouping and workspace presentation</h3>
 <p>The colored WorkItem container represents the <strong>logical work item</strong>, not each operational workspace. It specializes shared Group hull geometry with status, explicit semantic membership, source/task context, and activity-sidebar presence.</p>
 <p>A Project container automatically fits its WorkItems and project-scoped nodes. A WorkItem automatically fits nodes carrying its <code>workItemId</code>. Ordinary user-created Groups remain visual hulls: their movement and containment do not rewrite Project or WorkItem identity.</p>
-<p>P3 preserved five opaque workspace identities without semantic lanes, but its final canvas placed one workspace beneath the PullRequest node. Collision-free layout for many factual resources remains a presentation requirement, not evidence for adding workflow-stage types.</p>
+<p>Automatic placement never overlaps nodes: every placed node reserves its presented size plus spacing, and WorkItem and Group hulls reserve their fitted extents. P3 preserved five opaque workspace identities without semantic lanes, but its fixed slot grid was smaller than native entity sizes and placed one workspace beneath the PullRequest node. That was a placement defect, not evidence for adding workflow-stage types.</p>
 <p>Workspace identity remains visible through node badges, a workspace inspector, and optional nested accents. Selecting a workspace badge can highlight every node using that checkout and expose branch, cwd, base ref, dirty state, role, and lifecycle.</p>
 <h2 id="9-context-passed-to-agents">9. Context passed to agents</h2>
 <p>Connections do not automatically inject unlimited content. SPADE builds an explicit, bounded context projection.</p>
@@ -780,7 +780,7 @@ const defaultConversationExpansion = {
 </code></pre>
 <p>Do not spread direct protocol calls through entity renderers.</p>
 <h3 id="known-technical-risk">Known technical risk</h3>
-<p>The public Paseo SDK v0.4 facade covers agents, workspaces, providers and config, but the P3 prototype required one confined internal <code>DaemonClient</code> boundary to share a connection with checkout RPCs. The full run also exposed unresolved exact-agent reconciliation, unavailable provider-native discovery, and changing bounded timeline epochs/ranges after daemon restart. SPADE should keep these dependencies isolated and request stable public connection/readiness, exact-agent diagnostics, provider-native identity, normalized timeline, selected-workspace checkout, and typed PR-status APIs.</p>
+<p>The public Paseo SDK v0.4 facade covers agents, workspaces, providers and config, but the P3 prototype required one confined internal <code>DaemonClient</code> boundary to share a connection with checkout RPCs. The full run also exposed a client-version gate on provider visibility (fixed by sending a semver <code>appVersion</code>), unavailable provider-native discovery, and changing bounded timeline epochs/ranges after daemon restart. SPADE keeps these dependencies isolated and requires the Paseo capabilities it uses: connection/readiness, exact agent reads, provider-native subagent identity, normalized timelines, selected-workspace checkout, and typed PR status.</p>
 <h3 id="plugin-boundary">Plugin boundary</h3>
 <p>Paseo's plugin system may be useful for daemon-side SPADE RPCs later, but a complete React Flow shell does not fit naturally as a Paseo sidebar plugin. SPADE remains a separate frontend.</p>
 <h2 id="14-github-scope">14. GitHub scope</h2>
@@ -984,10 +984,10 @@ const defaultConversationExpansion = {
 </ul>
 <p>Unresolved findings:</p>
 <ul>
-<li>Integrated exact-agent refresh failed for an unknown reason, so four managed descendant agent nodes and delegated edges were not presented.</li>
+<li>Integrated exact-agent refresh failed because the adapter identified itself with a non-semver <code>appVersion</code>, and Paseo 0.4 hides agents from providers other than claude/codex/opencode from such clients, so four managed descendant agent nodes and delegated edges were not presented. The adapter now sends a semver <code>appVersion</code>; a full re-run has not confirmed the complete tree yet.</li>
 <li>Provider-native child discovery was unavailable; complete-tree coverage was not proved.</li>
 <li>Paseo restart preserved agent/workspace identity but changed bounded timeline epochs/ranges and transient lifecycle state.</li>
-<li>One workspace remained in the ledger but was visually covered by the PullRequest node.</li>
+<li>One workspace remained in the ledger but was visually covered by the PullRequest node; §8.4 now requires non-overlapping placement.</li>
 <li>Fixture PR #7 has valid build/render evidence, but workflow/scope acceptance is unresolved because a published artifact-removal finding remains unfixed.</li>
 </ul>
 <p>These results select workflow-agnostic explicit identity and native GitHub entities. They do not establish SPADE knowledge of <code>paseo-issue-to-pr</code> stages.</p>
@@ -1020,11 +1020,8 @@ const defaultConversationExpansion = {
 <ol>
 <li>Does Electron <code>&lt;webview&gt;</code> survive transformed-node interaction tests, or must browser content use a selected overlay/window?</li>
 <li>Is a base diff pinned to creation revision or tracked through merge-base with a moving base branch?</li>
-<li>Does spawning an issue agent always create a new worktree, or offer existing checkout/new worktree choices?</li>
 <li>Which connected nodes are included automatically as agent context versus requiring explicit selection?</li>
-<li>How should non-resumable provider-native subagents be represented?</li>
 <li>What is the acceptable active-node budget for terminal/editor/browser renderers?</li>
-<li>What causes the P3 exact-agent reconciliation failure despite compatible client call shapes?</li>
 </ol>
 <h2 id="22-principal-risks">22. Principal risks</h2>
 <table>

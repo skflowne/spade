@@ -71,6 +71,20 @@ export type SpadePaseoAdapterOptions = {
   now?: () => string
 }
 
+// Paseo 0.4 hides agents from providers other than claude/codex/opencode unless the
+// session's appVersion parses as semver >= 0.1.45, so it must be a version, not a name.
+export const PASEO_CLIENT_APP_VERSION = '0.4.0'
+
+export function daemonClientOptions(url: string): ConstructorParameters<typeof DaemonClient>[0] {
+  return {
+    url,
+    clientId: 'spade-p3-prototype',
+    clientType: 'cli',
+    appVersion: PASEO_CLIENT_APP_VERSION,
+    reconnect: { enabled: true }
+  }
+}
+
 export class SpadePaseoAdapter {
   readonly url: string
   private readonly driver: PaseoDaemonDriver
@@ -85,13 +99,7 @@ export class SpadePaseoAdapter {
 
   constructor(options: SpadePaseoAdapterOptions) {
     this.url = options.url
-    this.driver = options.driver ?? new DaemonClient({
-      url: options.url,
-      clientId: 'spade-p3-prototype',
-      clientType: 'cli',
-      appVersion: 'spade-p3-paseo-bridge',
-      reconnect: { enabled: true }
-    })
+    this.driver = options.driver ?? new DaemonClient(daemonClientOptions(options.url))
     this.pollIntervalMs = options.pollIntervalMs ?? 500
     this.now = options.now ?? (() => new Date().toISOString())
   }
