@@ -299,7 +299,13 @@ test('uses listed agent snapshots when exact lookup disagrees and probes absent 
     agentArchives: [] as string[],
     timelines: [] as string[],
     providerReadyCwds: [] as string[],
-    spawnOptions: [] as unknown[]
+    spawnOptions: [] as unknown[],
+    observations: [] as unknown[],
+    releasedObservations: 0
+  }
+  const observation = (query: unknown) => {
+    calls.observations.push(query)
+    return { ready: Promise.resolve({}), release: async () => { calls.releasedObservations += 1 } }
   }
   const agents = [agent('root', null, 'workspace-a'), agent('child', 'root', 'workspace-b')]
   const createdAgent = agent('created', null, 'workspace-a')
@@ -313,12 +319,14 @@ test('uses listed agent snapshots when exact lookup disagrees and probes absent 
       subscribers.set(type, [...(subscribers.get(type) ?? []), listener])
       return () => undefined
     },
+    observeAgents: (options: unknown) => observation({ agents: options }),
+    observeWorkspaces: (options: unknown) => observation({ workspaces: options }),
+    observeEvents: (events: unknown) => observation({ events }),
     fetchAgents: async (options: { page?: { cursor?: string } }) => {
       calls.agentLists.push(options)
       const second = options.page?.cursor === 'agents-2'
       return {
         requestId: 'agents',
-        subscriptionId: second ? null : 'agent-subscription',
         entries: [{ agent: publicAgent(agents[second ? 1 : 0]), project: {} }],
         pageInfo: { nextCursor: second ? null : 'agents-2', prevCursor: null, hasMore: !second }
       }
@@ -328,7 +336,6 @@ test('uses listed agent snapshots when exact lookup disagrees and probes absent 
       const second = options.page?.cursor === 'workspaces-2'
       return {
         requestId: 'workspaces',
-        subscriptionId: second ? null : 'workspace-subscription',
         entries: [publicWorkspace(workspaces[second ? 1 : 0])],
         pageInfo: { nextCursor: second ? null : 'workspaces-2', prevCursor: null, hasMore: !second }
       }
@@ -366,7 +373,7 @@ test('uses listed agent snapshots when exact lookup disagrees and probes absent 
     getLastServerInfoMessage: () => ({ features: { providersSnapshotCwd: true } }),
     getProvidersSnapshot: async ({ cwd }: { cwd?: string }) => {
       calls.providerReadyCwds.push(cwd ?? '')
-      return { requestId: 'providers', cwd: cwd ?? '', entries: [] }
+      return { requestId: 'providers', cwd: cwd ?? '', entries: [{ provider: 'claude', status: 'available' }] }
     }
   } as unknown as PaseoDaemonDriver
 
@@ -403,6 +410,13 @@ test('uses listed agent snapshots when exact lookup disagrees and probes absent 
 
   expect(calls.connect).toBe(1)
   expect(calls.close).toBe(1)
+  expect(calls.observations).toEqual([
+    { agents: { filter: { includeArchived: true }, page: { limit: 1 } } },
+    { workspaces: { page: { limit: 1 } } },
+    { events: ['providers_snapshot_update'] }
+  ])
+  expect(calls.releasedObservations).toBe(3)
+  expect(calls.agentLists.every((options) => !('subscribe' in (options as object)))).toBe(true)
   expect(calls.agentLists).toHaveLength(2)
   expect(calls.workspaceLists.some((options) =>
     (options as { page?: { cursor?: string } }).page?.cursor === 'workspaces-2'
@@ -428,32 +442,23 @@ test('uses listed agent snapshots when exact lookup disagrees and probes absent 
   expect(notifications.filter(({ type }) => type === 'refresh')).toHaveLength(3)
 })
 
-test('waits for a matching provider update before spawning through the daemon driver', async () => {
-  let providerListener: ((message: { payload: { cwd: string; entries: unknown[] } }) => void) | null = null
+test('waits for the requested provider to finish discovery before spawning', async () => {
+  const snapshots = [
+    [{ provider: 'claude', status: 'loading' }, { provider: 'copilot', status: 'loading' }],
+    [{ provider: 'claude', status: 'available' }, { provider: 'copilot', status: 'loading' }]
+  ]
+  const snapshotCwds: string[] = []
   const created = agent('created-after-provider-ready', null, 'workspace-a')
   const driver = {
-    on: (type: string, listener: typeof providerListener) => {
-      if (type === 'providers_snapshot_update') providerListener = listener
-      return () => undefined
-    },
     fetchWorkspaces: async () => ({
       requestId: 'workspaces',
       entries: [publicWorkspace(workspace('workspace-a'))],
       pageInfo: { nextCursor: null, prevCursor: null, hasMore: false }
     }),
     getLastServerInfoMessage: () => ({ features: { providersSnapshotCwd: true } }),
-    getProvidersSnapshot: async () => {
-      queueMicrotask(() => providerListener?.({
-        payload: {
-          cwd: '/opaque/workspace-a',
-          entries: [{ provider: 'claude', status: 'ready' }]
-        }
-      }))
-      return {
-        requestId: 'providers',
-        cwd: '/opaque/workspace-a',
-        entries: [{ provider: 'claude', status: 'loading' }]
-      }
+    getProvidersSnapshot: async ({ cwd }: { cwd?: string }) => {
+      snapshotCwds.push(cwd ?? '')
+      return { requestId: 'providers', cwd: cwd ?? '', entries: snapshots.shift() ?? [] }
     },
     createAgent: async () => publicAgent(created)
   } as unknown as PaseoDaemonDriver
@@ -470,6 +475,7 @@ test('waits for a matching provider update before spawning through the daemon dr
     model: 'model-1',
     prompt: 'Start after discovery'
   })).resolves.toMatchObject({ id: created.id })
+  expect(snapshotCwds).toEqual(['/opaque/workspace-a', '/opaque/workspace-a'])
 })
 
 test('maps checkout operations through the same opaque-workspace daemon driver', async () => {

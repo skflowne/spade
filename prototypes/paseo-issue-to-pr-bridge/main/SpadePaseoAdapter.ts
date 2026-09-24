@@ -26,6 +26,9 @@ type DriverMethod =
   | 'getConnectionState'
   | 'on'
   | 'fetchAgents'
+  | 'observeAgents'
+  | 'observeWorkspaces'
+  | 'observeEvents'
   | 'fetchAgent'
   | 'fetchAgentTimeline'
   | 'createAgent'
@@ -71,9 +74,12 @@ export type SpadePaseoAdapterOptions = {
   now?: () => string
 }
 
-// Paseo 0.4 hides agents from providers other than claude/codex/opencode unless the
-// session's appVersion parses as semver >= 0.1.45, so it must be a version, not a name.
-export const PASEO_CLIENT_APP_VERSION = '0.4.0'
+// Daemons hide agents from providers other than claude/codex/opencode unless the session
+// sends the all_providers capability (client >= 0.9) or an appVersion parsing as semver
+// >= 0.1.45, so appVersion must stay a version, not a name.
+export const PASEO_CLIENT_APP_VERSION = '0.9.2'
+const PROVIDER_READY_TIMEOUT_MS = 60_000
+const PROVIDER_READY_POLL_MS = 250
 
 export function daemonClientOptions(url: string): ConstructorParameters<typeof DaemonClient>[0] {
   return {
@@ -94,8 +100,7 @@ export class SpadePaseoAdapter {
   private cleanupDriverSubscriptions: (() => void) | null = null
   private connectionTimer: ReturnType<typeof setInterval> | null = null
   private lastConnectionState: PaseoConnectionState | null = null
-  private agentSubscriptionId: string | null = null
-  private workspaceSubscriptionId: string | null = null
+  private observations: Array<{ ready: Promise<unknown>; release(): Promise<void> }> = []
 
   constructor(options: SpadePaseoAdapterOptions) {
     this.url = options.url
@@ -122,6 +127,15 @@ export class SpadePaseoAdapter {
     }
 
     await this.driver.connect()
+    if (this.observations.length === 0) {
+      // Daemons send agent, workspace, and provider updates only while an owned subscription is open.
+      this.observations = [
+        this.driver.observeAgents({ filter: { includeArchived: true }, page: { limit: 1 } }),
+        this.driver.observeWorkspaces({ page: { limit: 1 } }),
+        this.driver.observeEvents(['providers_snapshot_update'])
+      ]
+      await Promise.all(this.observations.map(({ ready }) => ready))
+    }
     this.pollConnectionState()
     if (!this.connectionTimer && this.pollIntervalMs > 0) {
       this.connectionTimer = setInterval(() => this.pollConnectionState(), this.pollIntervalMs)
@@ -134,6 +148,9 @@ export class SpadePaseoAdapter {
     this.connectionTimer = null
     this.cleanupDriverSubscriptions?.()
     this.cleanupDriverSubscriptions = null
+    const observations = this.observations
+    this.observations = []
+    await Promise.allSettled(observations.map((observation) => observation.release()))
     await this.driver.close()
   }
 
@@ -176,7 +193,7 @@ export class SpadePaseoAdapter {
       const workspace = await this.requireWorkspace(input.workspaceId)
       cwd = workspace.workspaceDirectory
     }
-    await waitForProvidersReady(this.driver, cwd)
+    await waitForProviderReady(this.driver, cwd, input.provider)
     const created = await this.driver.createAgent({
       config: {
         provider: input.provider,
@@ -363,19 +380,13 @@ export class SpadePaseoAdapter {
   private async fetchAllAgentPages(): Promise<PaseoAgentSnapshot[][]> {
     const pages: PaseoAgentSnapshot[][] = []
     let cursor: string | undefined
-    let firstPage = true
     do {
       const result = await this.driver.fetchAgents({
         filter: { includeArchived: true },
-        page: { limit: PAGE_LIMIT, ...(cursor ? { cursor } : {}) },
-        ...(firstPage
-          ? { subscribe: this.agentSubscriptionId ? { subscriptionId: this.agentSubscriptionId } : {} }
-          : {})
+        page: { limit: PAGE_LIMIT, ...(cursor ? { cursor } : {}) }
       })
-      if (firstPage && result.subscriptionId) this.agentSubscriptionId = result.subscriptionId
       pages.push(result.entries.map(({ agent }) => toAgentSnapshot(agent)))
       cursor = result.pageInfo.nextCursor ?? undefined
-      firstPage = false
     } while (cursor)
     return pages
   }
@@ -383,18 +394,12 @@ export class SpadePaseoAdapter {
   private async fetchAllWorkspacePages(): Promise<PaseoWorkspaceSnapshot[][]> {
     const pages: PaseoWorkspaceSnapshot[][] = []
     let cursor: string | undefined
-    let firstPage = true
     do {
       const result = await this.driver.fetchWorkspaces({
-        page: { limit: PAGE_LIMIT, ...(cursor ? { cursor } : {}) },
-        ...(firstPage
-          ? { subscribe: this.workspaceSubscriptionId ? { subscriptionId: this.workspaceSubscriptionId } : {} }
-          : {})
+        page: { limit: PAGE_LIMIT, ...(cursor ? { cursor } : {}) }
       })
-      if (firstPage && result.subscriptionId) this.workspaceSubscriptionId = result.subscriptionId
       pages.push(result.entries.map((workspace) => toWorkspaceSnapshot(workspace, this.now())))
       cursor = result.pageInfo.nextCursor ?? undefined
-      firstPage = false
     } while (cursor)
     return pages
   }
@@ -495,64 +500,22 @@ function mapConnectionState(connection: ConnectionState): {
   }
 }
 
-async function waitForProvidersReady(driver: PaseoDaemonDriver, cwd: string): Promise<void> {
+// Client 0.9 routes providers_snapshot_update only to owned subscriptions, so readiness is
+// polled; only the provider being spawned has to finish discovery.
+async function waitForProviderReady(driver: PaseoDaemonDriver, cwd: string, provider: string): Promise<void> {
   if (driver.getLastServerInfoMessage()?.features?.providersSnapshotCwd !== true) {
     throw new Error('Update the host to wait for provider discovery.')
   }
-
-  await new Promise<void>((resolve, reject) => {
-    let settled = false
-    let snapshotCwd: string | null = null
-    const pendingUpdates = new Map<string, { entries: Array<{ status: string }> }>()
-    let latestEntries: Array<{ provider: string; status: string }> = []
-    const cleanup = (): void => {
-      clearTimeout(timeout)
-      unsubscribe()
+  const deadline = Date.now() + PROVIDER_READY_TIMEOUT_MS
+  for (;;) {
+    const snapshot = await driver.getProvidersSnapshot({ cwd })
+    const status = snapshot.entries.find((entry) => entry.provider === provider)?.status
+    if (status && status !== 'loading') return
+    if (Date.now() >= deadline) {
+      throw new Error(status ? `Timed out waiting for provider: ${provider}` : `Provider is not registered: ${provider}`)
     }
-    const finish = (): void => {
-      if (settled) return
-      settled = true
-      cleanup()
-      resolve()
-    }
-    const fail = (error: unknown): void => {
-      if (settled) return
-      settled = true
-      cleanup()
-      reject(error instanceof Error ? error : new Error(String(error)))
-    }
-    const unsubscribe = driver.on('providers_snapshot_update', (message) => {
-      const update = message.payload
-      const updateCwd = update.cwd ?? ''
-      if (!snapshotCwd) {
-        pendingUpdates.set(updateCwd, update)
-        return
-      }
-      if (updateCwd !== snapshotCwd) return
-      latestEntries = update.entries
-      if (!update.entries.some(({ status }) => status === 'loading')) finish()
-    })
-    const timeout = setTimeout(() => {
-      const loading = latestEntries
-        .filter(({ status }) => status === 'loading')
-        .map(({ provider }) => provider)
-        .join(', ')
-      fail(new Error(
-        loading ? `Timed out waiting for providers: ${loading}` : 'Timed out waiting for provider discovery'
-      ))
-    }, 60_000)
-
-    void driver.getProvidersSnapshot({ cwd }).then((snapshot) => {
-      snapshotCwd = snapshot.cwd ?? ''
-      latestEntries = snapshot.entries
-      if (!snapshot.entries.some(({ status }) => status === 'loading')) {
-        finish()
-        return
-      }
-      const pending = pendingUpdates.get(snapshotCwd)
-      if (pending && !pending.entries.some(({ status }) => status === 'loading')) finish()
-    }).catch(fail)
-  })
+    await new Promise((resolve) => setTimeout(resolve, PROVIDER_READY_POLL_MS))
+  }
 }
 
 function requireCheckoutCwd(

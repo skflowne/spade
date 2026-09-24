@@ -1,4 +1,4 @@
-import { SpadePaseoAdapter } from './SpadePaseoAdapter'
+import { PASEO_CLIENT_APP_VERSION, SpadePaseoAdapter } from './SpadePaseoAdapter'
 import {
   emitValidationResult,
   errorMessage,
@@ -54,7 +54,7 @@ export async function runPaseoValidation(
       provider,
       model,
       prompt: rootPrompt,
-      title: 'SPADE 0.4 validation root'
+      title: 'SPADE validation root'
     })
     createdAgentIds.push(root.id)
     const child = await adapter.spawnAgent({
@@ -64,7 +64,7 @@ export async function runPaseoValidation(
       model,
       parentAgentId: root.id,
       prompt: childPrompt,
-      title: 'SPADE 0.4 validation child'
+      title: 'SPADE validation child'
     })
     createdAgentIds.push(child.id)
 
@@ -79,7 +79,7 @@ export async function runPaseoValidation(
     verifySnapshots(first, second, root.id, child.id, workspace.id)
 
     evidence = {
-      clientVersion: '0.4.0',
+      clientVersion: PASEO_CLIENT_APP_VERSION,
       daemonUrl: url,
       provider,
       model,
