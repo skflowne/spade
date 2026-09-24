@@ -10,6 +10,7 @@ import {
 import { createConfiguredPaseoAdapter } from '../../prototypes/paseo-issue-to-pr-bridge/main/paseoComposition'
 import { registerSnapshotPublication } from '../../prototypes/paseo-issue-to-pr-bridge/main/snapshotPublication'
 import {
+  daemonClientOptions,
   SpadePaseoAdapter,
   type PaseoAdapterNotification,
   type PaseoDaemonDriver
@@ -1063,6 +1064,14 @@ test('persists an attached opaque identity before refresh failure', async () => 
   expect(service.snapshot().nodes.find(({ resourceRef }) => resourceRef.id === 'root')).toBeDefined()
   expect(state.stored).toEqual(service.snapshot())
   await service.close()
+})
+
+test('identifies the daemon client with a semver app version so non-legacy providers stay visible', () => {
+  const { appVersion } = daemonClientOptions('ws://127.0.0.1:7777/ws')
+  const match = /^(\d+)\.(\d+)\.(\d+)$/.exec(appVersion ?? '')
+  expect(match).not.toBeNull()
+  const [major, minor, patch] = match!.slice(1).map(Number)
+  expect(major * 1e6 + minor * 1e3 + patch).toBeGreaterThanOrEqual(1 * 1e3 + 45)
 })
 
 test('composes the concrete adapter from the configured daemon URL', async () => {
