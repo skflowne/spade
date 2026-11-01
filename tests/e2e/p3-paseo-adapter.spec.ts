@@ -412,13 +412,16 @@ test('uses listed agent snapshots when exact lookup disagrees and probes absent 
   expect(calls.connect).toBe(1)
   expect(calls.close).toBe(1)
   expect(calls.observations).toEqual([
-    { agents: { filter: { includeArchived: true }, page: { limit: 1 } } },
-    { workspaces: { page: { limit: 1 } } },
+    { agents: { filter: { includeArchived: true }, includeBackground: true, page: { limit: 1 } } },
+    { workspaces: { includeBackground: true, page: { limit: 1 } } },
     { events: ['providers_snapshot_update'] }
   ])
   expect(calls.releasedObservations).toBe(3)
   expect(calls.agentLists.every((options) => !('subscribe' in (options as object)))).toBe(true)
   expect(calls.agentLists).toHaveLength(2)
+  // Agent-created background workspaces and their agents are part of the tree.
+  expect(calls.agentLists.every((options) => (options as { includeBackground?: boolean }).includeBackground)).toBe(true)
+  expect(calls.workspaceLists.every((options) => (options as { includeBackground?: boolean }).includeBackground)).toBe(true)
   expect(calls.workspaceLists.some((options) =>
     (options as { page?: { cursor?: string } }).page?.cursor === 'workspaces-2'
   )).toBe(true)

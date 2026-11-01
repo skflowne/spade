@@ -130,9 +130,10 @@ export class SpadePaseoAdapter {
     await this.driver.connect()
     if (this.observations.length === 0) {
       // Daemons send agent, workspace, and provider updates only while an owned subscription is open.
+      // Paseo >= 0.14 hides agent-created background workspaces and their agents unless includeBackground is set.
       this.observations = [
-        this.driver.observeAgents({ filter: { includeArchived: true }, page: { limit: 1 } }),
-        this.driver.observeWorkspaces({ page: { limit: 1 } }),
+        this.driver.observeAgents({ filter: { includeArchived: true }, includeBackground: true, page: { limit: 1 } }),
+        this.driver.observeWorkspaces({ includeBackground: true, page: { limit: 1 } }),
         this.driver.observeEvents(['providers_snapshot_update'])
       ]
       await Promise.all(this.observations.map(({ ready }) => ready))
@@ -385,6 +386,7 @@ export class SpadePaseoAdapter {
     do {
       const result = await this.driver.fetchAgents({
         filter: { includeArchived: true },
+        includeBackground: true,
         page: { limit: PAGE_LIMIT, ...(cursor ? { cursor } : {}) }
       })
       pages.push(result.entries.map(({ agent }) => toAgentSnapshot(agent)))
@@ -398,6 +400,7 @@ export class SpadePaseoAdapter {
     let cursor: string | undefined
     do {
       const result = await this.driver.fetchWorkspaces({
+        includeBackground: true,
         page: { limit: PAGE_LIMIT, ...(cursor ? { cursor } : {}) }
       })
       pages.push(result.entries.map((workspace) => toWorkspaceSnapshot(workspace, this.now())))
@@ -410,6 +413,7 @@ export class SpadePaseoAdapter {
     let cursor: string | undefined
     do {
       const result = await this.driver.fetchWorkspaces({
+        includeBackground: true,
         page: { limit: PAGE_LIMIT, ...(cursor ? { cursor } : {}) }
       })
       const workspace = result.entries.find(({ id }) => id === workspaceId)

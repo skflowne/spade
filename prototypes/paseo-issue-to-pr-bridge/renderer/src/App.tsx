@@ -384,7 +384,8 @@ export function App(): React.JSX.Element {
   const [agentId, setAgentId] = useState('')
   const [provider, setProvider] = useState('')
   const [model, setModel] = useState('')
-  const [mode, setMode] = useState('')
+  // P3 has no permission surface, so unattended runs start without approval prompts unless the caller clears this.
+  const [mode, setMode] = useState('bypassPermissions')
   const [prompt, setPrompt] = useState('')
   const [workItemId, setWorkItemId] = useState('work-item-1')
   const [repository, setRepository] = useState('skflowne/spade-fixture')

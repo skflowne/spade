@@ -54,6 +54,9 @@ test('runs the generic P3 shell through narrow IPC and restores the exact ledger
     await expect(window).toHaveTitle('SPADE · P3 native GitHub work shell')
     await expect(window.getByRole('heading', { name: 'P3 native GitHub work shell' })).toBeVisible()
     await expect(window.getByTestId('project-container')).toContainText('P3 bridge prototype')
+    await expect(
+      window.getByRole('complementary', { name: 'Prototype commands' }).getByLabel('Mode', { exact: true })
+    ).toHaveValue('bypassPermissions')
 
     const hulls = window.locator('.group-hull')
     await expect(hulls).toHaveCount(2)
