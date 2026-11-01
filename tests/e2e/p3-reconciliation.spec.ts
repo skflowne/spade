@@ -218,7 +218,7 @@ test('exposes all supported and unavailable Paseo capability states explicitly',
   const capabilities = createLedger().paseo.capabilities
   expect(capabilities).toHaveLength(8)
   expect(capabilities.find(({ name }) => name === 'timeline-fetch')?.state).toBe('available')
-  expect(capabilities.find(({ name }) => name === 'provider-subagents')?.state).toBe('unavailable')
+  expect(capabilities.find(({ name }) => name === 'provider-subagents')?.state).toBe('available')
   expect(capabilities.find(({ name }) => name === 'live-timeline')?.state).toBe('unavailable')
   expect(capabilities.find(({ name }) => name === 'server-info')?.state).toBe('unavailable')
   for (const capability of capabilities) {

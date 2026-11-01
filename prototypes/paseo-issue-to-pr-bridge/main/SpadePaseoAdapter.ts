@@ -13,12 +13,24 @@ import { PASEO_TIMELINE_LIMIT, type PaseoConnectionState } from '../shared/model
 import {
   type PaseoAgentSnapshot,
   type PaseoAuthoritativeSnapshot,
+  type PaseoProviderSubagentSnapshot,
   type PaseoTimelineSnapshot,
   type PaseoWorkspaceSnapshot
 } from '../shared/paseoReconciliation'
+import type { PaseoPermissionBehavior } from '../shared/commands'
 
 const PAGE_LIMIT = 200
 const PARENT_AGENT_ID_LABEL = 'paseo.parent-agent-id'
+const ARCHIVED_AGENT_STATUS = 'archived'
+// Provider-subagent reads resume unloaded agents from storage, and Paseo rejects archived parents.
+const UNOBSERVABLE_SUBAGENT_PARENT_STATUSES = new Set([ARCHIVED_AGENT_STATUS, 'closed'])
+// Session events that change provider-subagent rows or pending permissions without an agent_update.
+const REFRESH_EVENTS = [
+  'providers_snapshot_update',
+  'agent.provider_subagents.update',
+  'agent_permission_request',
+  'agent_permission_resolved'
+] as const
 
 type DriverMethod =
   | 'connect'
@@ -31,6 +43,9 @@ type DriverMethod =
   | 'observeEvents'
   | 'fetchAgent'
   | 'fetchAgentTimeline'
+  | 'listProviderSubagents'
+  | 'fetchProviderSubagentTimeline'
+  | 'respondToPermission'
   | 'createAgent'
   | 'archiveAgent'
   | 'fetchWorkspaces'
@@ -119,11 +134,13 @@ export class SpadePaseoAdapter {
     if (!this.cleanupDriverSubscriptions) {
       const unsubscribeAgent = this.driver.on('agent_update', () => this.emit({ type: 'refresh' }))
       const unsubscribeWorkspace = this.driver.on('workspace_update', () => this.emit({ type: 'refresh' }))
-      const unsubscribeProvider = this.driver.on('providers_snapshot_update', () => this.emit({ type: 'refresh' }))
+      const unsubscribeEvents = REFRESH_EVENTS.map((type) =>
+        this.driver.on(type, () => this.emit({ type: 'refresh' }))
+      )
       this.cleanupDriverSubscriptions = () => {
         unsubscribeAgent()
         unsubscribeWorkspace()
-        unsubscribeProvider()
+        for (const unsubscribe of unsubscribeEvents) unsubscribe()
       }
     }
 
@@ -134,7 +151,7 @@ export class SpadePaseoAdapter {
       this.observations = [
         this.driver.observeAgents({ filter: { includeArchived: true }, includeBackground: true, page: { limit: 1 } }),
         this.driver.observeWorkspaces({ includeBackground: true, page: { limit: 1 } }),
-        this.driver.observeEvents(['providers_snapshot_update'])
+        this.driver.observeEvents([...REFRESH_EVENTS])
       ]
       await Promise.all(this.observations.map(({ ready }) => ready))
     }
@@ -221,6 +238,14 @@ export class SpadePaseoAdapter {
     return (await this.driver.archiveAgent(agentId)).archivedAt
   }
 
+  async respondToPermission(agentId: string, requestId: string, behavior: PaseoPermissionBehavior): Promise<void> {
+    await this.driver.respondToPermission(
+      agentId,
+      requestId,
+      behavior === 'allow' ? { behavior: 'allow' } : { behavior: 'deny', message: 'Denied in SPADE.' }
+    )
+  }
+
   async fetchAuthoritative(
     rootAgentId: string,
     references: PaseoSnapshotReferences
@@ -266,14 +291,57 @@ export class SpadePaseoAdapter {
       })
     }
 
+    const providerSubagents: PaseoProviderSubagentSnapshot[] = []
+    const observedSubagentParentIds: string[] = []
+    for (const agentId of timelineAgentIds) {
+      const status = agentById.get(agentId)?.status
+      if (!status || UNOBSERVABLE_SUBAGENT_PARENT_STATUSES.has(status)) continue
+      const subagents = await this.fetchProviderSubagents(agentId)
+      if (!subagents) continue
+      observedSubagentParentIds.push(agentId)
+      providerSubagents.push(...subagents)
+    }
+
     return {
       rootAgentId,
       agentPages: [allAgents],
       workspacePages: [[...workspaceById.values()]],
-      providerSubagents: [],
+      providerSubagents,
+      observedSubagentParentIds,
       timelines,
       refreshedAt: this.now()
     }
+  }
+
+  // Returns null when the parent's provider subagents cannot be observed; existing rows then stay stale.
+  private async fetchProviderSubagents(parentAgentId: string): Promise<PaseoProviderSubagentSnapshot[] | null> {
+    const listed = await this.driver.listProviderSubagents(parentAgentId)
+    if (listed.error) return null
+    const result: PaseoProviderSubagentSnapshot[] = []
+    for (const subagent of listed.subagents) {
+      const timeline = await this.driver.fetchProviderSubagentTimeline(parentAgentId, subagent.id, {
+        direction: 'tail',
+        limit: PASEO_TIMELINE_LIMIT
+      })
+      result.push({
+        id: subagent.id,
+        parentAgentId,
+        parentSubagentId: subagent.parentSubagentId ?? null,
+        provider: subagent.provider,
+        title: subagent.title ?? subagent.description,
+        status: subagent.status,
+        cwd: subagent.cwd ?? null,
+        updatedAt: subagent.updatedAt,
+        timelineEpoch: timeline.epoch,
+        timeline: timeline.rows.map((row) => ({
+          timestamp: row.timestamp,
+          seqStart: row.seq,
+          seqEnd: row.seq,
+          item: row.item
+        }))
+      })
+    }
+    return result
   }
 
   async checkoutStatus(workspaceId: string): Promise<CheckoutStatus> {
@@ -448,10 +516,29 @@ function toAgentSnapshot(agent: PaseoAgent): PaseoAgentSnapshot {
     title: agent.title,
     provider: agent.provider,
     model: agent.model,
-    status: agent.status,
+    // Archived agents keep their last lifecycle status; archival is the fact SPADE must show.
+    status: agent.archivedAt ? ARCHIVED_AGENT_STATUS : agent.status,
     cwd: agent.cwd,
-    updatedAt: agent.updatedAt
+    updatedAt: agent.updatedAt,
+    pendingPermissions: (agent.pendingPermissions ?? []).map((request) => ({
+      id: request.id,
+      kind: request.kind,
+      name: request.name,
+      title: request.title ?? null,
+      description: request.description ?? permissionInputSummary(request.input)
+    }))
   }
+}
+
+const PERMISSION_INPUT_SUMMARY_LIMIT = 240
+
+// Without a provider description, the raw request input is the only evidence of what is being approved.
+function permissionInputSummary(input: unknown): string | null {
+  if (input === undefined || input === null) return null
+  const text = JSON.stringify(input)
+  return text.length > PERMISSION_INPUT_SUMMARY_LIMIT
+    ? `${text.slice(0, PERMISSION_INPUT_SUMMARY_LIMIT - 1)}…`
+    : text
 }
 
 function toWorkspaceSnapshot(workspace: PaseoWorkspace, fallbackUpdatedAt: string): PaseoWorkspaceSnapshot {

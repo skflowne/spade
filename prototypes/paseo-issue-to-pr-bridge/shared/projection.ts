@@ -56,8 +56,12 @@ export function projectActivitySidebar(
 }
 
 export function nodePresentationSize(node: PrototypeNode): Size {
-  if (node.kind === 'github-issue') return GITHUB_ISSUE_NODE_SIZE
-  if (node.kind === 'github-pull-request') return GITHUB_PULL_REQUEST_NODE_SIZE
+  return presentationSizeForKind(node.kind)
+}
+
+export function presentationSizeForKind(kind: PrototypeNode['kind']): Size {
+  if (kind === 'github-issue') return GITHUB_ISSUE_NODE_SIZE
+  if (kind === 'github-pull-request') return GITHUB_PULL_REQUEST_NODE_SIZE
   return PLACEHOLDER_NODE_SIZE
 }
 

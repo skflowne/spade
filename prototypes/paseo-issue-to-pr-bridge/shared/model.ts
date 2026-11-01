@@ -129,6 +129,14 @@ export type NormalizedConversationEvent = {
   initialExpanded: boolean
 }
 
+export type PaseoPendingPermission = {
+  id: string
+  kind: string
+  name: string
+  title: string | null
+  description: string | null
+}
+
 export type PaseoManagedAgentRuntime = {
   type: 'managed-agent'
   state: PaseoResourceState
@@ -139,12 +147,15 @@ export type PaseoManagedAgentRuntime = {
   status: string
   cwd: string
   timeline: NormalizedConversationEvent[]
+  // Absent in ledgers persisted before permission requests were projected.
+  pendingPermissions?: PaseoPendingPermission[]
 }
 
 export type PaseoProviderSubagentRuntime = {
   type: 'provider-subagent'
   state: PaseoResourceState
   parentAgentId: string
+  parentSubagentId?: string | null
   provider: string
   status: string
   cwd: string | null
@@ -232,8 +243,8 @@ export function createInitialPaseoState(): PaseoAdapterState {
       capability('agent-workspace-subscriptions', 'available'),
       capability(
         'provider-subagents',
-        'unavailable',
-        'The bounded prototype does not project the daemon driver’s provider-subagent RPC.'
+        'available',
+        'Read for loaded, unarchived agents; rows under unobservable parents stay stale.'
       ),
       capability(
         'live-timeline',
@@ -357,14 +368,30 @@ function isPaseoRuntime(value: unknown): value is PaseoNodeRuntime {
       (value.parentAgentId === null || typeof value.parentAgentId === 'string') &&
       (value.workspaceId === null || typeof value.workspaceId === 'string') &&
       (value.model === null || typeof value.model === 'string') &&
-      hasString(value, 'cwd')
+      hasString(value, 'cwd') &&
+      (value.pendingPermissions === undefined ||
+        (Array.isArray(value.pendingPermissions) && value.pendingPermissions.every(isPendingPermission)))
     )
   }
 
   return (
     value.type === 'provider-subagent' &&
     hasString(value, 'parentAgentId') &&
+    (value.parentSubagentId === undefined ||
+      value.parentSubagentId === null ||
+      typeof value.parentSubagentId === 'string') &&
     (value.cwd === null || typeof value.cwd === 'string')
+  )
+}
+
+function isPendingPermission(value: unknown): value is PaseoPendingPermission {
+  return (
+    isRecord(value) &&
+    hasString(value, 'id') &&
+    typeof value.kind === 'string' &&
+    hasString(value, 'name') &&
+    (value.title === null || typeof value.title === 'string') &&
+    (value.description === null || typeof value.description === 'string')
   )
 }
 

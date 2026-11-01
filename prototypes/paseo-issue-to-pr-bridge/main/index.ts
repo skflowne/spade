@@ -10,6 +10,7 @@ import { PrototypeCommandService } from './commandService'
 import { P3IntegrationService } from './integrationService'
 import { LedgerStore } from './ledgerStore'
 import { createConfiguredPaseoAdapter } from './paseoComposition'
+import { PullRequestDiscovery } from './pullRequestDiscovery'
 import { registerSnapshotPublication } from './snapshotPublication'
 import { SpadeGitHubAdapter } from './spadeGitHubAdapter'
 import {
@@ -145,6 +146,11 @@ void app.whenReady().then(async () => {
     paseo ?? null,
     (url) => shell.openExternal(url)
   )
+  if (paseo) {
+    const discovery = new PullRequestDiscovery({ integrate: (request) => integrations.execute(request) })
+    service.subscribe((ledger) => void discovery.observe(ledger))
+    void discovery.observe(service.snapshot())
+  }
   createWindow(service, integrations)
 })
 

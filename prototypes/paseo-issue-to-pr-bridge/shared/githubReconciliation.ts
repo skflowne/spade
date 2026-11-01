@@ -1,4 +1,4 @@
-import { applyPrototypeCommand, groupMemberPosition, type CommandResult } from './commands'
+import { applyPrototypeCommand, freeGroupMemberPosition, type CommandResult } from './commands'
 import { githubResourceId, type GitHubIssue, type GitHubPullRequest } from './github'
 import {
   sameResourceIdentity,
@@ -77,10 +77,7 @@ export function reconcileGitHubIssue(
     workItemId,
     kind: 'github-issue',
     title: issue.title,
-    position: groupMemberPosition(
-      group,
-      next.nodes.filter(({ groupId }) => groupId === group.id).length
-    ),
+    position: freeGroupMemberPosition(next, group, 'github-issue'),
     resourceRef: reference,
     paseo: null,
     issue
@@ -153,6 +150,7 @@ export function reconcileGitHubPullRequest(
   } else {
     const sequence = next.nextSequence
     nodeId = `node-${sequence}`
+    const sourceGroup = next.groups.find(({ id }) => id === source.groupId)
     const node: GitHubPullRequestNode = {
       id: nodeId,
       projectId: next.project.id,
@@ -160,7 +158,9 @@ export function reconcileGitHubPullRequest(
       workItemId: source.workItemId,
       kind: 'github-pull-request',
       title: pullRequest.title,
-      position: { x: source.position.x, y: source.position.y + 140 },
+      position: sourceGroup
+        ? freeGroupMemberPosition(next, sourceGroup, 'github-pull-request')
+        : { x: source.position.x, y: source.position.y + 140 },
       resourceRef: reference,
       paseo: null,
       pullRequest

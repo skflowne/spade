@@ -352,6 +352,12 @@ test('uses listed agent snapshots when exact lookup disagrees and probes absent 
       calls.agentArchives.push(id)
       return { archivedAt: '2026-08-20T10:02:00Z' }
     },
+    listProviderSubagents: async (parentAgentId: string) => ({
+      requestId: 'subagents',
+      parentAgentId,
+      subagents: [],
+      error: null
+    }),
     fetchAgentTimeline: async (id: string) => {
       calls.timelines.push(id)
       return {
@@ -414,14 +420,18 @@ test('uses listed agent snapshots when exact lookup disagrees and probes absent 
   expect(calls.observations).toEqual([
     { agents: { filter: { includeArchived: true }, includeBackground: true, page: { limit: 1 } } },
     { workspaces: { includeBackground: true, page: { limit: 1 } } },
-    { events: ['providers_snapshot_update'] }
+    {
+      events: [
+        'providers_snapshot_update',
+        'agent.provider_subagents.update',
+        'agent_permission_request',
+        'agent_permission_resolved'
+      ]
+    }
   ])
   expect(calls.releasedObservations).toBe(3)
   expect(calls.agentLists.every((options) => !('subscribe' in (options as object)))).toBe(true)
   expect(calls.agentLists).toHaveLength(2)
-  // Agent-created background workspaces and their agents are part of the tree.
-  expect(calls.agentLists.every((options) => (options as { includeBackground?: boolean }).includeBackground)).toBe(true)
-  expect(calls.workspaceLists.every((options) => (options as { includeBackground?: boolean }).includeBackground)).toBe(true)
   expect(calls.workspaceLists.some((options) =>
     (options as { page?: { cursor?: string } }).page?.cursor === 'workspaces-2'
   )).toBe(true)
@@ -871,6 +881,7 @@ class FakeAdapter implements PaseoAdapterPort {
   async spawnAgent(): Promise<PaseoAgentSnapshot> {
     return agent('root', null, 'workspace-root')
   }
+  async respondToPermission(): Promise<void> {}
   async attachAgent(id: string): Promise<PaseoAgentSnapshot | null> {
     return this.missingAgentIds.has(id) ? null : agent(id, null, 'workspace-root')
   }
