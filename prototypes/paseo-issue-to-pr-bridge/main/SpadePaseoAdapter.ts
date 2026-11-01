@@ -77,7 +77,7 @@ export type SpadePaseoAdapterOptions = {
 // Daemons hide agents from providers other than claude/codex/opencode unless the session
 // sends the all_providers capability (client >= 0.9) or an appVersion parsing as semver
 // >= 0.1.45, so appVersion must stay a version, not a name.
-export const PASEO_CLIENT_APP_VERSION = '0.9.2'
+export const PASEO_CLIENT_APP_VERSION = '0.14.0'
 const PROVIDER_READY_TIMEOUT_MS = 60_000
 const PROVIDER_READY_POLL_MS = 250
 
@@ -500,7 +500,7 @@ function mapConnectionState(connection: ConnectionState): {
   }
 }
 
-// Client 0.9 routes providers_snapshot_update only to owned subscriptions, so readiness is
+// Clients >= 0.9 route providers_snapshot_update only to owned subscriptions, so readiness is
 // polled; only the provider being spawned has to finish discovery.
 async function waitForProviderReady(driver: PaseoDaemonDriver, cwd: string, provider: string): Promise<void> {
   if (driver.getLastServerInfoMessage()?.features?.providersSnapshotCwd !== true) {
