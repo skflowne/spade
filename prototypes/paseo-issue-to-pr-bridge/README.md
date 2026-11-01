@@ -25,7 +25,7 @@ The renderer exposes generic controls to select/open a checkout, create or attac
 
 ## Architecture and invariants
 
-- `main/SpadePaseoAdapter.ts` is the only `@getpaseo/client` boundary. It owns one exported internal `DaemonClient` because checkout RPCs are absent from the public 0.9 facade; lifecycle and checkout operations share that one connection.
+- `main/SpadePaseoAdapter.ts` is the only `@getpaseo/client` boundary. It owns one exported internal `DaemonClient` because checkout RPCs are absent from the public facade (still true in 0.14.0); lifecycle and checkout operations share that one connection.
 - `main/commandService.ts` serializes commands, persistence, adapter notifications, startup restoration, reconnect refetch, and publication. Refresh notifications are buffered/coalesced through initialization and reconnect; a reconnect snapshot completes before one pending post-authoritative refresh.
 - A successful external spawn or attach persists its exact opaque identity and root binding before the fallible authoritative fetch.
 - One opaque root belongs to at most one WorkItem. Rebinding transfers ownership; persisted duplicate roots are rejected.
@@ -35,11 +35,11 @@ The renderer exposes generic controls to select/open a checkout, create or attac
 
 External identity is always `provider + kind + opaque ID`. Titles, cwd segments, branches, prompt text, skill names, and creation order never determine identity or presentation type.
 
-## Paseo 0.9.2 capability inventory
+## Paseo 0.14.0 capability inventory
 
-`package.json` pins `@getpaseo/client` to exactly `0.9.2` (upgraded from `0.4.0` on 2026-09-24). The persisted inventory in `shared/model.ts` is the prototype authority.
+`package.json` pins `@getpaseo/client` to exactly `0.14.0` (upgraded from `0.4.0` to `0.9.2` on 2026-09-24 and to `0.14.0` on 2026-11-01). The persisted inventory in `shared/model.ts` is the prototype authority.
 
-| Capability | Prototype state | Paseo 0.9.2 driver operation |
+| Capability | Prototype state | Paseo 0.14.0 driver operation |
 |---|---|---|
 | Agents | Available | paginated `fetchAgents`, exact `fetchAgent`, `createAgent`, `archiveAgent`, `agent_update` |
 | Workspaces | Available | paginated `fetchWorkspaces`, `openProject`, `createWorkspace`, `workspace_update` |
@@ -52,7 +52,7 @@ External identity is always `provider + kind + opaque ID`. Titles, cwd segments,
 
 Checkout reads/mutations use status, diff, commit, push, PR create, and PR status on that same connection; they are not a separate persisted capability record.
 
-Direct internal imports: **one**, confined to `main/SpadePaseoAdapter.ts`. `@getpaseo/client/internal/daemon-client` is an explicit package export and is required because the public 0.9 facade still closes over an inaccessible driver and exposes none of the checkout RPCs. Constructing a second client for checkout would create a prohibited second daemon connection. The unavailable states remain explicit; authoritative bounded timeline fetches replace unsupported live delivery.
+Direct internal imports: **one**, confined to `main/SpadePaseoAdapter.ts`. `@getpaseo/client/internal/daemon-client` is an explicit package export and is required because the public 0.14 facade still closes over an inaccessible driver and exposes none of the checkout RPCs. Constructing a second client for checkout would create a prohibited second daemon connection. The unavailable states remain explicit; authoritative bounded timeline fetches replace unsupported live delivery.
 
 ## Deterministic coverage
 
@@ -84,6 +84,12 @@ xvfb-run -a npx playwright test \
 ```
 
 ## Isolated real Paseo validation
+
+### Paseo 0.14.0 revalidation and full-run attempt (2026-11-01)
+
+The 0.14.0 upgrade needed no RPC-shape change: every driver method the adapter uses kept its signature, the client now sends `all_providers` and owned-subscription capabilities by default, and only the `appVersion` constant changed. Against an isolated CLI/daemon 0.14.0 home (`127.0.0.1:17714`, relay/MCP injection/browser tools disabled; the user daemon was stopped and untouched), the bundled validator passed with `claude/claude-haiku-4-5`: root and explicit child reached `idle` in one workspace, the child reported the root as exact parent, both timelines returned two events, repeated refetch was stable, and both were archived.
+
+A full `paseo-issue-to-pr` re-run with Claude agents was then started through the shell UI against fixture issue [`skflowne/spade-fixture#9`](https://github.com/skflowne/spade-fixture/issues/9) (same scope as #1, created to avoid colliding with open PR #7). The shell loaded the native Issue, created WorkItem `work-item-6`, opened workspace `wks_7aacd46489973a82`, and spawned root `f472fe87-73dc-4026-a0cc-a25ea73e3fce` (`claude/claude-opus-5-5`). Authoritative refresh succeeded with no `Agent not found` or connection error. The run produced no descendants: Paseo started the root in Claude's `default` (always ask) permission mode, its first preflight `Bash` request waited for approval, and P3 can neither choose a mode at spawn nor show or answer a pending permission. The UI showed one managed agent (`running`), one workspace (`needs_input`), no provider-native rows, and the Issue node overlapping the workspace node. Complete integrated descendant presentation therefore remains unproven.
 
 ### Paseo 0.9.2 revalidation (2026-09-24)
 
