@@ -384,6 +384,7 @@ export function App(): React.JSX.Element {
   const [agentId, setAgentId] = useState('')
   const [provider, setProvider] = useState('')
   const [model, setModel] = useState('')
+  const [mode, setMode] = useState('')
   const [prompt, setPrompt] = useState('')
   const [workItemId, setWorkItemId] = useState('work-item-1')
   const [repository, setRepository] = useState('skflowne/spade-fixture')
@@ -698,6 +699,10 @@ export function App(): React.JSX.Element {
             <input value={model} onChange={(event) => setModel(event.target.value)} />
           </label>
           <label>
+            Mode
+            <input value={mode} onChange={(event) => setMode(event.target.value)} />
+          </label>
+          <label>
             Caller prompt
             <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} />
           </label>
@@ -711,6 +716,7 @@ export function App(): React.JSX.Element {
               cwd: paseoCwd,
               provider,
               model,
+              ...(mode.trim() ? { mode: mode.trim() } : {}),
               prompt
             })}
           >

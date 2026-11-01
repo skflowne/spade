@@ -160,6 +160,7 @@ export class PrototypeCommandService {
           cwd: command.cwd,
           provider: command.provider,
           model: command.model,
+          mode: command.mode,
           prompt: command.prompt,
           title: command.title
         })

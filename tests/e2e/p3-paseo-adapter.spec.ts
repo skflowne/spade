@@ -394,6 +394,7 @@ test('uses listed agent snapshots when exact lookup disagrees and probes absent 
     cwd: '/ignored/by/opaque-workspace',
     provider: 'claude',
     model: 'model-1',
+    mode: 'bypassPermissions',
     prompt: 'Caller prompt',
     title: 'Caller title'
   })).toMatchObject({ id: 'created', workspaceId: 'workspace-a' })
@@ -429,6 +430,7 @@ test('uses listed agent snapshots when exact lookup disagrees and probes absent 
       provider: 'claude',
       model: 'model-1',
       cwd: '/opaque/workspace-a',
+      modeId: 'bypassPermissions',
       title: 'Caller title'
     },
     cwd: '/opaque/workspace-a',

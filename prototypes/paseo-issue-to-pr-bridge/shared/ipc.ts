@@ -83,6 +83,7 @@ export function isPrototypeCommand(value: unknown): value is PrototypeCommand {
           'cwd',
           'provider',
           'model',
+          'mode',
           'prompt',
           'title'
         ]) &&
@@ -91,6 +92,7 @@ export function isPrototypeCommand(value: unknown): value is PrototypeCommand {
         hasText(value.cwd) &&
         hasText(value.provider) &&
         hasText(value.model) &&
+        (value.mode === undefined || hasText(value.mode)) &&
         hasText(value.prompt) &&
         (value.title === undefined || hasText(value.title))
       )

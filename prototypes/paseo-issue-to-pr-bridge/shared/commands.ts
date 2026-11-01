@@ -43,6 +43,7 @@ export type PrototypeCommand =
       cwd: string
       provider: string
       model: string
+      mode?: string
       prompt: string
       title?: string
     }

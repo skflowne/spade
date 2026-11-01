@@ -62,6 +62,7 @@ export type SpawnAgentInput = {
   cwd: string
   provider: string
   model: string
+  mode?: string
   prompt: string
   title?: string
   parentAgentId?: string
@@ -199,6 +200,7 @@ export class SpadePaseoAdapter {
         provider: input.provider,
         model: input.model,
         cwd,
+        ...(input.mode ? { modeId: input.mode } : {}),
         ...(input.title ? { title: input.title } : {})
       },
       cwd,
