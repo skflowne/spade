@@ -132,6 +132,20 @@ test('restores archived nodes from the archived panel, undoes an archive, and ke
     for (const title of ['Root', 'Middle', 'Leaf']) await expect(canvasNode(page, title)).toBeVisible()
     await expect(panel.getByTestId('archived-entry')).toHaveCount(0)
 
+    // Undoing a branch archive restores what it archived, not a descendant archived earlier.
+    await page.getByRole('button', { name: 'Close Archived nodes' }).click()
+    await nodeMenu(page, 'Leaf', 'Archive node')
+    await nodeMenu(page, 'Root', 'Archive branch')
+    const branchNotice = page.getByRole('region', { name: 'Notices' }).getByRole('status').filter({ hasText: 'Archived the branch' }).last()
+    await expect(branchNotice).toContainText('(2 nodes)')
+    await branchNotice.getByRole('button', { name: 'Undo' }).click()
+    for (const title of ['Root', 'Middle']) await expect(canvasNode(page, title)).toBeVisible()
+    await expect(canvasNode(page, 'Leaf')).toHaveCount(0)
+    expect((await readCanvas(page)).nodes.find((node) => node.title === 'Leaf')!.archived).toBe(true)
+    await toolbar(page).getByRole('button', { name: 'Archived 1' }).click()
+    await panel.getByTestId('archived-entry').filter({ hasText: 'Leaf' }).getByRole('button', { name: 'Restore Leaf' }).click()
+    await expect(canvasNode(page, 'Leaf')).toBeVisible()
+
     // The orphan hint leads to the archived parent's entry.
     await nodeMenu(page, 'Middle', 'Archive node')
     await page.getByRole('button', { name: 'Close Archived nodes' }).click()

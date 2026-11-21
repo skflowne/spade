@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { activityItems, recentAgentChanges, relativeTime, RECENT_AGENT_CHANGE_MS } from '../../src/renderer/src/canvas/model/activityView'
-import { archivedEntries, archivedEntryOf } from '../../src/renderer/src/canvas/model/archivedNodes'
+import { archivedEntries, archivedEntryOf, newlyArchived } from '../../src/renderer/src/canvas/model/archivedNodes'
 import { canvasIndex } from '../../src/renderer/src/canvas/model/canvasIndex'
 import {
   currentFocus,
@@ -238,6 +238,18 @@ test.describe('archived nodes', () => {
     expect(archivedEntryOf(index, 'a1')).toBe('a')
     expect(archivedEntryOf(index, 'a2x')).toBe('a2x')
     expect(archivedEntryOf(index, 'a2')).toBeNull()
+  })
+
+  test('names exactly the nodes an archive would newly archive, leaving those archived before', () => {
+    const canvas = canvasOf(
+      [node('parent'), node('child', { archived: true }), node('sibling'), node('grandchild'), node('other')],
+      [edge('parent', 'child'), edge('parent', 'sibling'), edge('child', 'grandchild')]
+    )
+    const index = canvasIndex(canvas)
+    expect(newlyArchived(index, 'parent', true).sort()).toEqual(['grandchild', 'parent', 'sibling'])
+    expect(newlyArchived(index, 'parent', false)).toEqual(['parent'])
+    expect(newlyArchived(index, 'child', false)).toEqual([])
+    expect(newlyArchived(index, 'missing', true)).toEqual([])
   })
 })
 

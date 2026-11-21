@@ -9,7 +9,7 @@ import { MenuButton, type MenuItem } from '../ui/Menu'
 import { usePrompts } from '../ui/prompts'
 import { StatusBadge } from '../ui/StatusBadge'
 import { useAgentChange, useCanvasActions, useCanvasInteraction, useCanvasProject } from './CanvasContext'
-import { archivedEntryOf } from './model/archivedNodes'
+import { archivedEntryOf, newlyArchived } from './model/archivedNodes'
 import { canvasIndex } from './model/canvasIndex'
 import { detailForZoom } from './model/levelOfDetail'
 import { RelatedMenu } from './RelatedMenu'
@@ -226,15 +226,19 @@ function NodeControls({
   const branchHidden = record.branchCollapsed
   const run = (command: Parameters<typeof actions.execute>[0]): void => void actions.execute(command)
 
-  // Archiving is undoable from the confirmation it shows.
+  // Archiving is undoable from the confirmation it shows. Undo restores exactly what this archive archived:
+  // nodes in the branch that were archived before stay archived.
   const archive = async (branch: boolean): Promise<void> => {
-    const count = branch ? canvasIndex(actions.getCanvas()).tree.branchOf(nodeId).length : 1
+    const archived = newlyArchived(canvasIndex(actions.getCanvas()), nodeId, branch)
     const response = await actions.execute({ type: branch ? 'archiveBranch' : 'archiveNode', nodeId })
     if (!response.ok) return
+    const count = archived.length
     const what = branch ? `the branch “${record.title}” (${count} ${count === 1 ? 'node' : 'nodes'})` : `“${record.title}”`
     store.inform(`Archived ${what}.`, {
       label: 'Undo',
-      run: () => void actions.execute({ type: 'restoreNode', nodeId, ...(branch ? { branch: true } : {}) })
+      run: () => {
+        for (const id of archived) void actions.execute({ type: 'restoreNode', nodeId: id })
+      }
     })
   }
 
