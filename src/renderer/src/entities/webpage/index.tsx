@@ -1,44 +1,68 @@
 import { useState } from 'react'
 import { WEB_PAGE_ENTITY, type WebPageConfig } from '@shared/builtinEntities'
-import { DetailList, TextField } from '../../ui/fields'
+import { TextField } from '../../ui/fields'
 import { defineEntityRenderer } from '../registry'
-import type { EntityBodyProps, EntityCreateFormProps } from '../types'
-
-// Minimal placeholder: the viewer slice replaces this file wholesale.
-
-function WebPageBody({ config }: EntityBodyProps<WebPageConfig>): React.JSX.Element {
-  return (
-    <div className="entity-summary">
-      <DetailList rows={[['URL', <span className="mono">{config.url}</span>]]} />
-    </div>
-  )
-}
+import type { EntityCreateFormProps } from '../types'
+import { requestReload } from './reloadRequests'
+import { normalizeWebAddress } from './webAddress'
+import { WebPageBody } from './WebPageBody'
 
 function WebPageCreateForm({ formId, onSubmit }: EntityCreateFormProps): React.JSX.Element {
-  const [title, setTitle] = useState('')
-  const [url, setUrl] = useState('')
+  const [address, setAddress] = useState('')
+  const [invalid, setInvalid] = useState(false)
   return (
     <form
       id={formId}
       className="entity-form"
       onSubmit={(event) => {
         event.preventDefault()
-        onSubmit({
-          entityType: WEB_PAGE_ENTITY,
-          config: { url: url.trim() },
-          ...(title.trim() ? { title: title.trim() } : {})
-        })
+        const url = normalizeWebAddress(address)
+        if (url === null) {
+          setInvalid(true)
+          return
+        }
+        onSubmit({ entityType: WEB_PAGE_ENTITY, config: { url } })
       }}
     >
-      <TextField label="Title" value={title} onChange={setTitle} autoFocus />
-      <TextField label="URL" value={url} onChange={setUrl} required placeholder="https://" monospace />
+      <TextField
+        label="URL"
+        value={address}
+        onChange={(value) => {
+          setAddress(value)
+          setInvalid(false)
+        }}
+        required
+        autoFocus
+        placeholder="example.com"
+        monospace
+        hint={invalid ? <span className="webpage-form__error">Enter an http or https address.</span> : 'http or https; a bare host opens over https.'}
+      />
     </form>
   )
+}
+
+function report(action: string): (result: { ok: boolean }) => void {
+  return (result) => {
+    if (!result.ok) console.error(`${action} failed`, result)
+  }
 }
 
 export const webPageRenderer = defineEntityRenderer<WebPageConfig>({
   type: WEB_PAGE_ENTITY,
   icon: 'W',
   Body: WebPageBody,
-  CreateForm: WebPageCreateForm
+  CreateForm: WebPageCreateForm,
+  menuActions: ({ node, config }) => [
+    {
+      id: 'open-external',
+      label: 'Open in default browser',
+      onSelect: () => void window.spadeHost.files.openExternal(config.url).then(report('Opening the page'))
+    },
+    {
+      id: 'copy-url',
+      label: 'Copy URL',
+      onSelect: () => void window.spadeHost.files.copyText(config.url).then(report('Copying the URL'))
+    },
+    { id: 'reload', label: 'Reload', disabled: node.collapsed, onSelect: () => requestReload(node.id) }
+  ]
 })
