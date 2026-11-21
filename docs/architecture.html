@@ -147,13 +147,13 @@
 <li>The sidebar is a derived overview and jump projection. It issues focus commands into the global canvas and owns no state.</li>
 <li>A shared Group container owns child bounds, nesting, movement, and common viewport actions. The Project container specializes it with a set of user-declared folders; there is no work-item or status specialization.</li>
 <li>Group membership is explicit. Overlapping a group never changes it.</li>
-<li>Structure is a forest of <code>child</code> edges; a branch is a derived view of one child and its descendants. One generic tree mechanic serves every node type, including agents and sub-agents.</li>
+<li>Structure is a forest of <code>child</code> edges; a branch is a derived view of one child and its descendants. One generic tree mechanic serves every node type, including agents and sub-agents. An agent may spawn children only on itself or on a descendant in its own tree; the command layer enforces this.</li>
 <li>Container chrome and non-interactive surfaces preserve outer-canvas zoom-in/out, and containers keep navigation gutters between children.</li>
 <li>Automatic placement of new nodes is one pure shared function that never overlaps nodes and never moves user-placed nodes.</li>
 </ul>
 
 <h2 id="p3-proven-prototype-boundaries">Prototype-proven boundaries</h2>
-<p>The production application still has no external integrations or persistence. The merged P3 prototype proved the following generic boundaries; its GitHub, issue, pull-request, and checkout parts are not planned for production.</p>
+<p>The production application still has no external integrations or persistence. The merged P3 prototype proved the following generic boundaries; its GitHub, issue, pull-request, and checkout parts are deferred beyond the first usable phase.</p>
 <ul>
 <li>Typed renderer requests cross a sandboxed preload into one serialized main-process command and publication owner; renderers receive no credentials, filesystem access, or Paseo client.</li>
 <li>SPADE persists its own ledger and exact external references as <code>provider + kind + opaque ID</code>. Paseo remains authoritative for agents, workspaces, parent relations, and bounded timeline data. Production persistence lives in SPADE's application data directory and never inside user project folders.</li>

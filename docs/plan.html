@@ -47,8 +47,8 @@
 <h3 id="decisions">Recorded decisions</h3>
 <p>These decisions were taken on 2026-11-21 and govern the first usable version. Prototypes P1–P3 answered their questions; the next work is production code, not further prototypes.</p>
 <ul>
-<li><strong>Generic over workflow-specific.</strong> The GitHub issue → agent → worktree → diff → PR workflow is no longer used. It is not part of v1; its code is kept for recovery (§19).</li>
-<li><strong>No GitHub ceremony.</strong> No issue, pull-request, review, check, diff, commit, push, or merge surfaces in v1 (§14).</li>
+<li><strong>Generic over workflow-specific.</strong> The GitHub issue → agent → worktree → diff → PR workflow is not what SPADE is used for now, so it is not part of the first usable phase. It is deferred, not dropped: its code stays in the merged prototypes for later (§19).</li>
+<li><strong>GitHub is deferred.</strong> Issue, pull-request, review, check, diff, commit, push, and merge surfaces are not relevant to the first usable phase and are postponed to a later phase (§14).</li>
 <li><strong>Windows only.</strong> v1 targets native Windows. WSL, macOS, and Linux are out of scope and must not shape the design.</li>
 <li><strong>SPADE never touches user projects.</strong> The application keeps all of its own state in its application data directory (§4.7). It writes no files, markers, ignore entries, or Git state into project folders.</li>
 <li><strong>Parent-child trees, not branches.</strong> The structural relationship is a parent-child edge. A "branch" is only a derived view: a child together with everything below it (§4.6).</li>
@@ -176,7 +176,7 @@
 <li>No worktree management. Users work in fixed checkouts; Paseo-managed worktrees can be added later.</li>
 <li>No terminal, Monaco editor, LSP, whiteboard, or task-board entities until the bricks in §20 are in use.</li>
 <li>No embedded full IDE; no containerized execution isolation.</li>
-<li>No ACP or SPADE-owned MCP integration in v1.</li>
+<li>No ACP or SPADE-owned MCP integration in v1, unless the narrow spawn-target tool in §21 is adopted.</li>
 <li>No security hardening or sandbox restrictions for agent-authored HTML/JavaScript; runtime isolation may still be used to prevent CSS/lifecycle collisions.</li>
 <li>No assumption that a branch name is workspace identity, and no use of Git branches as a canvas concept.</li>
 </ul>
@@ -311,6 +311,14 @@ type ProjectFolder = {
 <li><strong>Pick a tree or node:</strong> attach as a child of any chosen node. Choosing a tree attaches to its root.</li>
 <li><strong>Start a new tree:</strong> create the node with no parent.</li>
 </ol>
+<h4 id="agent-spawn-rule">Agent-initiated spawns</h4>
+<p>An agent (including a sub-agent) chooses where each child it spawns goes, and the choice is always a continuation of its own tree. Exactly two targets are allowed:</p>
+<ol>
+<li><strong>Itself:</strong> a new child of the agent's own node, which starts a new branch off the agent.</li>
+<li><strong>A node below it:</strong> a child of any descendant of the agent in its own tree, which continues an existing branch.</li>
+</ol>
+<p>An agent cannot start a new tree, attach to an ancestor, a sibling, or any node outside its own subtree. SPADE enforces this when the command is executed by checking that the chosen node is the agent's node or one of its descendants; anything else is rejected with an error returned to the agent. If the chosen node no longer exists, the spawn fails rather than falling back silently. When an agent does not choose, a spawned child defaults to a child of the agent itself. A user can always override placement with the full target choice above.</p>
+<p>The agent-facing channel through which an agent names its target is an open decision (§21).</p>
 <p>Commands: <code>spawnChild(sourceNodeId, type, config, target, origin)</code>, <code>startTree(type, config, placement)</code>, <code>reparent(nodeId, newParentId | null)</code> (moves the whole branch; rejects cycles; <code>null</code> makes the node a new root), <code>collapseBranch</code> / <code>expandBranch</code> (hides descendants and shows a count), and <code>archiveBranch</code>.</p>
 <p>Removing a single node never deletes its children: they are promoted to the removed node's parent, or become roots if it had none. Deleting a whole branch is an explicit action. Removing a node removes only SPADE records.</p>
 <p>Sub-agents use the same mechanic. A managed sub-agent identified by Paseo's durable parent identity appears as a collapsed <code>child</code> node with origin <code>delegated</code>. A sub-agent can itself have children of any type, so a branch can start at a sub-agent and continue with images and web pages.</p>
@@ -501,7 +509,7 @@ type ProjectFolder = {
 <li>Tool calls and file reads use expandable panes.</li>
 <li>Supports prompts, interrupt/resume, model/mode display and attention state.</li>
 <li>Spawn: the caller selects the project folder (working directory), provider, model, mode, and prompt. The mode default comes from a user setting; unattended runs depend on it.</li>
-<li>Can spawn child nodes from any message, artifact, or the generic node chrome, using the tree mechanic (§4.6).</li>
+<li>Can spawn child nodes from any message, artifact, or the generic node chrome, using the tree mechanic (§4.6). When the agent itself spawns a child, it chooses either itself or a node below it in its own tree (§4.6).</li>
 <li>Can attach selected connected nodes as bounded context (§9).</li>
 </ul>
 <h4 id="rich-conversation-artifacts">Rich conversation artifacts</h4>
@@ -644,7 +652,7 @@ const defaultConversationExpansion = {
 <h3 id="mcp">MCP</h3>
 <p>MCP is a tool/resource protocol between an agent host and external capability servers.</p>
 <p>The harness/provider may support transporting MCP tools, and Paseo can inject MCP server configuration into supported providers. That does <strong>not</strong> automatically define how an agent reads SPADE nodes.</p>
-<p>MCP is out of scope for v1. Prompt/attachment context projection is sufficient. Revisit a SPADE node tool service only after a prototype demonstrates that bounded prompt projections are inadequate.</p>
+<p>MCP is out of scope for v1, with one candidate exception: the narrow agent spawn-target tool described in §21. Prompt/attachment context projection is otherwise sufficient. Revisit a SPADE node tool service only after a prototype demonstrates that bounded prompt projections are inadequate.</p>
 <h2 id="11-rich-agent-responses-and-generated-html">11. Rich agent responses and generated HTML</h2>
 <p>V1 supports both standard rich blocks and full agent-authored HTML/JavaScript. Security hardening is explicitly deferred for the prototype.</p>
 <h3 id="standard-rich-blocks">Standard rich blocks</h3>
@@ -743,7 +751,7 @@ const defaultConversationExpansion = {
 </code></pre>
 <p>Do not spread direct protocol calls through entity renderers.</p>
 <h3 id="recoverable-adapter-behavior">Recoverable adapter behavior</h3>
-<p>The merged P3 prototype already solved the generic parts of this boundary against Paseo 0.14.0. The production adapter is built by copying and generalizing it, dropping everything GitHub-, issue-, pull-request-, and checkout-specific. Behavior to keep:</p>
+<p>The merged P3 prototype already solved the generic parts of this boundary against Paseo 0.14.0. The production adapter is built by copying and generalizing it, leaving everything GitHub-, issue-, pull-request-, and checkout-specific for the later phase that revisits it. Behavior to keep:</p>
 <ul>
 <li>One daemon connection with explicit readiness and reconnect.</li>
 <li>Identify the client with a semver <code>appVersion</code>; a non-semver value hides non-legacy providers from the session.</li>
@@ -759,8 +767,8 @@ const defaultConversationExpansion = {
 <h3 id="plugin-boundary">Plugin boundary</h3>
 <p>Paseo's plugin system may be useful for daemon-side SPADE RPCs later, but a complete React Flow shell does not fit naturally as a Paseo sidebar plugin. SPADE remains a separate frontend.</p>
 <h2 id="14-github-scope">14. GitHub and Git scope</h2>
-<p>None in v1. SPADE has no GitHub adapter, no <code>gh</code> dependency, no issue or pull-request entities, and no diff, commit, push, or merge surfaces. Agents may use Git freely inside their working directory; SPADE neither requires nor models it.</p>
-<p>The prior GitHub entities, adapter, reconciliation, and checkout operations exist only in the merged P3 prototype for reference. If they return, they return as ordinary entities registered through §5, not as a built-in workflow.</p>
+<p><strong>Deferred</strong>, not dropped. The first usable phase has no GitHub adapter, no <code>gh</code> dependency, no issue or pull-request entities, and no diff, commit, push, or merge surfaces. Agents may use Git freely inside their working directory; SPADE neither requires nor models it.</p>
+<p>The earlier GitHub entities, adapter, reconciliation, and checkout operations remain in the merged P3 prototype. When this scope is picked up in a later phase, it comes back as ordinary entities registered through §5, not as a built-in workflow.</p>
 <h2 id="15-full-ide">15. Full IDE and file explorer</h2>
 <p>Do not embed a full IDE. In v1, SPADE provides <strong>Reveal in Explorer</strong> for files and folders (§7.1) using the Windows file explorer. An <code>Open in IDE</code> action is deferred; when added it targets VS Code on Windows paths (<code>code -g path:line:column</code>) with configurable command templates for other editors.</p>
 <h2 id="16-desktop-shell-and-browser-rendering">16. Desktop shell and browser rendering</h2>
@@ -866,7 +874,7 @@ const defaultConversationExpansion = {
 <tr>
 <td>P1: global canvas and project navigation (mock)</td>
 <td>One global canvas with auto-sized project containers, a sidebar jump surface, and shared Group geometry works.</td>
-<td>Group/Project container model, sidebar, <code>Fit</code> / <code>Full height</code>, focus history. WorkItem, status, and issue-workflow parts are dropped.</td>
+<td>Group/Project container model, sidebar, <code>Fit</code> / <code>Full height</code>, focus history. WorkItem, status, and issue-workflow parts are not needed now.</td>
 </tr>
 <tr>
 <td>P2: Electron browser and custom answer</td>
@@ -875,8 +883,8 @@ const defaultConversationExpansion = {
 </tr>
 <tr>
 <td>P3: real Paseo issue-to-PR bridge (Paseo 0.14.0)</td>
-<td>Opaque agent/workspace identity survives restarts; one confined adapter was sufficient. The issue-to-PR workflow is abandoned as a product direction.</td>
-<td><code>prototypes/paseo-issue-to-pr-bridge/</code>: <code>main/SpadePaseoAdapter.ts</code>, <code>shared/paseoReconciliation.ts</code>, <code>main/ledgerStore.ts</code>, <code>main/paseoComposition.ts</code>, the generic command-service and IPC patterns. GitHub adapters, reconciliation, PullRequest/Issue entities, checkout operations, and the stage assumptions are not carried forward.</td>
+<td>Opaque agent/workspace identity survives restarts; one confined adapter was sufficient. The issue-to-PR workflow is not used now and is outside the first usable phase.</td>
+<td><code>prototypes/paseo-issue-to-pr-bridge/</code>: <code>main/SpadePaseoAdapter.ts</code>, <code>shared/paseoReconciliation.ts</code>, <code>main/ledgerStore.ts</code>, <code>main/paseoComposition.ts</code>, the generic command-service and IPC patterns. GitHub adapters, reconciliation, PullRequest/Issue entities, and checkout operations are deferred to a later phase and stay in the prototype until then; the stage assumptions are not carried forward.</td>
 </tr>
 <tr>
 <td>P4: editor/LSP and IDE handoff</td>
@@ -920,7 +928,7 @@ const defaultConversationExpansion = {
 <tr>
 <td>B5 Agents and sub-agents</td>
 <td>Generalized Paseo adapter (§13), spawn from a project folder, conversation renderer, permissions, delegated sub-agent children, restart reconciliation without duplicates.</td>
-<td>Run an agent that delegates to a sub-agent in one of the project's folders; both appear as a tree; quitting and relaunching SPADE and restarting Paseo reproduces the same nodes.</td>
+<td>Run an agent that delegates to a sub-agent in one of the project's folders; both appear as a tree, and an agent spawn can target itself or a descendant while any other target is rejected; quitting and relaunching SPADE and restarting Paseo reproduces the same nodes.</td>
 </tr>
 <tr>
 <td>B6 Rich conversation</td>
@@ -933,6 +941,7 @@ const defaultConversationExpansion = {
 <h2 id="21-open-decisions">21. Open decisions</h2>
 <ol>
 <li>Final default sizes and spacing in §8; they are initial values to tune against real content in B3.</li>
+<li>The channel through which an agent names its spawn target (§4.6). Sub-agents created through Paseo carry only a parent identity, so naming a descendant target needs a SPADE-facing mechanism. Recommendation: a minimal SPADE-owned tool limited to <code>spawn_child(target, type, config)</code> and a read-only listing of the agent's own subtree, as an explicit, narrow exception to the v1 MCP deferral (§10). Until decided, B5 implements only the default (child of the agent itself) for Paseo-created sub-agents.</li>
 <li>Which connected nodes are included automatically as agent context versus requiring explicit selection (§9).</li>
 <li>Acceptable active-node budget for webview and conversation renderers on a large canvas.</li>
 <li>Whether to watch image files for changes, or reload only on focus or request, given many images on a canvas.</li>
