@@ -13,6 +13,8 @@ export type FileServiceErrorCode =
   | 'image-missing'
   // The image exists but cannot be read, or its content is not an image of a supported type.
   | 'image-unreadable'
+  // describeImage: a network path outside the project root that the user has not approved this session.
+  | 'network-path'
 
 // Carries a stable `code` the IPC layer forwards as `{ code, message }`.
 export class FileServiceError extends Error {

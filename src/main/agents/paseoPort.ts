@@ -1,8 +1,9 @@
 import { PaseoUnavailableError, type PaseoAdapter } from '../paseo'
 import { AgentServiceError } from './errors'
 
-// The part of the Paseo adapter the agent service uses. Nothing here archives or stops an agent:
-// removing or archiving a node in SPADE never touches the Paseo agent behind it.
+// The part of the Paseo adapter the agent service uses. Removing or archiving a node in SPADE never
+// touches the Paseo agent behind it: `archiveAgent` is only for rolling back an agent spawned by a
+// creation command that then failed, in that same call.
 export type PaseoPort = Pick<
   PaseoAdapter,
   | 'start'
@@ -12,6 +13,7 @@ export type PaseoPort = Pick<
   | 'watchTimelines'
   | 'listProviders'
   | 'spawnAgent'
+  | 'archiveAgent'
   | 'getAgent'
   | 'listChildAgents'
   | 'sendPrompt'

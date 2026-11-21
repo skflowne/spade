@@ -70,12 +70,28 @@ spade prompt <agent-node> Please summarize your result
 Spawning an agent starts a real Paseo agent in the project root as your sub-agent; do it only when the work
 needs a separate agent. The viewport belongs to the user: there is no viewport or focus command.
 
+**Pass arbitrary text through stdin.** Any free-text value (the text of `prompt`, `rename`, `describe`;
+`--body`, `--prompt`, `--title`, `--description`, `--caption`, `--config`, `--label`) can be a single `-`,
+which reads that value from stdin (one per command; a final line break is dropped). Shells, and above all
+`cmd.exe` on Windows, re-read quotes, `&`, `|`, `>`, `$`, and `%VAR%` in arguments; stdin is passed as is:
+
+```sh
+spade prompt <agent-node> - <<'EOF'
+Text with "quotes", & | > $HOME %PATH%, and several lines.
+EOF
+spade spawn note --title "Findings" --body - < findings.md
+```
+
 ## Failure
 
 A command naming a missing node or edge, an invalid config, or a cycle fails with a code and message on
 stderr (`spade: unknown-node: Unknown node: …`) and a non-zero exit; nothing falls back silently. Exit 2
 means wrong usage (`spade <command> --help`). If SPADE is not running, say so and continue without the
 canvas. Add `--json` to any command for exact structured output.
+
+You act as yourself through `PASEO_AGENT_ID`, which Paseo sets for you. **Never pass `--as-user`**: it is
+only for a person at a terminal. If a command fails with `identity-required` (your agent identity is
+missing), stop using the canvas and tell the user; do not try to work around it.
 
 ## Rich answers
 

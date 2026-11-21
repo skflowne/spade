@@ -73,7 +73,8 @@ const canvas: Canvas = {
   nodes: [canvasNode],
   edges: [childEdge],
   workspaces: [workspace],
-  activity: [activity]
+  activity: [activity],
+  dismissedResources: [{ provider: 'paseo', kind: 'agent', id: 'agent-removed' }]
 }
 
 void canvas

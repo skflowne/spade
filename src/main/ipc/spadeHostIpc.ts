@@ -127,15 +127,17 @@ export function registerSpadeHostIpc(options: SpadeHostIpcOptions): () => void {
     'agents.openProviderSubagent': (nodeId, subagentId) =>
       result(() => agents.openProviderSubagent(args.id(nodeId, 'nodeId'), args.id(subagentId, 'subagentId'), USER)),
 
-    'files.inspectPath': (projectId, path) =>
-      envelope(() => files.inspectPath(project(projectId), args.text(path, 'path'))),
+    'files.inspectPath': (projectId, path, options) =>
+      envelope(() => files.inspectPath(project(projectId), args.text(path, 'path'), args.pathAccess(options))),
     'files.reveal': (projectId, path) => result(() => files.reveal(project(projectId), args.text(path, 'path'))),
     'files.openExternal': (url) => result(() => files.openExternal(args.webUrl(url))),
     'files.copyText': (text) =>
       result(async () => files.copyText(args.text(text, 'text', { allowEmpty: true }))),
     'files.pickImage': (projectId) => envelope(() => files.pickImage(project(projectId))),
-    'files.describeImage': (projectId, source) =>
-      result(async () => ({ image: await files.describeImage(project(projectId), args.imageSource(source)) })),
+    'files.describeImage': (projectId, source, options) =>
+      result(async () => ({
+        image: await files.describeImage(project(projectId), args.imageSource(source), args.pathAccess(options))
+      })),
     'files.importImage': (input) => result(() => files.importImage(args.imageData(input)))
   }
 

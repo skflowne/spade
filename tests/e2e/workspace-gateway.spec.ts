@@ -274,6 +274,112 @@ test('fails a creation with entity-create-failed and persists nothing when the a
   })
 })
 
+test('releases the resource it just created when the creation fails afterwards, and still reports the failure', async () => {
+  await withFixture(async ({ projectDirectory, open }) => {
+    const failWrites = { on: false }
+    const files: PersistenceFileOperations = {
+      ...nodeFileOperations,
+      async writeNewFile(path, data) {
+        if (failWrites.on) throw Object.assign(new Error('disk full'), { code: 'ENOSPC' })
+        return nodeFileOperations.writeNewFile(path, data)
+      }
+    }
+    const gateway = await open({ files })
+    const { project } = await gateway.createProject(await projectDirectory('rollback'))
+    const { project: doomedProject } = await gateway.createProject(await projectDirectory('doomed-project'))
+    const discarded: Array<{ input: EntityCreateInput; created: EntityCreateResult }> = []
+    let duringCreate: (input: EntityCreateInput) => Promise<void> = async () => {}
+    let result: (input: EntityCreateInput) => EntityCreateResult = (input) => ({
+      resourceRef: { provider: 'electron', kind: 'webview', id: `page-for-${input.nodeId}` }
+    })
+    const adapter: MainEntityAdapter = {
+      type: WEB_PAGE_ENTITY,
+      async create(input) {
+        await duringCreate(input)
+        return result(input)
+      },
+      async discard(input, created) {
+        discarded.push({ input, created })
+      }
+    }
+    gateway.registerEntityAdapter(adapter)
+    const page = { entityType: WEB_PAGE_ENTITY, config: { url: 'https://example.com' } }
+    const { nodeId: source } = await gateway.execute(project.id, { type: 'startTree', node: note('source') }, user)
+
+    // The source node is removed while the resource is being created.
+    duringCreate = async () => {
+      await gateway.execute(project.id, { type: 'removeNode', nodeId: source! }, user)
+    }
+    await expectCode(
+      gateway.execute(project.id, { type: 'spawnChild', sourceNodeId: source!, node: page, origin: 'spawned' }, agent),
+      'unknown-node'
+    )
+    expect(discarded).toHaveLength(1)
+    expect(discarded[0].input).toMatchObject({ sourceNode: { id: source }, actor: agent, config: page.config })
+    expect(discarded[0].created.resourceRef?.id).toBe(`page-for-${discarded[0].input.nodeId}`)
+
+    // The project is removed meanwhile.
+    duringCreate = async () => gateway.removeProject(doomedProject.id)
+    await expectCode(gateway.execute(doomedProject.id, { type: 'startTree', node: page }, user), 'unknown-project')
+    expect(discarded).toHaveLength(2)
+
+    // The adapter returns something the command cannot hold.
+    duringCreate = async () => {}
+    result = () => ({ resourceRef: { provider: '', kind: 'webview', id: 'bad' } })
+    await expectCode(gateway.execute(project.id, { type: 'startTree', node: page }, user), 'entity-create-failed')
+    expect(discarded).toHaveLength(3)
+
+    // The canvas cannot be written.
+    result = (input) => ({ resourceRef: { provider: 'electron', kind: 'webview', id: `page-for-${input.nodeId}` } })
+    failWrites.on = true
+    const saveFailure = await gateway.execute(project.id, { type: 'startTree', node: page }, user).catch((error: unknown) => error)
+    failWrites.on = false
+    expect(saveFailure).toMatchObject({ message: expect.stringContaining('disk full') })
+    expect(discarded).toHaveLength(4)
+
+    // A successful creation keeps its resource.
+    await gateway.execute(project.id, { type: 'startTree', node: page }, user)
+    expect(discarded).toHaveLength(4)
+    expect((await gateway.getCanvas(project.id)).nodes.filter((node) => node.entityType === WEB_PAGE_ENTITY)).toHaveLength(1)
+  })
+})
+
+test('a release that fails is logged with the resource it left behind, and the original failure is still reported', async () => {
+  await withFixture(async ({ projectDirectory, open }) => {
+    const gateway = await open()
+    const { project } = await gateway.createProject(await projectDirectory('release-fails'))
+    const { nodeId: source } = await gateway.execute(project.id, { type: 'startTree', node: note('source') }, user)
+    gateway.registerEntityAdapter({
+      type: WEB_PAGE_ENTITY,
+      async create() {
+        await gateway.execute(project.id, { type: 'removeNode', nodeId: source! }, user)
+        return { resourceRef: { provider: 'electron', kind: 'webview', id: 'orphan-page-7' } }
+      },
+      async discard() {
+        throw new Error('daemon went away')
+      }
+    })
+    const logged: unknown[][] = []
+    const original = console.error
+    console.error = (...args: unknown[]) => void logged.push(args)
+    try {
+      await expectCode(
+        gateway.execute(
+          project.id,
+          { type: 'spawnChild', sourceNodeId: source!, node: { entityType: WEB_PAGE_ENTITY, config: { url: 'https://example.com' } }, origin: 'spawned' },
+          user
+        ),
+        'unknown-node'
+      )
+    } finally {
+      console.error = original
+    }
+    expect(logged).toHaveLength(1)
+    expect(String(logged[0][0])).toContain('orphan-page-7')
+    expect(logged[0]).toContainEqual(expect.objectContaining({ message: 'daemon went away' }))
+  })
+})
+
 test('rejects a doomed creation before asking the entity adapter for a resource', async () => {
   await withFixture(async ({ projectDirectory, open }) => {
     const gateway = await open()

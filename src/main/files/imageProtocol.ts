@@ -1,6 +1,6 @@
 import { Readable } from 'node:stream'
 import { isSafeId } from '../persistence'
-import { isAbsolutePath, isImagePath } from '../../shared/paths'
+import { isAbsolutePath, isImagePath, isNetworkPath } from '../../shared/paths'
 import { FileServiceError } from './errors'
 import { IMAGE_MIME_TYPES, IMAGE_SNIFF_BYTES } from './imageFormat'
 import { openImageFile, type OpenedImage } from './imageFile'
@@ -65,19 +65,26 @@ function refuse(status: number, message: string, headers: Record<string, string>
 
 export type ImageRequestHandlerOptions = {
   resolveAsset(assetId: string): Promise<string | null>
+  // Whether a file path may be opened. By default no network path is: the file service allows only those
+  // the user approved or that lie inside an open project.
+  allowsFile?(path: string): boolean
+  openImage?: typeof openImageFile
 }
 
 export function createImageRequestHandler(options: ImageRequestHandlerOptions): (request: Request) => Promise<Response> {
+  const allowsFile = options.allowsFile ?? ((path: string) => !isNetworkPath(path))
+  const openImage = options.openImage ?? openImageFile
   return async (request) => {
     if (request.method !== 'GET') return refuse(405, 'Images are read-only.', { Allow: 'GET' })
     const location = parseImageUrl(request.url)
     if (location === null) return refuse(400, 'Not an image URL.')
+    if (location.kind === 'file' && !allowsFile(location.path)) return refuse(403, 'This network path is not approved.')
     const path = location.kind === 'file' ? location.path : await options.resolveAsset(location.assetId)
     if (path === null) return refuse(404, 'Unknown asset.')
 
     let image: OpenedImage
     try {
-      image = await openImageFile(path, IMAGE_SNIFF_BYTES)
+      image = await openImage(path, IMAGE_SNIFF_BYTES)
     } catch (error) {
       if (!(error instanceof FileServiceError)) throw error
       return error.code === 'image-missing' ? refuse(404, 'Image not found.') : refuse(415, 'Not a supported image.')

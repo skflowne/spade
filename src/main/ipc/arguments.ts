@@ -1,5 +1,6 @@
 import { AGENT_TIMELINE_PAGE_LIMIT, type AgentTimelineQuery, type PermissionBehavior } from '../../shared/agents'
 import { imageEntity, type ImageSource } from '../../shared/builtinEntities'
+import type { PathAccessOptions } from '../../shared/ipc'
 
 // Renderer arguments are untrusted: every handler checks them here before calling a service.
 export class InvalidArgumentError extends Error {
@@ -73,6 +74,15 @@ export function promptInput(value: unknown): { text: string; contextNodeIds?: st
 export function permissionBehavior(value: unknown): PermissionBehavior {
   if (value !== 'allow' && value !== 'deny') throw new InvalidArgumentError('behavior must be "allow" or "deny"')
   return value
+}
+
+export function pathAccess(value: unknown): PathAccessOptions | undefined {
+  if (value === undefined) return undefined
+  const options = fields(value, 'options', ['explicit'])
+  if (options.explicit !== undefined && typeof options.explicit !== 'boolean') {
+    throw new InvalidArgumentError('options.explicit must be a boolean')
+  }
+  return options.explicit === undefined ? {} : { explicit: options.explicit }
 }
 
 export function imageSource(value: unknown): ImageSource {

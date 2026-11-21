@@ -8,10 +8,13 @@ import { expect, test } from '@playwright/test'
 import {
   createControlServer,
   formatAgentInstructions,
+  posixShimScript,
+  powershellShimScript,
   windowsShimScript,
   type ControlServer,
   type ControlServerInfo
 } from '../../src/main/control'
+import { AgentServiceError } from '../../src/main/agents'
 import { MAX_PAGE_LIMIT } from '../../src/main/control/protocol'
 import type { Actor } from '../../src/shared/domain'
 import { agentSeed, FakeAgentService, FakeGateway, noteSeed } from '../control-fakes'
@@ -55,12 +58,14 @@ function post(
   })
 }
 
-async function call(info: ControlServerInfo, method: string, params: unknown = {}, agentId?: string) {
-  const reply = await post(info, { method, params, ...(agentId ? { agentId } : {}) })
+// `asUser` stands for a person at a terminal passing --as-user.
+async function call(info: ControlServerInfo, method: string, params: unknown = {}, agentId?: string | { asUser: true }) {
+  const caller = typeof agentId === 'string' ? { agentId } : (agentId ?? {})
+  const reply = await post(info, { method, params, ...caller })
   return reply.body
 }
 
-async function ok<Result>(info: ControlServerInfo, method: string, params: unknown = {}, agentId?: string) {
+async function ok<Result>(info: ControlServerInfo, method: string, params: unknown = {}, agentId?: string | { asUser: true }) {
   const body = await call(info, method, params, agentId)
   expect(body.error).toBeUndefined()
   return body.result as Result
@@ -199,8 +204,8 @@ test.describe('identity and attribution', () => {
     expect(body.error?.message).toContain('agent-unknown')
   })
 
-  test('without an agent id the caller is the user, who must name a project for project-wide reads', async () => {
-    const { info, gateway, plan } = await world()
+  test('without an agent id reads are the user’s, who must name a project for project-wide reads', async () => {
+    const { info } = await world()
     const me = await ok<{ actor: Actor; node: unknown }>(info, 'whoami')
     expect(me.actor).toEqual({ kind: 'user' })
     expect(me.node).toBeNull()
@@ -209,9 +214,39 @@ test.describe('identity and attribution', () => {
     expect(unscoped.error?.code).toBe('project-required')
     const byName = await ok<{ projectId: string }>(info, 'nodes', { project: 'Alpha' })
     expect(byName.projectId).toBe('alpha')
+  })
 
-    await ok(info, 'execute', { command: { type: 'collapseNode', nodeId: plan } })
+  test('a change without an agent id is refused unless the caller explicitly acts as the user', async () => {
+    const { info, gateway, agents, lead, plan } = await world()
+    const before = gateway.canvas('alpha')
+    for (const [method, params] of [
+      ['execute', { command: { type: 'collapseNode', nodeId: plan } }],
+      ['spawn', { entityType: 'note', config: { body: 'x' }, placement: { kind: 'child', parentNodeId: plan } }],
+      ['prompt', { nodeId: lead, text: 'status?' }]
+    ] as const) {
+      const refused = await call(info, method, params)
+      expect(refused.error?.code, method).toBe('identity-required')
+      expect(refused.error?.message, method).toContain('PASEO_AGENT_ID')
+      expect(refused.error?.message, method).toContain('--as-user')
+    }
+    expect(gateway.executed).toEqual([])
+    expect(gateway.canvas('alpha')).toBe(before)
+    expect(agents.prompts).toEqual([])
+
+    await ok(info, 'execute', { command: { type: 'collapseNode', nodeId: plan } }, { asUser: true })
+    await ok(info, 'prompt', { nodeId: lead, text: 'status?' }, { asUser: true })
     expect(gateway.executed.at(-1)?.actor).toEqual({ kind: 'user' })
+    expect(agents.prompts.at(-1)?.actor).toEqual({ kind: 'user' })
+  })
+
+  test('an agent identity and acting as the user cannot be combined, and asUser must be exactly true', async () => {
+    const { info, gateway, plan } = await world()
+    const both = await post(info, { method: 'execute', params: { command: { type: 'collapseNode', nodeId: plan } }, agentId: 'agent-lead', asUser: true })
+    expect(both.body.error?.code).toBe('invalid-params')
+    const loose = await post(info, { method: 'execute', params: { command: { type: 'collapseNode', nodeId: plan } }, asUser: 'yes' })
+    expect(loose.status).toBe(400)
+    expect(loose.body.error?.code).toBe('bad-request')
+    expect(gateway.executed).toEqual([])
   })
 
   test('every change method is attributed to the calling agent', async () => {
@@ -323,6 +358,23 @@ test.describe('commands', () => {
 
     const missingEdge = await call(info, 'execute', { command: { type: 'disconnectNodes', edgeId: 'ghost-edge' } }, 'agent-lead')
     expect(missingEdge.error?.code).toBe('unknown-edge')
+  })
+
+  test('agent service failures keep their stable codes; anything else is internal', async () => {
+    const { info, agents, lead } = await world()
+    agents.promptFailure = new AgentServiceError('agent-missing', `Paseo no longer has the agent behind node ${lead}.`)
+    expect((await call(info, 'prompt', { nodeId: lead, text: 'status?' }, 'agent-lead')).error).toEqual({
+      code: 'agent-missing',
+      message: `Paseo no longer has the agent behind node ${lead}.`
+    })
+
+    agents.providersFailure = new AgentServiceError('paseo-unavailable', 'Paseo is not connected (connecting).')
+    expect((await call(info, 'providers')).error).toEqual({ code: 'paseo-unavailable', message: 'Paseo is not connected (connecting).' })
+
+    for (const failure of [Object.assign(new Error('open failed'), { code: 'ENOENT' }), new Error('boom'), Object.assign(new Error('x'), { code: 42 })]) {
+      agents.providersFailure = failure
+      expect((await call(info, 'providers')).error?.code).toBe('internal')
+    }
   })
 
   test('agents cannot move the viewport, forge resources, or bypass spawn', async () => {
@@ -475,7 +527,7 @@ test.describe('discovery and launcher shims', () => {
     expect(discovery).toEqual({ version: 1, url: info.url, token: info.token, pid: process.pid, startedAt: expect.any(String) })
     if (process.platform !== 'win32') expect((await stat(controlFile)).mode & 0o777).toBe(0o600)
     expect((await readdir(dataDirectory)).sort()).toEqual(['bin', 'control.json'])
-    expect((await readdir(join(dataDirectory, 'bin'))).sort()).toEqual(['spade', 'spade.cmd'])
+    expect((await readdir(join(dataDirectory, 'bin'))).sort()).toEqual(['spade', 'spade.cmd', 'spade.ps1'])
 
     await server.stop()
     expect(await readdir(dataDirectory)).toEqual(['bin'])
@@ -525,7 +577,7 @@ test.describe('discovery and launcher shims', () => {
   test('the Windows shim quotes every path and keeps its environment local', () => {
     const script = windowsShimScript({
       controlFile: 'C:\\Users\\A B\\AppData\\Roaming\\SPADE\\control.json',
-      executablePath: 'C:\\Program Files\\SPADE\\SPADE.exe',
+      executablePath: 'C:\\Program Files\\R&D ^1\\SPADE.exe',
       cliScriptPath: 'C:\\Program Files\\SPADE\\resources\\app 100%\\out\\main\\cli.js'
     })
     expect(script.split('\r\n')).toEqual([
@@ -533,10 +585,59 @@ test.describe('discovery and launcher shims', () => {
       'setlocal',
       'set "SPADE_CONTROL_FILE=C:\\Users\\A B\\AppData\\Roaming\\SPADE\\control.json"',
       'set "ELECTRON_RUN_AS_NODE=1"',
-      '"C:\\Program Files\\SPADE\\SPADE.exe" "C:\\Program Files\\SPADE\\resources\\app 100%%\\out\\main\\cli.js" %*',
+      // Inside double quotes `&` and `^` are literal in a batch file; only `%` needs doubling.
+      '"C:\\Program Files\\R&D ^1\\SPADE.exe" "C:\\Program Files\\SPADE\\resources\\app 100%%\\out\\main\\cli.js" %*',
       'exit /b %ERRORLEVEL%',
       ''
     ])
+  })
+
+  test('the PowerShell launcher passes every path literally and restores the caller’s environment', () => {
+    const script = powershellShimScript({
+      controlFile: "C:\\Users\\O'Neil\\AppData\\Roaming\\SPADE\\control.json",
+      executablePath: 'C:\\Program Files\\R&D ^1 $env:X `n\\SPADE.exe',
+      cliScriptPath: 'C:\\Users\\Ann’s 100% "app"\\out\\main\\cli.js'
+    })
+    // A UTF-8 byte order mark, so Windows PowerShell 5.1 reads non-ASCII paths correctly.
+    expect(script.startsWith('\uFEFF')).toBe(true)
+    expect(script.slice(1).split('\r\n')).toEqual([
+      '# Written by SPADE at every start.',
+      '$spadePrevious = @($env:SPADE_CONTROL_FILE, $env:ELECTRON_RUN_AS_NODE)',
+      'try {',
+      "  $env:SPADE_CONTROL_FILE = 'C:\\Users\\O''Neil\\AppData\\Roaming\\SPADE\\control.json'",
+      "  $env:ELECTRON_RUN_AS_NODE = '1'",
+      // Single-quoted strings expand nothing; every quote character PowerShell accepts is doubled.
+      "  & 'C:\\Program Files\\R&D ^1 $env:X `n\\SPADE.exe' 'C:\\Users\\Ann’’s 100% \"app\"\\out\\main\\cli.js' @args",
+      '  $spadeExit = $LASTEXITCODE',
+      '} finally {',
+      '  $env:SPADE_CONTROL_FILE = $spadePrevious[0]',
+      '  $env:ELECTRON_RUN_AS_NODE = $spadePrevious[1]',
+      '}',
+      'exit $spadeExit',
+      ''
+    ])
+  })
+
+  test('the POSIX launcher uses forward slashes for Windows paths, so Git Bash can run it', () => {
+    const script = posixShimScript({
+      controlFile: "C:\\Users\\O'Neil\\AppData\\Roaming\\SPADE\\control.json",
+      executablePath: 'C:\\Program Files\\R&D 100% $HOME\\SPADE.exe',
+      cliScriptPath: '\\\\server\\share\\SPADE\\cli.js'
+    })
+    expect(script.split('\n')).toEqual([
+      '#!/bin/sh',
+      '# Written by SPADE at every start.',
+      "SPADE_CONTROL_FILE='C:/Users/O'\\''Neil/AppData/Roaming/SPADE/control.json'",
+      'export SPADE_CONTROL_FILE',
+      'ELECTRON_RUN_AS_NODE=1',
+      'export ELECTRON_RUN_AS_NODE',
+      "exec 'C:/Program Files/R&D 100% $HOME/SPADE.exe' '//server/share/SPADE/cli.js' \"$@\"",
+      ''
+    ])
+    // POSIX paths, whose names may legally contain backslashes, are left alone.
+    expect(posixShimScript({ controlFile: '/data/a\\b.json', executablePath: '/opt/spade', cliScriptPath: '/opt/cli.js' })).toContain(
+      "SPADE_CONTROL_FILE='/data/a\\b.json'"
+    )
   })
 })
 
@@ -545,7 +646,11 @@ test.describe('agent instructions', () => {
     const posix = formatAgentInstructions({
       nodeId: 'node-7',
       projectName: 'Alpha\nBeta',
-      shimPath: "/home/me/.config/SPADE data/bin/spade",
+      shims: {
+        posixShim: '/home/me/.config/SPADE data/bin/spade',
+        powershellShim: '/home/me/.config/SPADE data/bin/spade.ps1',
+        windowsShim: '/home/me/.config/SPADE data/bin/spade.cmd'
+      },
       platform: 'linux'
     })
     expect(posix).toContain('node-7')
@@ -557,10 +662,24 @@ test.describe('agent instructions', () => {
     const windows = formatAgentInstructions({
       nodeId: 'node-7',
       projectName: 'Alpha',
-      shimPath: 'C:\\Users\\A B\\AppData\\Roaming\\SPADE\\bin\\spade.cmd',
+      shims: {
+        posixShim: "C:\\Users\\O'Neil B\\AppData\\Roaming\\SPADE\\bin\\spade",
+        powershellShim: "C:\\Users\\O'Neil B\\AppData\\Roaming\\SPADE\\bin\\spade.ps1",
+        windowsShim: "C:\\Users\\O'Neil B\\AppData\\Roaming\\SPADE\\bin\\spade.cmd"
+      },
       platform: 'win32'
     })
-    expect(windows).toContain('`"C:\\Users\\A B\\AppData\\Roaming\\SPADE\\bin\\spade.cmd" skill`')
-    expect(windows).toContain('& "C:\\Users')
+    const bash = "'C:/Users/O'\\''Neil B/AppData/Roaming/SPADE/bin/spade'"
+    const powershell = "& 'C:\\Users\\O''Neil B\\AppData\\Roaming\\SPADE\\bin\\spade.ps1'"
+    const cmd = '"C:\\Users\\O\'Neil B\\AppData\\Roaming\\SPADE\\bin\\spade.cmd"'
+    expect(windows).toContain('node-7')
+    expect(windows).toContain(`\`${bash} skill\``)
+    // Recommended in this order: bash-like shells, PowerShell, then cmd.exe with its warning.
+    const order = [bash, powershell, cmd].map((command) => windows.indexOf(command))
+    expect(order.every((index) => index >= 0)).toBe(true)
+    expect([...order].sort((a, b) => a - b)).toEqual(order)
+    const cmdLine = windows.split('\n').find((line) => line.includes(cmd))!
+    expect(cmdLine).toContain('cmd.exe')
+    expect(cmdLine).toContain('stdin')
   })
 })

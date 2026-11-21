@@ -6,7 +6,7 @@ import type { EntityRegistry } from '../../shared/entities'
 import { removeDiscoveryFile, writeDiscoveryFile, writeFileAtomic } from './files'
 import { createControlMethods, toControlError } from './methods'
 import { CONTROL_PROTOCOL_VERSION, RPC_PATH, type ControlErrorCode, type RpcResponse } from './protocol'
-import { controlPaths, posixShimScript, windowsShimScript, type ControlPaths } from './shims'
+import { controlPaths, posixShimScript, powershellShimScript, windowsShimScript, type ControlPaths } from './shims'
 
 export type ControlServerOptions = {
   gateway: WorkspaceGateway
@@ -93,19 +93,20 @@ export function createControlServer(options: ControlServerOptions): ControlServe
       throw new HttpFailure(400, 'bad-request', 'The body is not valid JSON')
     }
     if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
-      throw new HttpFailure(400, 'bad-request', 'The body must be an object { method, params, agentId? }')
+      throw new HttpFailure(400, 'bad-request', 'The body must be an object { method, params, agentId?, asUser? }')
     }
-    const { method, params, agentId } = payload as Record<string, unknown>
+    const { method, params, agentId, asUser } = payload as Record<string, unknown>
     if (typeof method !== 'string' || !methods.has(method)) {
       throw new HttpFailure(400, 'unknown-method', `Unknown method: ${String(method)}`)
     }
     if (agentId !== undefined && (typeof agentId !== 'string' || agentId.length === 0 || agentId.length > 256)) {
       throw new HttpFailure(400, 'bad-request', 'agentId must be a non-empty string')
     }
+    if (asUser !== undefined && asUser !== true) throw new HttpFailure(400, 'bad-request', 'asUser must be true when present')
 
     let reply: RpcResponse
     try {
-      reply = { ok: true, result: await methods.call(method, params, agentId) }
+      reply = { ok: true, result: await methods.call(method, params, { agentId, asUser: asUser === true }) }
     } catch (error) {
       reply = { ok: false, error: toControlError(error) }
     }
@@ -161,6 +162,7 @@ export function createControlServer(options: ControlServerOptions): ControlServe
           cliScriptPath: options.cliScriptPath
         }
         await writeFileAtomic(paths.posixShim, posixShimScript(target), 0o755)
+        await writeFileAtomic(paths.powershellShim, powershellShimScript(target), 0o755)
         await writeFileAtomic(paths.windowsShim, windowsShimScript(target), 0o755)
         await writeDiscoveryFile(paths.controlFile, {
           version: CONTROL_PROTOCOL_VERSION,

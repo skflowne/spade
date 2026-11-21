@@ -1,5 +1,11 @@
 import { randomUUID } from 'node:crypto'
-import type { MainEntityAdapter, WorkspaceGateway, WorkspaceGatewayEvent } from '../contracts'
+import type {
+  EntityCreateInput,
+  EntityCreateResult,
+  MainEntityAdapter,
+  WorkspaceGateway,
+  WorkspaceGatewayEvent
+} from '../contracts'
 import {
   CorruptDataError,
   UnsupportedVersionError,
@@ -36,6 +42,7 @@ export type WorkspaceGatewayOptions = {
 }
 
 type NodeMatch = { projectId: string; node: CanvasNode }
+type CreatedResource = { adapter: MainEntityAdapter; input: EntityCreateInput; result: EntityCreateResult }
 
 // The production WorkspaceGateway, plus the project and selection operations only the app shell uses.
 // Every change to SPADE's records runs in one queue, strictly in arrival order; the store stays the
@@ -217,6 +224,7 @@ export class SpadeWorkspaceGateway implements WorkspaceGateway {
   async execute(projectId: string, untrusted: CanvasCommand, actor: Actor): Promise<CanvasCommandOutcome> {
     let command = parseCanvasCommand(untrusted)
     let nodeId: string | undefined
+    let created: CreatedResource | null = null
 
     if (isCreationCommand(command) && !command.node.resourceRef) {
       const adapter = this.adapters.get(command.node.entityType)
@@ -224,39 +232,58 @@ export class SpadeWorkspaceGateway implements WorkspaceGateway {
         const project = this.requireCanvasProject(projectId)
         const { config, sourceNode } = preflightCreation(await this.loadCanvas(projectId), command, this.entities)
         nodeId = this.createId()
-        let seed
+        const input = { nodeId, config, project, sourceNode, actor, title: command.node.title }
+        let result
         try {
-          const result = await adapter.create({ nodeId, config, project, sourceNode, actor, title: command.node.title })
-          seed = mergeCreateResult(command.node, result)
+          result = await adapter.create(input)
         } catch (error) {
           throw new CanvasCommandError('entity-create-failed', `Could not create the ${adapter.type}: ${describe(error)}`)
         }
+        created = { adapter, input, result }
         try {
-          command = parseCanvasCommand({ ...command, node: seed })
+          command = parseCanvasCommand({ ...command, node: mergeCreateResult(command.node, result) })
         } catch (error) {
+          await this.release(created)
           throw new CanvasCommandError('entity-create-failed', `The ${adapter.type} adapter returned ${describe(error)}`)
         }
       }
     }
 
     const applied = command
-    return this.serialized(async () => {
-      this.requireCanvasProject(projectId)
-      const canvas = await this.loadCanvas(projectId)
-      const result = applyCanvasCommand(canvas, applied, {
-        actor,
-        now: this.now().toISOString(),
-        createId: this.createId,
-        entities: this.entities,
-        nodeId
+    try {
+      return await this.serialized(async () => {
+        this.requireCanvasProject(projectId)
+        const canvas = await this.loadCanvas(projectId)
+        const result = applyCanvasCommand(canvas, applied, {
+          actor,
+          now: this.now().toISOString(),
+          createId: this.createId,
+          entities: this.entities,
+          nodeId
+        })
+        if (result.canvas !== canvas) {
+          await this.store.saveCanvas(result.canvas)
+          this.canvases.set(projectId, Promise.resolve(result.canvas))
+          this.publish({ type: 'canvas-changed', canvas: result.canvas, command: applied, actor })
+        }
+        return result.outcome
       })
-      if (result.canvas !== canvas) {
-        await this.store.saveCanvas(result.canvas)
-        this.canvases.set(projectId, Promise.resolve(result.canvas))
-        this.publish({ type: 'canvas-changed', canvas: result.canvas, command: applied, actor })
-      }
-      return result.outcome
-    })
+    } catch (error) {
+      if (created) await this.release(created)
+      throw error
+    }
+  }
+
+  // Best effort: the command's own failure is what the caller hears about.
+  private async release({ adapter, input, result }: CreatedResource): Promise<void> {
+    if (!adapter.discard) return
+    try {
+      await adapter.discard(input, result)
+    } catch (error) {
+      const ref = result.resourceRef
+      const resource = ref ? `${ref.provider}:${ref.kind}:${ref.id}` : `the resource for node ${input.nodeId}`
+      console.error(`SPADE could not release ${resource} after its ${adapter.type} node failed to be created`, error)
+    }
   }
 
   findNodeByResource(ref: ResourceRef): Promise<NodeMatch | null> {

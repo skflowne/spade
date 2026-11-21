@@ -30,7 +30,7 @@ export async function readDiscovery(env: Record<string, string | undefined>): Pr
   const file = env[CONTROL_FILE_ENV]
   if (!file) {
     throw notRunning(
-      `${CONTROL_FILE_ENV} is not set. Run the CLI through the launcher SPADE writes at startup into its data directory (bin/spade, or bin\\spade.cmd on Windows).`
+      `${CONTROL_FILE_ENV} is not set. Run the CLI through a launcher SPADE writes at startup into its data directory: bin/spade (POSIX shells, Git Bash), bin\\spade.ps1 (PowerShell), or bin\\spade.cmd (cmd.exe).`
     )
   }
   let text: string
@@ -63,14 +63,18 @@ export type RpcClient = <Method extends RpcMethod>(
   params: RpcMethods[Method]['params']
 ) => Promise<RpcMethods[Method]['result']>
 
-export function createRpcClient(discovery: ControlDiscovery & { file: string }, agentId: string | undefined): RpcClient {
+export function createRpcClient(
+  discovery: ControlDiscovery & { file: string },
+  identity: { agentId: string | undefined; asUser: boolean }
+): RpcClient {
+  const { agentId, asUser } = identity
   return async (method, params) => {
     let response: Response
     try {
       response = await fetch(new URL(RPC_PATH, discovery.url), {
         method: 'POST',
         headers: { authorization: `Bearer ${discovery.token}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ method, params, ...(agentId ? { agentId } : {}) }),
+        body: JSON.stringify({ method, params, ...(agentId ? { agentId } : {}), ...(asUser ? { asUser: true } : {}) }),
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
       })
     } catch (error) {

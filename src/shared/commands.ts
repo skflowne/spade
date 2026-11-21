@@ -15,7 +15,8 @@ export type NodeSeed = {
   // Present: the resource already exists and the main-process entity adapter is not asked to create it.
   resourceRef?: ResourceRef | null
   // With a resourceRef: when a node with the same provider+kind+id already exists on the canvas,
-  // the command succeeds without creating anything and returns that node's id.
+  // the command succeeds without creating anything and returns that node's id. For the system actor, a
+  // resource in the canvas's dismissedResources also creates nothing, and no node id is returned.
   ifResourceAbsent?: boolean
 }
 
@@ -100,10 +101,11 @@ export class CanvasCommandError extends Error {
 
 // What a successful command reports besides the new canvas.
 export type CanvasCommandOutcome = {
-  // The created node, or the existing node matched by `ifResourceAbsent`.
+  // The created node, or the existing node matched by `ifResourceAbsent`; absent when a system creation
+  // skipped a dismissed resource.
   nodeId?: string
   edgeId?: string
-  // False when `ifResourceAbsent` matched an existing node.
+  // False when `ifResourceAbsent` matched an existing node or skipped a dismissed resource.
   created?: boolean
   // Every node record removed by removeNode / removeBranch.
   removedNodeIds?: string[]

@@ -1,4 +1,5 @@
 import type { AgentService, WorkspaceGateway } from '../contracts'
+import { stableErrorCode } from '../errors'
 import { describeNodeForAgent } from '../../shared/agentContext'
 import { AGENT_ENTITY, PASEO_AGENT_KIND, type AgentConfig } from '../../shared/builtinEntities'
 import {
@@ -17,6 +18,8 @@ import {
   DEFAULT_TREE_DEPTH,
   MAX_PAGE_LIMIT,
   MAX_TREE_DEPTH,
+  MUTATING_METHODS,
+  PASEO_AGENT_ID_ENV,
   type ActivityEntry,
   type ControlError,
   type ControlErrorCode,
@@ -63,9 +66,12 @@ export type ControlMethodsOptions = {
 
 type Handler = (params: unknown, caller: () => Promise<Caller>) => Promise<unknown>
 
+// Who the request says is calling: an agent by its Paseo id, or a person who explicitly acts as the user.
+export type CallerIdentity = { agentId: string | undefined; asUser: boolean }
+
 export type ControlMethods = {
   has(method: string): method is RpcMethod
-  call(method: RpcMethod, params: unknown, agentId: string | undefined): Promise<unknown>
+  call(method: RpcMethod, params: unknown, identity: CallerIdentity): Promise<unknown>
 }
 
 // Commands an agent or the CLI may send through `execute`. Creation goes through `spawn`, which builds the
@@ -477,26 +483,27 @@ export function createControlMethods(options: ControlMethodsOptions): ControlMet
 
   return {
     has: (method): method is RpcMethod => Object.hasOwn(handlers, method),
-    async call(method, params, agentId) {
+    async call(method, params, { agentId, asUser }) {
+      if (agentId !== undefined && asUser) {
+        throw new ControlFailure('invalid-params', 'An agent acts as itself; --as-user is only for a person at a terminal')
+      }
+      if (agentId === undefined && !asUser && MUTATING_METHODS.includes(method)) {
+        throw new ControlFailure(
+          'identity-required',
+          `This command changes the canvas but carries no agent identity (${PASEO_AGENT_ID_ENV} is not set), so SPADE cannot attribute it. An agent must stop and tell the user. A person at a terminal passes --as-user to act as the user.`
+        )
+      }
       let resolved: Promise<Caller> | null = null
       return handlers[method](params ?? {}, () => (resolved ??= resolveCaller(agentId)))
     }
   }
 }
 
+// Every failure that carries a stable code (the reducer's, the agent service's, the control methods' own)
+// reaches the CLI with that code; anything else is internal.
 export function toControlError(error: unknown): ControlError {
-  if (error instanceof ControlFailure || error instanceof CanvasCommandError) {
-    return { code: error.code, message: error.message }
-  }
-  // Errors from other module instances or services that follow the same { code, message } convention.
-  if (
-    error instanceof Error &&
-    (error.name === 'CanvasCommandError' || error.name === 'ControlFailure') &&
-    'code' in error &&
-    typeof error.code === 'string'
-  ) {
-    return { code: error.code as ControlErrorCode, message: error.message }
-  }
+  const code = stableErrorCode(error)
+  if (code !== null) return { code: code as ControlErrorCode, message: (error as Error).message }
   return { code: 'internal', message: error instanceof Error ? error.message : String(error) }
 }
 

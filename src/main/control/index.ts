@@ -5,4 +5,12 @@ export {
   type ControlServerInfo,
   type ControlServerOptions
 } from './controlServer'
-export { controlPaths, posixShimScript, windowsShimScript, type ControlPaths, type ShimTarget } from './shims'
+export {
+  controlPaths,
+  posixShimScript,
+  powershellShimScript,
+  windowsShimScript,
+  type ControlPaths,
+  type ShimPaths,
+  type ShimTarget
+} from './shims'

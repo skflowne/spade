@@ -1,5 +1,6 @@
 import type { AgentActivity, AgentContextReference, AgentProviderInfo } from '../../shared/agents'
 import type { CanvasCommand, CanvasCommandErrorCode } from '../../shared/commands'
+import type { AgentServiceErrorCode } from '../agents/errors'
 import type { Actor, CanvasEdgeRelation, Point, Size } from '../../shared/domain'
 
 // Wire protocol between the `spade` CLI and the control server. Pure types and constants: the CLI bundle
@@ -27,6 +28,7 @@ export type ControlDiscovery = {
 
 export type ControlErrorCode =
   | CanvasCommandErrorCode
+  | AgentServiceErrorCode
   | 'internal'
   | 'unauthorized'
   | 'forbidden'
@@ -37,6 +39,8 @@ export type ControlErrorCode =
   | 'invalid-params'
   | 'unknown-agent'
   | 'project-required'
+  // A change came without an agent identity and without `asUser`.
+  | 'identity-required'
 
 export type ControlError = { code: ControlErrorCode; message: string }
 
@@ -45,7 +49,13 @@ export type RpcRequest = {
   params?: unknown
   // The caller's PASEO_AGENT_ID; absent when a human runs the CLI.
   agentId?: string
+  // A person at a terminal (`--as-user`) acting as the user. Changes without an agentId are refused
+  // unless this is set; it is never combined with an agentId.
+  asUser?: true
 }
+
+// Methods that change the canvas or an agent; they never fall back to the user silently.
+export const MUTATING_METHODS: readonly RpcMethod[] = ['spawn', 'execute', 'prompt']
 
 export type RpcResponse<Result = unknown> = { ok: true; result: Result } | { ok: false; error: ControlError }
 

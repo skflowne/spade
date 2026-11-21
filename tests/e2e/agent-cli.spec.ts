@@ -1,4 +1,4 @@
-import { execFile } from 'node:child_process'
+import { execFile, spawn } from 'node:child_process'
 import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -15,6 +15,7 @@ const builtCli = resolve('out/main/cli.js')
 
 type World = {
   gateway: FakeGateway
+  agents: FakeAgentService
   info: ControlServerInfo
   server: ControlServer
   lead: string
@@ -56,7 +57,7 @@ async function world(): Promise<World> {
   servers.push(server)
   const info = await server.start()
   const userEnv = { SPADE_CONTROL_FILE: info.controlFile }
-  return { gateway, info, server, lead, helper, sketch, userEnv, agentEnv: { ...userEnv, PASEO_AGENT_ID: 'agent-lead' } }
+  return { gateway, agents, info, server, lead, helper, sketch, userEnv, agentEnv: { ...userEnv, PASEO_AGENT_ID: 'agent-lead' } }
 }
 
 test.afterEach(async () => {
@@ -64,16 +65,22 @@ test.afterEach(async () => {
   for (const directory of directories.splice(0)) await rm(directory, { recursive: true, force: true })
 })
 
-async function cli(argv: string[], env: Record<string, string | undefined>, cwd = '/work/alpha') {
+// `stdin` is what the CLI reads when an argument is `-`; `stdinReads` counts how often it asked.
+async function cli(argv: string[], env: Record<string, string | undefined>, options: { cwd?: string; stdin?: string } = {}) {
   const stdout: string[] = []
   const stderr: string[] = []
+  let stdinReads = 0
   const code = await runCli(argv, env, {
     stdout: (text) => stdout.push(text),
     stderr: (text) => stderr.push(text),
-    cwd,
-    skill: await readFile(skillPath, 'utf8')
+    cwd: options.cwd ?? '/work/alpha',
+    skill: await readFile(skillPath, 'utf8'),
+    readStdin: async () => {
+      stdinReads += 1
+      return options.stdin ?? ''
+    }
   })
-  return { code, stdout: stdout.join('\n'), stderr: stderr.join('\n') }
+  return { code, stdout: stdout.join('\n'), stderr: stderr.join('\n'), stdinReads }
 }
 
 async function json<Value>(argv: string[], env: Record<string, string | undefined>): Promise<Value> {
@@ -190,9 +197,95 @@ test('without an agent identity the user names the project', async () => {
   expect(scoped.code).toBe(0)
   expect(scoped.stdout).toContain(`${lead} · agent · Lead`)
 
-  const noSelf = await cli(['spawn', 'note', '--body', 'x'], userEnv)
+  const noSelf = await cli(['spawn', 'note', '--body', 'x', '--as-user'], userEnv)
   expect(noSelf.code).toBe(1)
   expect(noSelf.stderr).toContain('--parent')
+})
+
+test('without an agent identity a change is refused unless a person passes --as-user', async () => {
+  const { gateway, userEnv, agentEnv, lead } = await world()
+  const refused = await cli(['rename', lead, 'Renamed'], userEnv)
+  expect(refused.code).toBe(1)
+  expect(refused.stderr).toMatch(/^spade: identity-required: /)
+  expect(refused.stderr).toContain('--as-user')
+  expect(gateway.executed).toEqual([])
+
+  const asUser = await cli(['rename', lead, 'Renamed', '--as-user'], userEnv)
+  expect(asUser.code).toBe(0)
+  expect(gateway.executed.at(-1)?.actor).toEqual({ kind: 'user' })
+  expect(gateway.node(lead).title).toBe('Renamed')
+
+  // An agent cannot pose as the user.
+  const posing = await cli(['rename', lead, 'Mine', '--as-user'], agentEnv)
+  expect(posing.code).toBe(1)
+  expect(gateway.node(lead).title).toBe('Renamed')
+
+  expect((await cli(['help'], {})).stdout).toContain('--as-user')
+  expect((await cli(['skill'], {})).stdout).toContain('--as-user')
+})
+
+test('a "-" argument reads that free-text value from stdin, verbatim apart from one trailing newline', async () => {
+  const { gateway, agents, agentEnv, lead, helper, sketch } = await world()
+  // Text cmd.exe, PowerShell, or a shell would otherwise reinterpret.
+  const tricky = `Say "hi" & echo pwned | more > out.txt %PATH% ^ $HOME \`x\` 'q'\nsecond line`
+
+  const send = async (argv: string[], stdin: string) => {
+    const result = await cli(argv, agentEnv, { stdin })
+    expect(result.stderr, argv.join(' ')).toBe('')
+    expect(result.code, argv.join(' ')).toBe(0)
+    expect(result.stdinReads, argv.join(' ')).toBe(1)
+  }
+
+  await send(['rename', sketch, '-'], `${tricky}\n`)
+  expect(gateway.node(sketch).title).toBe(tricky)
+
+  await send(['describe', sketch, '-'], `${tricky}\r\n`)
+  expect(gateway.node(sketch).shortDescription).toBe(tricky)
+
+  await send(['edit', sketch, '--body', '-'], `${tricky}\n\n`)
+  expect(gateway.node(sketch).config).toEqual({ body: `${tricky}\n` })
+
+  await send(['edit', sketch, '--config', '-'], JSON.stringify({ body: tricky }))
+  expect(gateway.node(sketch).config).toEqual({ body: tricky })
+
+  await send(['connect', helper, sketch, '--label', '-'], tricky)
+  expect(gateway.canvas('alpha').edges.at(-1)).toMatchObject({ relation: 'references', label: tricky })
+
+  await send(['spawn', 'note', '--title', 'T', '--body', '-'], tricky)
+  await send(['spawn', 'note', '--title', '-', '--body', 'B'], tricky)
+  const notes = gateway.canvas('alpha').nodes.slice(-2)
+  expect(notes.map((node) => [node.title, node.config])).toEqual([
+    ['T', { body: tricky }],
+    [tricky, { body: 'B' }]
+  ])
+
+  await send(['spawn', 'agent', '--prompt', '-', '--title', 'Reviewer'], tricky)
+  await send(['spawn', 'note', '--config', '-'], JSON.stringify({ body: tricky }))
+  expect(gateway.executed.slice(-2).map((entry) => entry.command)).toMatchObject([
+    { node: { entityType: 'agent', title: 'Reviewer', config: { prompt: tricky } } },
+    { node: { entityType: 'note', config: { body: tricky } } }
+  ])
+
+  await send(['prompt', lead, '-'], `${tricky}\n`)
+  expect(agents.prompts.at(-1)?.text).toBe(tricky)
+})
+
+test('only one value per command can come from stdin, and a "-" among other words is literal', async () => {
+  const { gateway, agentEnv, sketch } = await world()
+  const twice = await cli(['spawn', 'note', '--title', '-', '--body', '-'], agentEnv, { stdin: 'x' })
+  expect(twice.code).toBe(2)
+  expect(twice.stderr).toContain('stdin')
+  expect(twice.stdinReads).toBe(0)
+  expect(gateway.executed).toEqual([])
+
+  const literal = await cli(['rename', sketch, 'A', '-', 'B'], agentEnv, { stdin: 'unused' })
+  expect(literal.code).toBe(0)
+  expect(literal.stdinReads).toBe(0)
+  expect(gateway.node(sketch).title).toBe('A - B')
+
+  expect((await cli(['help'], {})).stdout).toContain('stdin')
+  expect((await cli(['help', 'prompt'], {})).stdout).toContain('-')
+  expect((await cli(['skill'], {})).stdout).toContain('stdin')
 })
 
 test('reports clearly when SPADE is not running or its discovery file is stale', async () => {
@@ -230,14 +323,37 @@ test('the built CLI runs under plain node and through the launcher shim, with th
   const skill = await run(process.execPath, [builtCli, 'skill'])
   expect(skill.stdout.trimEnd()).toBe((await readFile(skillPath, 'utf8')).trimEnd())
 
-  const { agentEnv, info, lead } = await world()
+  const { agentEnv, info, lead, sketch, gateway } = await world()
   const whoami = await run(process.execPath, [builtCli, 'whoami', '--json'], { env: { ...process.env, ...agentEnv } })
   expect(JSON.parse(whoami.stdout).node.id).toBe(lead)
 
   if (process.platform !== 'win32') {
-    const throughShim = await run(info.shimPath, ['whoami', '--json'], {
-      env: { ...process.env, SPADE_CONTROL_FILE: undefined, PASEO_AGENT_ID: 'agent-lead' }
-    })
+    const shimEnv = { ...process.env, SPADE_CONTROL_FILE: undefined, PASEO_AGENT_ID: 'agent-lead' }
+    const throughShim = await run(info.shimPath, ['whoami', '--json'], { env: shimEnv })
     expect(JSON.parse(throughShim.stdout).node.id).toBe(lead)
+
+    // Free text piped through the launcher reaches SPADE untouched.
+    const title = `Quote " & | > %PATH% $HOME \`x\` 'q'`
+    const piped = await runWithStdin(info.shimPath, ['rename', sketch, '-'], `${title}\n`, shimEnv)
+    expect(piped.code).toBe(0)
+    expect(gateway.node(sketch).title).toBe(title)
   }
 })
+
+function runWithStdin(
+  command: string,
+  args: string[],
+  input: string,
+  env: NodeJS.ProcessEnv
+): Promise<{ code: number | null; stdout: string; stderr: string }> {
+  return new Promise((resolvePromise, reject) => {
+    const child = spawn(command, args, { env })
+    let stdout = ''
+    let stderr = ''
+    child.stdout.on('data', (chunk: Buffer) => (stdout += chunk.toString('utf8')))
+    child.stderr.on('data', (chunk: Buffer) => (stderr += chunk.toString('utf8')))
+    child.on('error', reject)
+    child.on('close', (code) => resolvePromise({ code, stdout, stderr }))
+    child.stdin.end(input)
+  })
+}

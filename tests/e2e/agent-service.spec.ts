@@ -106,6 +106,14 @@ class FakePaseo implements PaseoPort {
     return agent
   }
 
+  async archiveAgent(agentId: string): Promise<string> {
+    this.require(`archiveAgent ${agentId}`)
+    const agent = this.agents.get(agentId)
+    if (!agent) throw new Error(`Agent ${agentId} not found`)
+    this.agents.set(agentId, { ...agent, archivedAt: OLD, status: 'closed' })
+    return OLD
+  }
+
   async getAgent(agentId: string): Promise<PaseoAgentSnapshot | null> {
     this.require(`getAgent ${agentId}`)
     return this.agents.get(agentId) ?? null
@@ -385,6 +393,40 @@ test('a spawn Paseo cannot serve fails with a clear error and creates no node', 
   })
 })
 
+test('a spawn whose node cannot be created archives the agent it just created, which is then never adopted', async () => {
+  await withFixture(async ({ project, open }) => {
+    const session = await open(new FakePaseo())
+    const rootNodeId = await spawnRoot(session, project)
+    const { nodeId: planNodeId } = await session.gateway.execute(
+      project.id,
+      { type: 'spawnChild', sourceNodeId: rootNodeId, node: { entityType: 'note', config: { body: 'plan' } }, origin: 'spawned' },
+      user
+    )
+    // The source node is removed while Paseo creates the agent.
+    session.paseo.onSpawn = async () => {
+      await session.gateway.execute(project.id, { type: 'removeNode', nodeId: planNodeId! }, user)
+    }
+    const actor: Actor = { kind: 'agent', nodeId: rootNodeId, agentId: 'spawned-1' }
+
+    const error = await rejection(
+      session.gateway.execute(project.id, { type: 'spawnChild', sourceNodeId: planNodeId!, node: agentSeed('Orphan'), origin: 'spawned' }, actor)
+    )
+    expect(error.code).toBe('unknown-node')
+    expect(session.paseo.calls.filter((call) => call.startsWith('archiveAgent'))).toEqual(['archiveAgent spawned-2'])
+
+    // Paseo still lists it as a child of the root agent; reconciliation must not give it a node.
+    session.paseo.updated('spawned-2')
+    session.paseo.updated('spawned-1')
+    await session.service.whenIdle()
+    const canvas = await canvasOf(session, project)
+    expect(nodesFor(canvas, 'agent', 'spawned-2')).toHaveLength(0)
+    expect(canvas.nodes.map((node) => node.id)).toEqual([rootNodeId])
+    // Only the agent created by the failed call was archived.
+    expect(session.paseo.count('archiveAgent')).toBe(1)
+    expect(session.paseo.agents.get('spawned-1')?.archivedAt).toBeNull()
+  })
+})
+
 test('an agent spawning through SPADE becomes the Paseo parent and the new node is attributed to it', async () => {
   await withFixture(async ({ project, open }) => {
     const session = await open(new FakePaseo())
@@ -637,6 +679,21 @@ test('runtime events and cached summaries are written only when something change
   })
 })
 
+test('a service started again after a stop watches its agents’ timelines again', async () => {
+  await withFixture(async ({ project, open }) => {
+    const paseo = new FakePaseo()
+    const session = await open(paseo)
+    await spawnRoot(session, project)
+    expect(paseo.watched).toEqual(['spawned-1'])
+
+    await session.service.stop()
+    paseo.watched = []
+    await session.service.start()
+    await session.service.whenIdle()
+    expect(paseo.watched).toEqual(['spawned-1'])
+  })
+})
+
 test('timelines route to the agent or the provider sub-agent and growth is reported per node, debounced', async () => {
   await withFixture(async ({ project, open }) => {
     const paseo = new FakePaseo()
@@ -704,6 +761,33 @@ test('a prompt carries the bounded context block for nodes on the same canvas an
   })
 })
 
+test('a prompt from an agent starts with one line naming the sending node; a user prompt is sent unchanged', async () => {
+  await withFixture(async ({ project, open }) => {
+    const paseo = new FakePaseo()
+    const session = await open(paseo)
+    const receiver = await spawnRoot(session, project, 'Receive work')
+    const sender = await spawnRoot(session, project, 'Send work')
+    await session.gateway.execute(project.id, { type: 'updateNode', nodeId: sender, patch: { title: 'Lead\n  planner' } }, user)
+    const note = await session.gateway.execute(
+      project.id,
+      { type: 'spawnChild', sourceNodeId: receiver, node: { entityType: 'note', config: { body: 'Use the blue button' }, title: 'Hint' }, origin: 'spawned' },
+      user
+    )
+
+    await session.service.prompt(receiver, { text: 'Run the tests' }, { kind: 'agent', nodeId: sender, agentId: 'spawned-2' })
+    await session.service.prompt(receiver, { text: 'And this', contextNodeIds: [note.nodeId!] }, { kind: 'agent', nodeId: sender, agentId: 'spawned-2' })
+    await session.service.prompt(receiver, { text: 'From me' }, user)
+
+    const block = formatAgentContext(buildAgentContext(await canvasOf(session, project), entities, receiver, [note.nodeId!]))
+    const from = `[Prompt from SPADE agent node "Lead planner" (${sender})]`
+    expect(paseo.prompts).toEqual([
+      { agentId: 'spawned-1', text: `${from}\nRun the tests` },
+      { agentId: 'spawned-1', text: `${from}\nAnd this\n\n${block}` },
+      { agentId: 'spawned-1', text: 'From me' }
+    ])
+  })
+})
+
 test('answering a permission refreshes the agent promptly; interrupting reaches Paseo', async () => {
   await withFixture(async ({ project, open }) => {
     const paseo = new FakePaseo()
@@ -756,6 +840,42 @@ test('removing an agent node never touches Paseo and a removed delegated child i
     // SPADE wrote only into its own data directory.
     expect((await readdir(root)).sort()).toEqual(['data', 'project'])
     expect(await readdir(join(root, 'project'))).toEqual([])
+  })
+})
+
+test('a removed delegated child stays removed across a restart, and opening a provider sub-agent again brings it back', async () => {
+  await withFixture(async ({ project, open }) => {
+    const paseo = new FakePaseo()
+    const session = await open(paseo)
+    const rootNodeId = await spawnRoot(session, project)
+    paseo.agents.set('child', snapshot('child', { parentAgentId: 'spawned-1' }))
+    paseo.subagents.set('spawned-1', { observable: true, subagents: [subagent('toolu_1')] })
+    paseo.updated('child', true)
+    await session.service.whenIdle()
+    const child = onlyNode(await canvasOf(session, project), 'child')
+    const opened = await session.service.openProviderSubagent(rootNodeId, 'toolu_1', user)
+
+    await session.gateway.execute(project.id, { type: 'removeNode', nodeId: child.id }, user)
+    await session.gateway.execute(project.id, { type: 'removeNode', nodeId: opened.nodeId }, user)
+    await session.service.whenIdle()
+    await session.stop()
+
+    // A fresh service over the same records, with Paseo reporting the same agents.
+    const restarted = await open(new FakePaseo([...paseo.agents.values()]))
+    restarted.paseo.subagents.set('spawned-1', { observable: true, subagents: [subagent('toolu_1')] })
+    restarted.paseo.updated('child')
+    restarted.paseo.updated('spawned-1')
+    await restarted.service.whenIdle()
+    let canvas = await canvasOf(restarted, project)
+    expect(nodesFor(canvas, 'agent', 'child')).toHaveLength(0)
+    expect(nodesFor(canvas, 'provider-subagent', 'spawned-1/toolu_1')).toHaveLength(0)
+    expect(canvas.nodes.map((node) => node.id)).toEqual([rootNodeId])
+
+    // The user asking for the sub-agent explicitly is not reconciliation: its node comes back.
+    const reopened = await restarted.service.openProviderSubagent(rootNodeId, 'toolu_1', user)
+    canvas = await canvasOf(restarted, project)
+    expect(onlyNode(canvas, 'spawned-1/toolu_1', 'provider-subagent').id).toBe(reopened.nodeId)
+    expect(canvas.dismissedResources).toEqual([{ provider: 'paseo', kind: 'agent', id: 'child' }])
   })
 })
 

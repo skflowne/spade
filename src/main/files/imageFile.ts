@@ -66,9 +66,10 @@ export async function openImageFile(path: string, prefixBytes: number): Promise<
 
 // Type, revision, and displayed size, from a bounded prefix: a large image is never loaded whole.
 export async function probeImageFile(
-  path: string
+  path: string,
+  open: typeof openImageFile = openImageFile
 ): Promise<{ type: ImageType; revision: string; dimensions: ImageDimensions | null }> {
-  const image = await openImageFile(path, IMAGE_HEADER_BYTES)
+  const image = await open(path, IMAGE_HEADER_BYTES)
   await image.handle.close()
   return { type: image.type, revision: image.revision, dimensions: readImageDimensions(image.prefix, image.type) }
 }
