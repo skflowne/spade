@@ -80,6 +80,7 @@ const DEFAULT_TIMING: AgentServiceTiming = {
 const SYSTEM: Actor = { kind: 'system' }
 const READ_CONCURRENCY = 8
 const SUBAGENT_TITLE_LIMIT = 80
+const SENDER_TITLE_LIMIT = 80
 
 type IndexedNode = { projectId: string; node: CanvasNode; target: AgentNodeTarget }
 
@@ -353,12 +354,13 @@ class PaseoAgentService implements SpadeAgentService {
     return { nodeId, ...page }
   }
 
-  async prompt(nodeId: string, input: { text: string; contextNodeIds?: string[] }): Promise<void> {
+  async prompt(nodeId: string, input: { text: string; contextNodeIds?: string[] }, actor: Actor): Promise<void> {
     const { projectId, agentId } = await this.requireManagedAgent(nodeId, 'prompted')
     if (typeof input.text !== 'string' || input.text.trim().length === 0) {
       throw new AgentServiceError('invalid-argument', 'A prompt needs text.')
     }
-    let message = input.text
+    // Both the receiving agent and the user reading its conversation see which agent sent the prompt.
+    let message = actor.kind === 'agent' ? `${await this.senderLine(actor.nodeId)}\n${input.text}` : input.text
     const contextNodeIds = input.contextNodeIds ?? []
     if (contextNodeIds.length > 0) {
       const canvas = await this.gateway.getCanvas(projectId)
@@ -371,6 +373,12 @@ class PaseoAgentService implements SpadeAgentService {
     }
     await callPaseo('send the prompt', () => this.paseo.sendPrompt(agentId, message))
     this.request((pending) => pending.fetch.add(agentId))
+  }
+
+  private async senderLine(senderNodeId: string): Promise<string> {
+    const sender = await this.gateway.findNode(senderNodeId)
+    const title = sender ? clipText(sender.node.title, SENDER_TITLE_LIMIT) : ''
+    return title ? `[Prompt from SPADE agent node "${title}" (${senderNodeId})]` : `[Prompt from SPADE agent node ${senderNodeId}]`
   }
 
   async interrupt(nodeId: string): Promise<void> {

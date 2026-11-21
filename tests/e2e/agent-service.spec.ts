@@ -746,6 +746,33 @@ test('a prompt carries the bounded context block for nodes on the same canvas an
   })
 })
 
+test('a prompt from an agent starts with one line naming the sending node; a user prompt is sent unchanged', async () => {
+  await withFixture(async ({ project, open }) => {
+    const paseo = new FakePaseo()
+    const session = await open(paseo)
+    const receiver = await spawnRoot(session, project, 'Receive work')
+    const sender = await spawnRoot(session, project, 'Send work')
+    await session.gateway.execute(project.id, { type: 'updateNode', nodeId: sender, patch: { title: 'Lead\n  planner' } }, user)
+    const note = await session.gateway.execute(
+      project.id,
+      { type: 'spawnChild', sourceNodeId: receiver, node: { entityType: 'note', config: { body: 'Use the blue button' }, title: 'Hint' }, origin: 'spawned' },
+      user
+    )
+
+    await session.service.prompt(receiver, { text: 'Run the tests' }, { kind: 'agent', nodeId: sender, agentId: 'spawned-2' })
+    await session.service.prompt(receiver, { text: 'And this', contextNodeIds: [note.nodeId!] }, { kind: 'agent', nodeId: sender, agentId: 'spawned-2' })
+    await session.service.prompt(receiver, { text: 'From me' }, user)
+
+    const block = formatAgentContext(buildAgentContext(await canvasOf(session, project), entities, receiver, [note.nodeId!]))
+    const from = `[Prompt from SPADE agent node "Lead planner" (${sender})]`
+    expect(paseo.prompts).toEqual([
+      { agentId: 'spawned-1', text: `${from}\nRun the tests` },
+      { agentId: 'spawned-1', text: `${from}\nAnd this\n\n${block}` },
+      { agentId: 'spawned-1', text: 'From me' }
+    ])
+  })
+})
+
 test('answering a permission refreshes the agent promptly; interrupting reaches Paseo', async () => {
   await withFixture(async ({ project, open }) => {
     const paseo = new FakePaseo()
