@@ -128,19 +128,22 @@ export function ArtifactLayer({ projectId, nodeId, host, notify, children }: Art
       ) : null}
       {lightbox
         ? createPortal(
-            <Dialog
-              open
-              wide
-              title={lightbox.label}
-              onCancel={() => setLightbox(null)}
-              footer={
-                <button type="button" className="cr-button" onClick={() => setLightbox(null)}>
-                  Close
-                </button>
-              }
-            >
-              <img className="agent-lightbox__image" src={lightbox.url} alt={lightbox.label} />
-            </Dialog>,
+            // React events bubble through portals; a click in the lightbox must not reach the node behind it.
+            <div className="agent-lightbox" onClick={(event) => event.stopPropagation()}>
+              <Dialog
+                open
+                wide
+                title={lightbox.label}
+                onCancel={() => setLightbox(null)}
+                footer={
+                  <button type="button" className="cr-button" onClick={() => setLightbox(null)}>
+                    Close
+                  </button>
+                }
+              >
+                <img className="agent-lightbox__image" src={lightbox.url} alt={lightbox.label} />
+              </Dialog>
+            </div>,
             document.body
           )
         : null}

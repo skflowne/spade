@@ -763,6 +763,10 @@
   padding: 0 var(--cr-space-2);
 }
 
+.agent-lightbox {
+  display: contents;
+}
+
 .agent-lightbox__image {
   display: block;
   max-width: 100%;

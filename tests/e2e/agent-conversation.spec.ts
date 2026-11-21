@@ -520,6 +520,12 @@ test('an agent message with a path, an image, and a URL offers every action', as
     await popover.getByRole('button', { name: 'Enlarge' }).click()
     const lightbox = page.getByRole('dialog', { name: 'shot.png' })
     await expect(lightbox.getByRole('img')).toHaveAttribute('src', /^spade-image:/)
+    // A click inside the lightbox stays there: it never activates the node behind it.
+    await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })))
+    await expect(nodeBody(page, 'Agent')).toHaveAttribute('data-active', 'false')
+    await lightbox.getByRole('img').click()
+    await expect(lightbox).toBeVisible()
+    await expect(nodeBody(page, 'Agent')).toHaveAttribute('data-active', 'false')
     await lightbox.getByRole('button', { name: 'Close' }).click()
     await expect(lightbox).toBeHidden()
 
