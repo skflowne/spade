@@ -397,7 +397,10 @@ export async function runCli(argv: readonly string[], env: Record<string, string
   try {
     const rpc: RpcClient = command.offline
       ? () => Promise.reject(new Error('offline command'))
-      : createRpcClient(await readDiscovery(env), env[PASEO_AGENT_ID_ENV] || undefined)
+      : createRpcClient(await readDiscovery(env), {
+          agentId: env[PASEO_AGENT_ID_ENV] || undefined,
+          asUser: args.options['as-user'] === true
+        })
     await command.run({
       args,
       rpc,
@@ -429,7 +432,7 @@ function usageFailure(io: CliIo, name: string, error: unknown): number {
 }
 
 function parseArgs(tokens: readonly string[], command: Command): Args {
-  const accepted: Record<string, boolean> = { json: false, help: false, ...command.options }
+  const accepted: Record<string, boolean> = { json: false, help: false, 'as-user': false, ...command.options }
   const positionals: string[] = []
   const options: Options = {}
   for (let index = 0; index < tokens.length; index += 1) {
@@ -571,7 +574,9 @@ function overview(): string {
     ...lines,
     '',
     'Every command accepts --json for structured output and --help for details.',
-    'Agents act as their own canvas node (from PASEO_AGENT_ID); every change is attributed to them.'
+    'Agents act as their own canvas node (from PASEO_AGENT_ID); every change is attributed to them.',
+    'Without PASEO_AGENT_ID, changes are refused unless a person at a terminal passes --as-user to act as the',
+    'user. Agents never pass --as-user.'
   ].join('\n')
 }
 

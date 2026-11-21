@@ -42,7 +42,7 @@ function more(page: Page<unknown>): string[] {
 
 export function formatWhoAmI(result: WhoAmIResult): string {
   if (!result.node || result.actor.kind !== 'agent') {
-    return 'You are the user (no PASEO_AGENT_ID). Commands that read a whole canvas need --project <id|name>.'
+    return 'You are the user (no PASEO_AGENT_ID). Commands that read a whole canvas need --project <id|name>; changes need --as-user.'
   }
   const lines = [
     `You are agent node ${nodeLine(result.node)} (Paseo agent ${result.actor.agentId})`,

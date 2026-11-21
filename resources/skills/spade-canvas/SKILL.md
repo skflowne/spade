@@ -77,6 +77,10 @@ stderr (`spade: unknown-node: Unknown node: …`) and a non-zero exit; nothing f
 means wrong usage (`spade <command> --help`). If SPADE is not running, say so and continue without the
 canvas. Add `--json` to any command for exact structured output.
 
+You act as yourself through `PASEO_AGENT_ID`, which Paseo sets for you. **Never pass `--as-user`**: it is
+only for a person at a terminal. If a command fails with `identity-required` (your agent identity is
+missing), stop using the canvas and tell the user; do not try to work around it.
+
 ## Rich answers
 
 Your messages render as Markdown in your conversation node. Beyond plain Markdown:

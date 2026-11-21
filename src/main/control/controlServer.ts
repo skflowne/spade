@@ -93,19 +93,20 @@ export function createControlServer(options: ControlServerOptions): ControlServe
       throw new HttpFailure(400, 'bad-request', 'The body is not valid JSON')
     }
     if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
-      throw new HttpFailure(400, 'bad-request', 'The body must be an object { method, params, agentId? }')
+      throw new HttpFailure(400, 'bad-request', 'The body must be an object { method, params, agentId?, asUser? }')
     }
-    const { method, params, agentId } = payload as Record<string, unknown>
+    const { method, params, agentId, asUser } = payload as Record<string, unknown>
     if (typeof method !== 'string' || !methods.has(method)) {
       throw new HttpFailure(400, 'unknown-method', `Unknown method: ${String(method)}`)
     }
     if (agentId !== undefined && (typeof agentId !== 'string' || agentId.length === 0 || agentId.length > 256)) {
       throw new HttpFailure(400, 'bad-request', 'agentId must be a non-empty string')
     }
+    if (asUser !== undefined && asUser !== true) throw new HttpFailure(400, 'bad-request', 'asUser must be true when present')
 
     let reply: RpcResponse
     try {
-      reply = { ok: true, result: await methods.call(method, params, agentId) }
+      reply = { ok: true, result: await methods.call(method, params, { agentId, asUser: asUser === true }) }
     } catch (error) {
       reply = { ok: false, error: toControlError(error) }
     }

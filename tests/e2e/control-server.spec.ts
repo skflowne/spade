@@ -56,12 +56,14 @@ function post(
   })
 }
 
-async function call(info: ControlServerInfo, method: string, params: unknown = {}, agentId?: string) {
-  const reply = await post(info, { method, params, ...(agentId ? { agentId } : {}) })
+// `asUser` stands for a person at a terminal passing --as-user.
+async function call(info: ControlServerInfo, method: string, params: unknown = {}, agentId?: string | { asUser: true }) {
+  const caller = typeof agentId === 'string' ? { agentId } : (agentId ?? {})
+  const reply = await post(info, { method, params, ...caller })
   return reply.body
 }
 
-async function ok<Result>(info: ControlServerInfo, method: string, params: unknown = {}, agentId?: string) {
+async function ok<Result>(info: ControlServerInfo, method: string, params: unknown = {}, agentId?: string | { asUser: true }) {
   const body = await call(info, method, params, agentId)
   expect(body.error).toBeUndefined()
   return body.result as Result
@@ -200,8 +202,8 @@ test.describe('identity and attribution', () => {
     expect(body.error?.message).toContain('agent-unknown')
   })
 
-  test('without an agent id the caller is the user, who must name a project for project-wide reads', async () => {
-    const { info, gateway, plan } = await world()
+  test('without an agent id reads are the user’s, who must name a project for project-wide reads', async () => {
+    const { info } = await world()
     const me = await ok<{ actor: Actor; node: unknown }>(info, 'whoami')
     expect(me.actor).toEqual({ kind: 'user' })
     expect(me.node).toBeNull()
@@ -210,9 +212,39 @@ test.describe('identity and attribution', () => {
     expect(unscoped.error?.code).toBe('project-required')
     const byName = await ok<{ projectId: string }>(info, 'nodes', { project: 'Alpha' })
     expect(byName.projectId).toBe('alpha')
+  })
 
-    await ok(info, 'execute', { command: { type: 'collapseNode', nodeId: plan } })
+  test('a change without an agent id is refused unless the caller explicitly acts as the user', async () => {
+    const { info, gateway, agents, lead, plan } = await world()
+    const before = gateway.canvas('alpha')
+    for (const [method, params] of [
+      ['execute', { command: { type: 'collapseNode', nodeId: plan } }],
+      ['spawn', { entityType: 'note', config: { body: 'x' }, placement: { kind: 'child', parentNodeId: plan } }],
+      ['prompt', { nodeId: lead, text: 'status?' }]
+    ] as const) {
+      const refused = await call(info, method, params)
+      expect(refused.error?.code, method).toBe('identity-required')
+      expect(refused.error?.message, method).toContain('PASEO_AGENT_ID')
+      expect(refused.error?.message, method).toContain('--as-user')
+    }
+    expect(gateway.executed).toEqual([])
+    expect(gateway.canvas('alpha')).toBe(before)
+    expect(agents.prompts).toEqual([])
+
+    await ok(info, 'execute', { command: { type: 'collapseNode', nodeId: plan } }, { asUser: true })
+    await ok(info, 'prompt', { nodeId: lead, text: 'status?' }, { asUser: true })
     expect(gateway.executed.at(-1)?.actor).toEqual({ kind: 'user' })
+    expect(agents.prompts.at(-1)?.actor).toEqual({ kind: 'user' })
+  })
+
+  test('an agent identity and acting as the user cannot be combined, and asUser must be exactly true', async () => {
+    const { info, gateway, plan } = await world()
+    const both = await post(info, { method: 'execute', params: { command: { type: 'collapseNode', nodeId: plan } }, agentId: 'agent-lead', asUser: true })
+    expect(both.body.error?.code).toBe('invalid-params')
+    const loose = await post(info, { method: 'execute', params: { command: { type: 'collapseNode', nodeId: plan } }, asUser: 'yes' })
+    expect(loose.status).toBe(400)
+    expect(loose.body.error?.code).toBe('bad-request')
+    expect(gateway.executed).toEqual([])
   })
 
   test('every change method is attributed to the calling agent', async () => {

@@ -39,6 +39,8 @@ export type ControlErrorCode =
   | 'invalid-params'
   | 'unknown-agent'
   | 'project-required'
+  // A change came without an agent identity and without `asUser`.
+  | 'identity-required'
 
 export type ControlError = { code: ControlErrorCode; message: string }
 
@@ -47,7 +49,13 @@ export type RpcRequest = {
   params?: unknown
   // The caller's PASEO_AGENT_ID; absent when a human runs the CLI.
   agentId?: string
+  // A person at a terminal (`--as-user`) acting as the user. Changes without an agentId are refused
+  // unless this is set; it is never combined with an agentId.
+  asUser?: true
 }
+
+// Methods that change the canvas or an agent; they never fall back to the user silently.
+export const MUTATING_METHODS: readonly RpcMethod[] = ['spawn', 'execute', 'prompt']
 
 export type RpcResponse<Result = unknown> = { ok: true; result: Result } | { ok: false; error: ControlError }
 

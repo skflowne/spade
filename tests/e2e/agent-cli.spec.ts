@@ -190,9 +190,31 @@ test('without an agent identity the user names the project', async () => {
   expect(scoped.code).toBe(0)
   expect(scoped.stdout).toContain(`${lead} · agent · Lead`)
 
-  const noSelf = await cli(['spawn', 'note', '--body', 'x'], userEnv)
+  const noSelf = await cli(['spawn', 'note', '--body', 'x', '--as-user'], userEnv)
   expect(noSelf.code).toBe(1)
   expect(noSelf.stderr).toContain('--parent')
+})
+
+test('without an agent identity a change is refused unless a person passes --as-user', async () => {
+  const { gateway, userEnv, agentEnv, lead } = await world()
+  const refused = await cli(['rename', lead, 'Renamed'], userEnv)
+  expect(refused.code).toBe(1)
+  expect(refused.stderr).toMatch(/^spade: identity-required: /)
+  expect(refused.stderr).toContain('--as-user')
+  expect(gateway.executed).toEqual([])
+
+  const asUser = await cli(['rename', lead, 'Renamed', '--as-user'], userEnv)
+  expect(asUser.code).toBe(0)
+  expect(gateway.executed.at(-1)?.actor).toEqual({ kind: 'user' })
+  expect(gateway.node(lead).title).toBe('Renamed')
+
+  // An agent cannot pose as the user.
+  const posing = await cli(['rename', lead, 'Mine', '--as-user'], agentEnv)
+  expect(posing.code).toBe(1)
+  expect(gateway.node(lead).title).toBe('Renamed')
+
+  expect((await cli(['help'], {})).stdout).toContain('--as-user')
+  expect((await cli(['skill'], {})).stdout).toContain('--as-user')
 })
 
 test('reports clearly when SPADE is not running or its discovery file is stale', async () => {
