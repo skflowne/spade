@@ -143,9 +143,9 @@
 <h2 id="selected-project-management-presentation">Selected project-management presentation</h2>
 <p>The planned first usable version replaces the work-item model with generic projects, groups, and trees (see the <a href="plan.html">plan</a>). The records above describe current code; the planned presentation is:</p>
 <ul>
-<li>The global canvas is the authoritative spatial surface for Project containers, Group containers, nodes, and edges.</li>
-<li>The sidebar is a derived overview and jump projection. It issues focus commands into the global canvas and owns no state.</li>
-<li>A shared Group container owns child bounds, nesting, movement, and common viewport actions. The Project container specializes it with a set of user-declared folders; there is no work-item or status specialization.</li>
+<li>Each project owns one canvas, which is the authoritative spatial surface for its Group containers, nodes, and edges. No record spans two canvases.</li>
+<li>The sidebar is a derived project list and canvas switcher with running-agent activity. It owns no state beyond the selected project.</li>
+<li>A shared Group container owns child bounds, nesting, movement, and common viewport actions within one canvas. There is no Project container and no work-item or status specialization; groups never separate projects.</li>
 <li>Group membership is explicit. Overlapping a group never changes it.</li>
 <li>Structure is a forest of <code>child</code> edges; a branch is a derived view of one child and its descendants. One generic tree mechanic serves every node type, including agents and sub-agents. Agents read and change the graph through the same commands as the user, via a CLI tool taught by a skill, not MCP. By default an agent continues its own tree, from itself or from a descendant.</li>
 <li>Container chrome and non-interactive surfaces preserve outer-canvas zoom-in/out, and containers keep navigation gutters between children.</li>
@@ -156,7 +156,7 @@
 <p>The production application still has no external integrations or persistence. The merged P3 prototype proved the following generic boundaries; its GitHub, issue, pull-request, and checkout parts are deferred beyond the first usable phase.</p>
 <ul>
 <li>Typed renderer requests cross a sandboxed preload into one serialized main-process command and publication owner; renderers receive no credentials, filesystem access, or Paseo client.</li>
-<li>SPADE persists its own ledger and exact external references as <code>provider + kind + opaque ID</code>. Paseo remains authoritative for agents, workspaces, parent relations, and bounded timeline data. Production persistence lives in SPADE's application data directory and never inside user project folders.</li>
+<li>SPADE persists its own ledger and exact external references as <code>provider + kind + opaque ID</code>. Paseo remains authoritative for agents, workspaces, parent relations, and bounded timeline data. Production persistence lives in SPADE's application data directory and never inside user project directories.</li>
 <li>One confined Paseo adapter owns one daemon connection and isolates internal client use.</li>
 <li>Managed sub-agents relate to their parent through durable Paseo parent IDs without classifying titles, prompts, paths, or ordering.</li>
 </ul>
@@ -235,8 +235,8 @@
 <ul>
 <li>The generic canvas owns container position, size, selection, nesting, connections, lifecycle, and viewport navigation.</li>
 <li>Container chrome and non-interactive surfaces never trap canvas zoom-in/out; groups preserve navigation gutters between children for outer-canvas pan and zoom, and interactive child content is the only gesture-routing exception.</li>
-<li>Group owns reusable containment geometry; Project specializes it with its own folder records and actions, while ordinary Groups remain visual hulls.</li>
-<li>The activity sidebar reads shared records and activity state; it does not own a parallel navigation or persistence model.</li>
+<li>Group owns reusable containment geometry and remains a visual hull; a project is a root directory with its own canvas, not a container.</li>
+<li>The sidebar reads shared records and activity state to switch canvases; it does not own a parallel navigation or persistence model.</li>
 <li>An entity renderer owns only the content and actions specific to its node type.</li>
 <li>Shared records are the common contract across application areas.</li>
 <li>Connections describe provenance and context; they are not an execution graph.</li>

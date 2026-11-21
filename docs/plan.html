@@ -34,10 +34,10 @@
 <h2 id="1-product-vision">1. Product vision</h2>
 <p>SPADE (Spatial Agent Development Environment) is a desktop, graph/canvas-based development environment built around a spatial representation of agent work.</p>
 <p>The canvas is a <strong>mind map of ongoing work</strong>, not an executable dataflow engine. Nodes represent live resources and durable artifacts: agent conversations, images, web pages, and later terminals, files, and boards. Directed parent-child connections record where each piece of work came from.</p>
-<p>SPADE is deliberately <strong>workflow-agnostic</strong>. It does not assume GitHub issues, pull requests, reviews, or any particular agent workflow. The first usable version is built from a small set of generic bricks that adapt to any kind of work, for example agent and sub-agent runs, image review, and several fixed checkouts kept inside a larger framework project:</p>
-<pre><code class="language-text">Project            user-declared folders (a framework root plus fixed checkouts)
-  Group            optional spatial hull around related projects or nodes
-  Agent            Paseo agent, run in one of the project's folders
+<p>SPADE is deliberately <strong>workflow-agnostic</strong>. It does not assume GitHub issues, pull requests, reviews, or any particular agent workflow. The first usable version is built from a small set of generic bricks that adapt to any kind of work, for example agent and sub-agent runs, image review, and several fixed checkouts kept under one framework project folder:</p>
+<pre><code class="language-text">Project            a root directory plus its own canvas (the sidebar switches canvases)
+  Group            optional spatial hull around related nodes on the canvas
+  Agent            Paseo agent, always started in the project's root directory
     Sub-agents     children of the agent
   Image, Web page  viewer nodes
   Rich conversation  paths, images and links become actions:
@@ -50,7 +50,8 @@
 <li><strong>Generic over workflow-specific.</strong> The GitHub issue → agent → worktree → diff → PR workflow is not what SPADE is used for now, so it is not part of the first usable phase. It is deferred, not dropped: its code stays in the merged prototypes for later (§19).</li>
 <li><strong>GitHub is deferred.</strong> Issue, pull-request, review, check, diff, commit, push, and merge surfaces are not relevant to the first usable phase and are postponed to a later phase (§14).</li>
 <li><strong>Windows only.</strong> v1 targets native Windows. WSL, macOS, and Linux are out of scope and must not shape the design.</li>
-<li><strong>SPADE never touches user projects.</strong> The application keeps all of its own state in its application data directory (§4.7). It writes no files, markers, ignore entries, or Git state into project folders.</li>
+<li><strong>SPADE never touches user projects.</strong> The application keeps all of its own state in its application data directory (§4.7). It writes no files, markers, ignore entries, or Git state into project directories.</li>
+<li><strong>A project is a root directory plus a canvas.</strong> Each project has its own canvas, and the sidebar switches between canvases. There is one canvas per project, no global canvas, and no project containers; groups are never used to tell projects apart. Every agent starts in its project's root directory. This replaces an earlier decision for one global canvas and multi-folder projects.</li>
 <li><strong>Parent-child trees, not branches.</strong> The structural relationship is a parent-child edge. A "branch" is only a derived view: a child together with everything below it (§4.6).</li>
 <li><strong>Legible by default.</strong> Default sizes and automatic placement must leave enough room that every new node is readable without manual rearrangement (§8). Users will still move things; automatic layout never overrides them.</li>
 <li><strong>Prototypes stay as reference.</strong> The P3 work is merged to <code>main</code> and the prototypes remain in the repository. They are not extended and not imported; code is copied into <code>src/</code> and generalized (§19).</li>
@@ -75,9 +76,8 @@
 <li>
 <p><strong>Projects, groups, and workspaces are separate concepts</strong></p>
 <ul>
-<li>One global canvas contains auto-sized project containers; the sidebar is an overview and jump surface, not a project switcher.</li>
-<li>A project is a user-declared set of folders. SPADE does not infer, scan, or reorganize them.</li>
-<li>Groups are optional, user-created spatial hulls with no status or workflow meaning.</li>
+<li>A project is a root directory with its own canvas. The sidebar switches between project canvases.</li>
+<li>Groups are optional, user-created spatial hulls inside one canvas, with no status or workflow meaning. They are never used to separate projects.</li>
 <li>A workspace is the concrete working directory an agent runs in. It is a fact about a node, not a grouping unit.</li>
 </ul>
 </li>
@@ -222,34 +222,28 @@
 <p>Examples:</p>
 <ul>
 <li>Paseo agent ID</li>
-<li>Filesystem path plus project folder identity (images, later files)</li>
+<li>Filesystem path plus project identity (images, later files)</li>
 <li>Electron browser instance ID</li>
 <li>SPADE-owned asset ID for an image SPADE had to store itself (§4.7)</li>
 </ul>
 <h3 id="4-3-project">4.3 Project</h3>
-<p>A project is a user-declared set of folders. It is a SPADE concept; it does not require a Git repository and SPADE never inspects or changes the folders' contents beyond reading what the user opens.</p>
+<p>A project is a root directory and the canvas that belongs to it. It does not require a Git repository, and SPADE never inspects or changes the directory's contents beyond reading what the user opens.</p>
 <pre><code class="language-ts">type Project = {
   version: DomainRecordVersion;
   id: string;
   name: string;
-  folders: ProjectFolder[];
+  rootPath: string;      // absolute Windows path, as the user selected it
   createdAt: string;
 };
-
-type ProjectFolder = {
-  id: string;            // stable SPADE identity; the path is mutable
-  path: string;          // absolute Windows path, as the user selected it
-  label?: string;
-  role?: "root" | "checkout" | string;   // descriptive only
-};
 </code></pre>
-<p>The motivating shape is a framework project containing several fixed checkouts that the framework's own version control ignores. SPADE models this as one project with several explicit folders. Nesting is allowed; SPADE does not infer parent-child folder relationships and does not care what any ignore file says. An agent's working directory is chosen from the project's folders.</p>
+<p>The motivating shape is a framework project containing several fixed checkouts that the framework's own version control ignores. SPADE does not model the checkouts: the project's root is the framework directory, every agent starts there, and the agent works in whichever checkout the task needs. SPADE does not infer folder structure and does not care what any ignore file says.</p>
 <h4 id="project-creation-and-navigation">Project creation and navigation</h4>
-<p>SPADE uses one persisted global canvas. Each project is represented by an auto-sized <strong>Project container</strong>, a specialization of the shared Group container (§6) with project identity, its folders, and project actions.</p>
+<p>Every project owns exactly one persisted canvas, stored separately in SPADE's application data (§4.7). Nodes, groups, edges, and the viewport belong to one canvas, and no node, edge, or group spans two canvases in v1.</p>
 <ul>
-<li><code>Open project…</code> opens a native Windows folder picker, proposes the folder name as the project name, creates the Project and its container, and jumps to it. It is available on the empty canvas as an overlay and at the top of the sidebar.</li>
-<li>Further folders are added to the project with <code>Add folder…</code>; folders can be relabeled or removed. Removing a folder removes only the SPADE record.</li>
-<li>The sidebar is an overview and jump bar, not a canvas switcher. It lists projects, groups, and their running agents; selecting an entry centers that container on the global canvas.</li>
+<li><code>Open project…</code> opens a native Windows folder picker, proposes the folder name as the project name, creates the project and its empty canvas, and switches to it. It is available as an overlay when no project exists and at the top of the sidebar.</li>
+<li>The sidebar lists projects and switches the visible canvas when one is selected. It shows each project's name and running-agent activity, and restores each canvas's last viewport. It is a switcher, not a jump surface within a single canvas.</li>
+<li>Removing a project removes only the SPADE project record and its canvas, never the directory.</li>
+<li>Changing a project's root path is an explicit action; project identity is the SPADE ID, not the path.</li>
 </ul>
 <h3 id="4-4-workspace">4.4 Workspace</h3>
 <p>A workspace is the concrete working directory an agent runs in.</p>
@@ -257,8 +251,7 @@ type ProjectFolder = {
   version: DomainRecordVersion;
   id: string;
   projectId: string;
-  folderId: string | null;      // the project folder it belongs to
-  cwd: string;
+  cwd: string;                  // the project root in v1
   paseoWorkspaceId?: string;    // opaque Paseo identity
   name: string;
   createdAt: string;
@@ -268,7 +261,7 @@ type ProjectFolder = {
 <ul>
 <li>Workspace identity is the opaque SPADE/Paseo ID. A path or Git branch is descriptive and may change; it never identifies a workspace.</li>
 <li>Membership is explicit through <code>node.workspaceId</code>; it is never inferred from an edge, a path, or a name.</li>
-<li>v1 agents run in a fixed project folder chosen by the caller. SPADE does not create worktrees.</li>
+<li>Every agent starts in its project's root directory. SPADE does not create worktrees or choose a different starting directory.</li>
 </ul>
 <h3 id="4-5-group">4.5 Group</h3>
 <p>A Group is a user-created spatial hull with a title and color. It carries no status, source, or workflow meaning.</p>
@@ -277,13 +270,13 @@ type ProjectFolder = {
   id: string;
   title: string;
   color?: string;
-  parentGroupId: string | null;   // groups and Project containers can nest
+  parentGroupId: string | null;   // groups can nest inside groups on one canvas
   position: { x: number; y: number };   // size is computed from members
   collapsed: boolean;
   createdAt: string;
 };
 </code></pre>
-<p>Membership is explicit: dropping a node or container onto a group, or choosing <code>Add to group</code>, sets <code>groupId</code>/<code>parentGroupId</code>; dragging it out or choosing <code>Remove from group</code> clears it. Merely overlapping a group never changes membership, and moving a group moves its members. Projects can be placed in groups without changing project identity.</p>
+<p>Membership is explicit: dropping a node or group onto a group, or choosing <code>Add to group</code>, sets <code>groupId</code>/<code>parentGroupId</code>; dragging it out or choosing <code>Remove from group</code> clears it. Merely overlapping a group never changes membership, and moving a group moves its members. Groups live inside one project canvas.</p>
 <h3 id="4-6-connections">4.6 Connections and trees</h3>
 <pre><code class="language-ts">type CanvasEdge = {
   version: DomainRecordVersion;
@@ -328,10 +321,10 @@ type ProjectFolder = {
 <p>Edges are provenance and context. They do not schedule, trigger, or stream live data.</p>
 <h3 id="4-7-persistence">4.7 Persistence and project safety</h3>
 <ul>
-<li>SPADE persists to its own application data directory (Electron <code>app.getPath("userData")</code>; on Windows, under <code>%APPDATA%</code>). It never persists into a project folder.</li>
+<li>SPADE persists to its own application data directory (Electron <code>app.getPath("userData")</code>; on Windows, under <code>%APPDATA%</code>). It never persists into a project directory. Each project's canvas is stored as its own record set so canvases load and save independently.</li>
 <li>A single main-process owner serializes all writes. Records are versioned, writes are atomic (write to a temporary file, then rename), and a migration keeps a backup of the previous data.</li>
-<li>SPADE never creates files, directories, marker files, ignore-file entries, or Git state inside a project folder. Its own operations on project folders are read-only. Reveal-in-Explorer and viewing images are reads. Files that agents create inside a folder belong to the agent's work, not to SPADE's state.</li>
-<li>Deleting a project, folder, group, or node removes only SPADE records and never deletes user files.</li>
+<li>SPADE never creates files, directories, marker files, ignore-file entries, or Git state inside a project directory. Its own operations on project directories are read-only. Reveal-in-Explorer and viewing images are reads. Files that agents create inside the directory belong to the agent's work, not to SPADE's state.</li>
+<li>Deleting a project, group, or node removes only SPADE records and never deletes user files.</li>
 <li>Images and artifacts are referenced by path. When SPADE must hold its own copy (for example a pasted image), it stores it in an asset store inside application data and references it by asset ID.</li>
 <li>Paths are stored as selected and compared in a normalized, case-insensitive form. Windows drive letters, UNC paths, and long paths must be handled.</li>
 <li>The renderer receives no direct filesystem access; it issues typed commands through a sandboxed preload (see the architecture page).</li>
@@ -466,11 +459,10 @@ type ProjectFolder = {
 <p>Canvas surfaces share one container contract rather than independently reimplementing movement, framing, and navigation controls.</p>
 <h3 id="container-hierarchy">Container hierarchy</h3>
 <ul>
-<li><strong>Group container:</strong> the reusable auto-sizing spatial container for related canvas members, including nested projects and nodes.</li>
-<li><strong>Project container:</strong> a Group-container specialization that owns project identity, folders, and project actions. It must reuse Group geometry and interaction behavior.</li>
+<li><strong>Group container:</strong> the reusable auto-sizing spatial container for related nodes and nested groups on one canvas.</li>
 <li><strong>Node wrapper:</strong> the common outer container around an entity renderer.</li>
 </ul>
-<p>Group containment communicates spatial organization. Membership remains explicit (§4.5); moving a container does not rewrite identities.</p>
+<p>Group containment communicates spatial organization. Membership remains explicit (§4.5); moving a container does not rewrite identities. Projects are not containers: each has its own canvas.</p>
 <h3 id="container-owned-behavior">Container-owned behavior</h3>
 <ul>
 <li>Title, icon and short description</li>
@@ -490,7 +482,7 @@ type ProjectFolder = {
 <li>Minimap color, icon and label</li>
 <li>Context-sharing indicator</li>
 </ul>
-<p><code>Fit</code> and <code>Full height</code> are present on Project containers, Group containers, and Node wrappers. They are common container navigation controls rather than entity-specific actions.</p>
+<p><code>Fit</code> and <code>Full height</code> are present on Group containers and Node wrappers. They are common container navigation controls rather than entity-specific actions.</p>
 <h3 id="renderer-owned-behavior">Renderer-owned behavior</h3>
 <p>The entity renderer owns only the node body and entity-specific toolbar/actions.</p>
 <h3 id="interaction-rule">Interaction rule</h3>
@@ -511,7 +503,7 @@ type ProjectFolder = {
 <li>Renders Markdown, code, Mermaid, tool calls, file reads, edits, shell commands, permission prompts and results.</li>
 <li>Tool calls and file reads use expandable panes.</li>
 <li>Supports prompts, interrupt/resume, model/mode display and attention state.</li>
-<li>Spawn: the caller selects the project folder (working directory), provider, model, mode, and prompt. The mode default comes from a user setting; unattended runs depend on it.</li>
+<li>Spawn: the caller selects provider, model, mode, and prompt. The working directory is always the project root. The mode default comes from a user setting; unattended runs depend on it.</li>
 <li>Can spawn child nodes from any message, artifact, or the generic node chrome, using the tree mechanic (§4.6). When the agent itself spawns a child, it defaults to continuing its own tree, from itself or from a node below it; it can also read and change the wider graph through the agent CLI (§4.6).</li>
 <li>Can attach selected connected nodes as bounded context (§9).</li>
 </ul>
@@ -528,7 +520,7 @@ type ProjectFolder = {
 <tbody>
 <tr>
 <td>File path</td>
-<td>Absolute Windows path, or path relative to a project folder, optionally with <code>:line</code></td>
+<td>Absolute Windows path, or path relative to the project root, optionally with <code>:line</code></td>
 <td>Reveal in Explorer (selects the file), copy path; if it is an image, Open as Image node</td>
 </tr>
 <tr>
@@ -703,18 +695,18 @@ const defaultConversationExpansion = {
 <p>Large-canvas navigation is a core feature, not polish.</p>
 <h3 id="required-behavior">Required behavior</h3>
 <ul>
-<li>Fit the entire global canvas</li>
+<li>Fit the entire project canvas</li>
 <li>Allow canvas zoom-in/out over every container's chrome and non-interactive surface</li>
 <li>Preserve navigation gutters between contained elements for outer-canvas pan and zoom</li>
-<li>Expose <code>Fit</code> and <code>Full height</code> controls on every Project container, Group container, and Node wrapper</li>
-<li>Jump immediately to a project or group from the sidebar</li>
+<li>Expose <code>Fit</code> and <code>Full height</code> controls on every Group container and Node wrapper</li>
+<li>Switch to a project canvas immediately from the sidebar, restoring its last viewport</li>
 <li>Center/focus a node</li>
 <li>Follow an edge to its source/target</li>
 <li>Back/forward focus history</li>
-<li>Search nodes by title/type/project/workspace/status</li>
+<li>Search nodes by title/type/status within a canvas</li>
 <li>Keyboard navigation between related nodes</li>
 <li>Breadcrumb or current-focus indicator</li>
-<li>Minimap overview with group colors, project containers, higher-level groups, and node-type icons</li>
+<li>Minimap overview with group colors, nested groups, and node-type icons</li>
 </ul>
 <h3 id="minimap-and-level-of-detail">Minimap and level of detail</h3>
 <p>React Flow's minimap is SVG-only and should show simplified node representations.</p>
@@ -875,9 +867,9 @@ const defaultConversationExpansion = {
 </thead>
 <tbody>
 <tr>
-<td>P1: global canvas and project navigation (mock)</td>
-<td>One global canvas with auto-sized project containers, a sidebar jump surface, and shared Group geometry works.</td>
-<td>Group/Project container model, sidebar, <code>Fit</code> / <code>Full height</code>, focus history. WorkItem, status, and issue-workflow parts are not needed now.</td>
+<td>P1: project navigation (mock)</td>
+<td>Auto-sized containers and shared Group geometry work. Its one-global-canvas direction was later replaced by one canvas per project.</td>
+<td>Group container geometry, <code>Fit</code> / <code>Full height</code>, focus history. Project containers and the jump sidebar are not carried forward. WorkItem, status, and issue-workflow parts are not needed now.</td>
 </tr>
 <tr>
 <td>P2: Electron browser and custom answer</td>
@@ -910,13 +902,13 @@ const defaultConversationExpansion = {
 <tbody>
 <tr>
 <td>B1 Persistence and projects</td>
-<td>App-data store (§4.7); Project and ProjectFolder records; <code>Open project…</code> with native folder picker; <code>Add folder…</code>; Project container; sidebar with jump; empty-state overlay. Remove the mock WorkItem concept from the shared model.</td>
-<td>Open a folder, add two more folders, quit, relaunch, and find the same canvas. No file was created in any project folder.</td>
+<td>App-data store with one canvas per project (§4.7); Project record (root path); <code>Open project…</code> with native folder picker; sidebar that switches canvases and restores each viewport; empty-state overlay. Remove the mock WorkItem concept from the shared model.</td>
+<td>Open two project directories, put different nodes on each canvas, switch between them, quit, relaunch, and find both canvases unchanged. No file was created in either directory.</td>
 </tr>
 <tr>
 <td>B2 Grouping</td>
-<td>Group container, explicit membership by drop/menu, nesting including projects, auto-fit, <code>Fit</code> and <code>Full height</code>, navigation gutters, minimap.</td>
-<td>Group two projects, move the group, remove one project from it; identities and positions persist across relaunch.</td>
+<td>Group container, explicit membership by drop/menu, nesting of groups, auto-fit, <code>Fit</code> and <code>Full height</code>, navigation gutters, minimap.</td>
+<td>Group several nodes, nest one group in another, move the outer group, remove a node from it; membership and positions persist across relaunch.</td>
 </tr>
 <tr>
 <td>B3 Tree mechanic and layout</td>
@@ -930,8 +922,8 @@ const defaultConversationExpansion = {
 </tr>
 <tr>
 <td>B5 Agents and sub-agents</td>
-<td>Generalized Paseo adapter (§13), spawn from a project folder, conversation renderer, permissions, delegated sub-agent children, restart reconciliation without duplicates, and the agent CLI plus skill for reading the graph and changing it (§4.6).</td>
-<td>Run an agent that delegates to a sub-agent in one of the project's folders; both appear as a tree; the agent reads the graph through the CLI, spawns a child on itself and another on a descendant, and reparents a node; every change is attributed to it; quitting and relaunching SPADE and restarting Paseo reproduces the same nodes.</td>
+<td>Generalized Paseo adapter (§13), spawn from the project root, conversation renderer, permissions, delegated sub-agent children, restart reconciliation without duplicates, and the agent CLI plus skill for reading the graph and changing it (§4.6).</td>
+<td>Run an agent in the project root that delegates to a sub-agent; both appear as a tree; the agent reads the graph through the CLI, spawns a child on itself and another on a descendant, and reparents a node; every change is attributed to it; quitting and relaunching SPADE and restarting Paseo reproduces the same nodes.</td>
 </tr>
 <tr>
 <td>B6 Rich conversation</td>
@@ -962,9 +954,9 @@ const defaultConversationExpansion = {
 </thead>
 <tbody>
 <tr>
-<td>SPADE alters or pollutes a user's project folders</td>
+<td>SPADE alters or pollutes a user's project directories</td>
 <td>High</td>
-<td>App-owned persistence, read-only operations on project folders, files revealed but never launched (§4.7, §7.1)</td>
+<td>App-owned persistence, read-only operations on project directories, files revealed but never launched (§4.7, §7.1)</td>
 </tr>
 <tr>
 <td>New nodes are illegible or overlap, forcing manual cleanup</td>
