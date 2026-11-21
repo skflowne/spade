@@ -427,13 +427,13 @@ test('shows a failed creation in the dialog and as a dismissible notice', async 
     const dialog = page.getByRole('dialog', { name: 'New agent' })
     await dialog.getByLabel('Provider', { exact: true }).fill('claude')
     await dialog.getByRole('button', { name: 'Create' }).click()
-    // This build has no agent service, so the main process rejects the creation.
-    await expect(dialog.getByRole('alert')).toContainText('not available')
+    // UI specs run with Paseo disabled, so the main process rejects the creation.
+    await expect(dialog.getByRole('alert')).toContainText('Could not create the agent')
     await dialog.getByRole('button', { name: 'Cancel' }).click()
     await expect(dialog).toBeHidden()
 
     const notice = page.getByRole('region', { name: 'Notices' }).getByRole('alert')
-    await expect(notice).toContainText('not available')
+    await expect(notice).toContainText('Could not create the agent')
     await notice.getByRole('button', { name: 'Dismiss' }).click()
     await expectNoNotice(page)
     expect((await readCanvas(page)).nodes).toEqual([])

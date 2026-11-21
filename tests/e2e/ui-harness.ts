@@ -16,7 +16,11 @@ export async function scratchDirectory(parent: string, name: string): Promise<st
 }
 
 export async function launch(userDataDirectory: string): Promise<Spade> {
-  const app = await electron.launch({ args: [resolve('.'), `--user-data-dir=${userDataDirectory}`] })
+  const app = await electron.launch({
+    args: [resolve('.'), `--user-data-dir=${userDataDirectory}`],
+    // UI specs never reach a real Paseo daemon.
+    env: { ...process.env, SPADE_DISABLE_PASEO: '1' }
+  })
   const page = await app.firstWindow()
   await page.setViewportSize({ width: 1400, height: 900 })
   await page.waitForFunction(() => 'spadeHost' in window)

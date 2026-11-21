@@ -1,5 +1,7 @@
 import { execFileSync, spawn } from 'node:child_process'
-import { resolve } from 'node:path'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { _electron as electron, expect, test } from '@playwright/test'
 
 test('comparison highlights added and removed documentation blocks', async () => {
@@ -24,7 +26,11 @@ test('comparison highlights added and removed documentation blocks', async () =>
     docsServer.once('error', reject)
     docsServer.once('exit', (code) => reject(new Error(`Docs server exited with code ${code}`)))
   })
-  const application = await electron.launch({ args: [resolve('.')] })
+  const userData = await mkdtemp(join(tmpdir(), 'spade-docs-compare-'))
+  const application = await electron.launch({
+    args: [resolve('.'), `--user-data-dir=${userData}`],
+    env: { ...process.env, SPADE_DISABLE_PASEO: '1' }
+  })
 
   try {
     const window = await application.firstWindow()
@@ -43,5 +49,6 @@ test('comparison highlights added and removed documentation blocks', async () =>
   } finally {
     await application.close()
     docsServer.kill()
+    await rm(userData, { recursive: true, force: true })
   }
 })

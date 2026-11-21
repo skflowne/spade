@@ -5,7 +5,10 @@ import { _electron as electron, expect, test } from '@playwright/test'
 
 test('starts the desktop shell with the project switcher and, without projects, the open-project overlay', async () => {
   const userData = await mkdtemp(join(tmpdir(), 'spade-startup-'))
-  const application = await electron.launch({ args: [resolve('.'), `--user-data-dir=${userData}`] })
+  const application = await electron.launch({
+    args: [resolve('.'), `--user-data-dir=${userData}`],
+    env: { ...process.env, SPADE_DISABLE_PASEO: '1' }
+  })
 
   try {
     const window = await application.firstWindow()
