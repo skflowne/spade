@@ -25,7 +25,11 @@ async function scratchDirectory(name: string): Promise<string> {
 }
 
 async function launch(userDataDirectory: string): Promise<{ app: ElectronApplication; page: Page }> {
-  const app = await electron.launch({ args: [resolve('.'), `--user-data-dir=${userDataDirectory}`] })
+  // The shell's behavior never depends on a Paseo daemon, and tests must not reach a live one.
+  const app = await electron.launch({
+    args: [resolve('.'), `--user-data-dir=${userDataDirectory}`],
+    env: { ...process.env, SPADE_DISABLE_PASEO: '1' }
+  })
   const page = await app.firstWindow()
   await page.waitForFunction(() => 'spadeHost' in window)
   return { app, page }
@@ -196,7 +200,7 @@ test('answers invalid bridge calls with failures instead of exceptions', async (
         }),
         settings: await host.app.updateSettings({ paseoUrl: 7 }),
         prompt: await host.agents.prompt('node', { text: 'hi', extra: true }),
-        unavailable: await host.agents.prompt('node', { text: 'hi' }),
+        unknownAgent: await host.agents.prompt('node', { text: 'hi' }),
         get: await host.canvas.get(null).then(
           () => 'resolved',
           (error: Error) => error.message
@@ -210,7 +214,7 @@ test('answers invalid bridge calls with failures instead of exceptions', async (
     expect(answers.unknownProject).toMatchObject({ ok: false, error: { code: 'unknown-project' } })
     expect(answers.settings).toMatchObject({ ok: false, error: { code: 'invalid-argument' } })
     expect(answers.prompt).toMatchObject({ ok: false, error: { code: 'invalid-argument' } })
-    expect(answers.unavailable).toMatchObject({ ok: false, error: { code: 'service-unavailable' } })
+    expect(answers.unknownAgent).toMatchObject({ ok: false, error: { code: 'unknown-node' } })
     expect(answers.get).toMatch(/^invalid-argument: /)
     expect(JSON.stringify(answers)).not.toMatch(/\n\s+at /)
   } finally {

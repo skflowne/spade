@@ -1,6 +1,9 @@
+import { createAgentService } from './agents'
 import type { AgentService, FileService, WorkspaceGateway } from './contracts'
+import { createPaseoAdapter } from './paseo'
 import type { AssetStore } from './persistence'
-import { createUnavailableAgentService, createUnavailableFileService } from './unavailableServices'
+import { createUnavailableFileService } from './unavailableServices'
+import { createBuiltinEntityRegistry } from '../shared/builtinEntities'
 
 export type ServiceDependencies = {
   gateway: WorkspaceGateway
@@ -19,7 +22,11 @@ export function prepareServices(): void {}
 
 // The one place the concrete services are chosen. Builds them and registers their entity adapters.
 export function createServices(dependencies: ServiceDependencies): Services {
-  const agents = createUnavailableAgentService()
+  const agents = createAgentService({
+    gateway: dependencies.gateway,
+    paseo: createPaseoAdapter({ setting: dependencies.gateway.getSettings().paseoUrl }),
+    entities: createBuiltinEntityRegistry()
+  })
   const files = createUnavailableFileService()
 
   for (const adapter of [agents.entityAdapter, files.imageEntityAdapter, files.webPageEntityAdapter]) {
