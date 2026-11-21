@@ -49,7 +49,7 @@ import { MoveDialog } from './spawn/MoveDialog'
 import { SpawnDialog, type SpawnDialogMode } from './spawn/SpawnDialog'
 import { SpawnRequests, type SpawnEntry } from './spawn/spawnRequests'
 import { Toolbar } from './Toolbar'
-import { branchMoves, canvasView, type CanvasView, type EdgeView, type NodeView } from './viewModel'
+import { bodyShown, branchMoves, canvasView, type CanvasView, type EdgeView, type NodeView } from './viewModel'
 import { FOCUS_MARGIN, focusViewport, type FocusMode } from './viewportMath'
 
 const ZOOM_LIMITS = { minZoom: 0.1, maxZoom: 2 }
@@ -141,9 +141,10 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
   const latest = useRef({ view, canvas, picking, history, activeNodeId, currentNodeId })
   latest.current = { view, canvas, picking, history, activeNodeId, currentNodeId }
 
+  // A collapsed, hidden, archived, or removed node has no body to hold the input: the canvas takes it back.
   useEffect(() => {
-    if (activeNodeId !== null && !view.nodes.some((node) => node.id === activeNodeId)) setActiveNodeId(null)
-  }, [view, activeNodeId])
+    if (activeNodeId !== null && !bodyShown(canvas, view, activeNodeId)) setActiveNodeId(null)
+  }, [canvas, view, activeNodeId])
 
   const agentChanges = useAgentChanges(canvas)
 

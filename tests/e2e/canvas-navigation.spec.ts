@@ -368,6 +368,17 @@ test('follows edges from node chrome, steps between related nodes by keyboard, a
     await page.keyboard.press('Alt+ArrowUp')
     await expect(nodeHeader(page, 'First')).toBeFocused()
 
+    // Collapsing the node whose body has the input gives the input back to the canvas.
+    await nodeBody(page, 'First').click()
+    await expect(nodeBody(page, 'First')).toHaveAttribute('data-active', 'true')
+    await canvasNode(page, 'First').getByRole('button', { name: 'Collapse node' }).click()
+    await expect(nodeBody(page, 'First')).toHaveCount(0)
+    await expect(currentFocus(page)).toHaveText(/First/)
+    await page.keyboard.press('Alt+ArrowUp')
+    await expect(currentFocus(page)).toHaveText(/Root/)
+    await canvasNode(page, 'First').getByRole('button', { name: 'Expand node' }).click()
+    await expect(nodeBody(page, 'First')).toHaveAttribute('data-active', 'false')
+
     await toolbar(page).getByRole('button', { name: 'Keyboard shortcuts' }).click()
     const help = page.getByRole('dialog', { name: 'Keyboard shortcuts' })
     await expect(help).toContainText('Go to the parent')

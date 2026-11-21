@@ -59,6 +59,12 @@ export function canvasView(canvas: Canvas, entities: EntityRegistry): CanvasView
   return { nodes, edges }
 }
 
+// The node's body is on screen to take input (plan §6): the node is drawn and not collapsed to its header.
+export function bodyShown(canvas: Canvas, view: CanvasView, nodeId: string): boolean {
+  const record = canvasIndex(canvas).byId.get(nodeId)
+  return record !== undefined && !record.collapsed && view.nodes.some((node) => node.id === nodeId)
+}
+
 function isArchived(node: { archived: boolean } | undefined): boolean {
   return node?.archived === true
 }

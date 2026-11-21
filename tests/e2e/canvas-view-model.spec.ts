@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { branchMoves, canvasView } from '../../src/renderer/src/canvas/viewModel'
+import { bodyShown, branchMoves, canvasView } from '../../src/renderer/src/canvas/viewModel'
 import { focusViewport } from '../../src/renderer/src/canvas/viewportMath'
 import { createBuiltinEntityRegistry } from '../../src/shared/builtinEntities'
 import {
@@ -120,6 +120,24 @@ test.describe('canvas view', () => {
     expect(byId.get('a')!.referenceCount).toBe(2)
     expect(byId.get('b')!.referenceCount).toBe(1)
     expect(byId.get('c')!.referenceCount).toBe(1)
+  })
+})
+
+test.describe('active body', () => {
+  test('can hold the input only while its node is drawn expanded', () => {
+    const canvas = canvasOf(
+      [
+        node('open'),
+        node('collapsed', { collapsed: true }),
+        node('archived', { archived: true }),
+        node('parent', { branchCollapsed: true }),
+        node('hidden')
+      ],
+      [edge('parent', 'hidden')]
+    )
+    const view = canvasView(canvas, entities)
+    expect(bodyShown(canvas, view, 'open')).toBe(true)
+    for (const id of ['collapsed', 'archived', 'hidden', 'removed']) expect(bodyShown(canvas, view, id), id).toBe(false)
   })
 })
 
