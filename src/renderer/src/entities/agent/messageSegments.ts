@@ -1,9 +1,9 @@
-import { Lexer } from 'marked'
+import { Lexer, type Token, type Tokens } from 'marked'
 import { LIVE_HTML_FENCE } from '../../../../shared/richBlocks'
 
 // An assistant message split at its top-level live HTML answers, so each answer gets its own collapsible
 // frame and annotation list. A fence still being streamed is pending: rendering it would restart the
-// answer runtime or the diagram on every chunk.
+// answer runtime or the diagram on every chunk. That holds for a fence nested in a list or a quote too.
 export type MessageSegment =
   | { type: 'markdown'; source: string }
   | { type: 'html'; html: string; title: string | null }
@@ -22,24 +22,54 @@ export function splitMessage(source: string): MessageSegment[] {
   }
   const tokens = Lexer.lex(source, { gfm: true, breaks: false })
   tokens.forEach((token, index) => {
+    const last = index === tokens.length - 1
     if (token.type === 'code' && FENCE_START.test(token.raw)) {
-      const [word = '', ...titleWords] = (token.lang ?? '').trim().split(/\s+/)
-      const language = word.toLowerCase()
-      if (RESTARTING_FENCES.has(language) && index === tokens.length - 1 && !isClosedFence(token.raw)) {
+      const code = token as Tokens.Code
+      if (last && isStreamingRestartingFence(code)) {
         flush()
-        segments.push({ type: 'pending', language })
+        segments.push({ type: 'pending', language: fenceLanguage(code) })
         return
       }
-      if (language === LIVE_HTML_FENCE) {
+      if (fenceLanguage(code) === LIVE_HTML_FENCE) {
+        const [, ...titleWords] = (code.lang ?? '').trim().split(/\s+/)
         flush()
-        segments.push({ type: 'html', html: token.text, title: titleWords.join(' ') || null })
+        segments.push({ type: 'html', html: code.text, title: titleWords.join(' ') || null })
         return
       }
+    }
+    const nested = last ? lastNestedCode(token) : null
+    if (nested && isStreamingRestartingFence(nested)) {
+      // The container's Markdown up to the line that opens the fence; the fence itself waits.
+      const opening = nested.raw.split('\n', 1)[0].trim()
+      const at = token.raw.lastIndexOf(opening)
+      markdown += at === -1 ? '' : token.raw.slice(0, token.raw.lastIndexOf('\n', at) + 1)
+      flush()
+      segments.push({ type: 'pending', language: fenceLanguage(nested) })
+      return
     }
     markdown += token.raw
   })
   flush()
   return segments
+}
+
+function fenceLanguage(token: Tokens.Code): string {
+  return ((token.lang ?? '').trim().split(/\s+/, 1)[0] ?? '').toLowerCase()
+}
+
+function isStreamingRestartingFence(token: Tokens.Code): boolean {
+  return FENCE_START.test(token.raw) && RESTARTING_FENCES.has(fenceLanguage(token)) && !isClosedFence(token.raw)
+}
+
+// The code block a list or quote ends with, however deeply nested.
+function lastNestedCode(token: Token): Tokens.Code | null {
+  let current: Token | undefined = token
+  while (current?.type === 'list' || current?.type === 'list_item' || current?.type === 'blockquote') {
+    const children: Token[] = current.type === 'list' ? (current as Tokens.List).items : ((current as Tokens.Blockquote).tokens ?? [])
+    current = children.filter((child) => child.type !== 'space').at(-1)
+    if (current?.type === 'code') return current as Tokens.Code
+  }
+  return null
 }
 
 function isClosedFence(raw: string): boolean {

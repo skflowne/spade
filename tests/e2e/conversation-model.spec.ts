@@ -313,6 +313,22 @@ test.describe('assistant message segments', () => {
       { type: 'markdown', source: '```mermaid\ngraph TD\nA-->B\n```\n' }
     ])
   })
+
+  test('a fence still being streamed inside a list or a quote is pending too', () => {
+    expect(splitMessage('Steps:\n\n- First\n- Diagram:\n\n  ```mermaid\n  graph TD\n  A-->')).toEqual([
+      { type: 'markdown', source: 'Steps:\n\n- First\n- Diagram:\n\n' },
+      { type: 'pending', language: 'mermaid' }
+    ])
+    expect(splitMessage('Intro\n\n> Note\n>\n> ```spade-html\n> <p>partial')).toEqual([
+      { type: 'markdown', source: 'Intro\n\n> Note\n>\n' },
+      { type: 'pending', language: 'spade-html' }
+    ])
+    // Closed, or ordinary code, the nested fence stays inside the Markdown.
+    const closed = '- Diagram:\n\n  ```mermaid\n  graph TD\n  A-->B\n  ```\n'
+    expect(splitMessage(closed)).toEqual([{ type: 'markdown', source: closed }])
+    const code = '- Code:\n\n  ```ts\n  const a ='
+    expect(splitMessage(code)).toEqual([{ type: 'markdown', source: code }])
+  })
 })
 
 test.describe('agent status', () => {
