@@ -679,6 +679,21 @@ test('runtime events and cached summaries are written only when something change
   })
 })
 
+test('a service started again after a stop watches its agents’ timelines again', async () => {
+  await withFixture(async ({ project, open }) => {
+    const paseo = new FakePaseo()
+    const session = await open(paseo)
+    await spawnRoot(session, project)
+    expect(paseo.watched).toEqual(['spawned-1'])
+
+    await session.service.stop()
+    paseo.watched = []
+    await session.service.start()
+    await session.service.whenIdle()
+    expect(paseo.watched).toEqual(['spawned-1'])
+  })
+})
+
 test('timelines route to the agent or the provider sub-agent and growth is reported per node, debounced', async () => {
   await withFixture(async ({ project, open }) => {
     const paseo = new FakePaseo()

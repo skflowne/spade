@@ -188,6 +188,8 @@ class PaseoAgentService implements SpadeAgentService {
     this.timelineTimers.clear()
     this.inFlight.clear()
     this.pending = emptyPending()
+    // Nothing watched before the stop is assumed to survive it: the next start subscribes again.
+    this.watchKey = null
     await this.paseo.stop()
     await Promise.race([this.queue, new Promise((resolve) => setTimeout(resolve, 2_000))])
   }
