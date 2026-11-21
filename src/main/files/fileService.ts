@@ -85,6 +85,8 @@ export function createFileService(options: FileServiceOptions): FileService {
   let stopServingImages: (() => void) | null = null
   let removeWebviewPolicy: (() => void) | null = null
 
+  // Images and web pages have no external resource to track: the node's config (path, asset id, URL) is
+  // the single source of truth, so their adapters return no resourceRef that could drift from it.
   const imageEntityAdapter: MainEntityAdapter = {
     type: IMAGE_ENTITY,
     async create(input) {
@@ -93,7 +95,7 @@ export function createFileService(options: FileServiceOptions): FileService {
         const path = await requireAssetPath(assetStore, config.source.assetId)
         const dimensions = await probeImageFile(path).then((probe) => probe.dimensions, () => null)
         return {
-          resourceRef: { provider: 'spade', kind: 'asset', id: config.source.assetId },
+          resourceRef: null,
           title: 'Image',
           config,
           ...fittedSize(dimensions)
@@ -104,7 +106,7 @@ export function createFileService(options: FileServiceOptions): FileService {
       // A missing or unreadable file still makes a node (plan §7.2); it shows its state once rendered.
       const dimensions = await probeImageFile(path).then((probe) => probe.dimensions, () => null)
       return {
-        resourceRef: { provider: 'filesystem', kind: 'image', id: path },
+        resourceRef: null,
         title: pathBaseName(path),
         config: { ...config, source: { kind: 'path', path } },
         ...fittedSize(dimensions)
@@ -123,7 +125,7 @@ export function createFileService(options: FileServiceOptions): FileService {
       }
       if (url === null) throw new FileServiceError('invalid-config', 'A web page needs an http or https URL.')
       return {
-        resourceRef: { provider: 'electron', kind: 'webview', id: input.nodeId },
+        resourceRef: null,
         title: url.host,
         config: { url: url.href }
       }

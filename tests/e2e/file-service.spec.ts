@@ -720,7 +720,7 @@ test('stopping the service releases every watcher', async () => {
 
 // ---------- Entity adapters ----------
 
-test('the image adapter references a path image by absolute path and fits the node to it', async () => {
+test('the image adapter stores a path image by absolute path in its config, with no resource reference, and fits the node to it', async () => {
   await withFixture(async ({ root, project, service }) => {
     await writeFile(join(root, 'wide.png'), png(1600, 900))
     const result = await service.imageEntityAdapter.create({
@@ -731,7 +731,7 @@ test('the image adapter references a path image by absolute path and fits the no
       config: { source: { kind: 'path', path: 'wide.png' }, caption: 'Wide' }
     })
     expect(result).toEqual({
-      resourceRef: { provider: 'filesystem', kind: 'image', id: join(root, 'wide.png') },
+      resourceRef: null,
       title: 'wide.png',
       config: { source: { kind: 'path', path: join(root, 'wide.png') }, caption: 'Wide' },
       size: { width: 560, height: 315 }
@@ -749,14 +749,14 @@ test('the image adapter keeps a node for a missing file, without a fitted size',
       config: { source: { kind: 'path', path: 'later/plot.svg' } }
     })
     expect(result).toEqual({
-      resourceRef: { provider: 'filesystem', kind: 'image', id: join(root, 'later', 'plot.svg') },
+      resourceRef: null,
       title: 'plot.svg',
       config: { source: { kind: 'path', path: join(root, 'later', 'plot.svg') } }
     })
   })
 })
 
-test('the image adapter references an asset image by asset id', async () => {
+test('the image adapter keeps an asset image by asset id in its config only', async () => {
   await withFixture(async ({ project, assets, service }) => {
     const { assetId } = await assets.import({ data: gif(300, 600), mimeType: 'image/gif' })
     const result = await service.imageEntityAdapter.create({
@@ -766,8 +766,9 @@ test('the image adapter references an asset image by asset id', async () => {
       actor: userActor,
       config: { source: { kind: 'asset', assetId } }
     })
-    expect(result).toMatchObject({
-      resourceRef: { provider: 'spade', kind: 'asset', id: assetId },
+    expect(result).toEqual({
+      resourceRef: null,
+      title: 'Image',
       config: { source: { kind: 'asset', assetId } },
       size: { width: 280, height: 560 }
     })
@@ -785,13 +786,13 @@ test('the image adapter rejects malformed configs, non-image paths, and unknown 
   })
 })
 
-test('the web page adapter references a guest webview by node id and titles it with the host', async () => {
+test('the web page adapter keeps the URL in its config only and titles it with the host', async () => {
   await withFixture(async ({ project, service }) => {
     const create = (url: unknown) =>
       service.webPageEntityAdapter.create({ nodeId: 'node-7', project, sourceNode: null, actor: userActor, config: { url } })
 
     expect(await create('https://github.com/skflowne/spade/issues/14')).toEqual({
-      resourceRef: { provider: 'electron', kind: 'webview', id: 'node-7' },
+      resourceRef: null,
       title: 'github.com',
       config: { url: 'https://github.com/skflowne/spade/issues/14' }
     })
