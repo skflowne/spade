@@ -147,7 +147,7 @@
 <li>The sidebar is a derived overview and jump projection. It issues focus commands into the global canvas and owns no state.</li>
 <li>A shared Group container owns child bounds, nesting, movement, and common viewport actions. The Project container specializes it with a set of user-declared folders; there is no work-item or status specialization.</li>
 <li>Group membership is explicit. Overlapping a group never changes it.</li>
-<li>Structure is a forest of <code>child</code> edges; a branch is a derived view of one child and its descendants. One generic tree mechanic serves every node type, including agents and sub-agents. An agent may spawn children only on itself or on a descendant in its own tree; the command layer enforces this, and agents reach it through a CLI tool taught by a skill, not MCP.</li>
+<li>Structure is a forest of <code>child</code> edges; a branch is a derived view of one child and its descendants. One generic tree mechanic serves every node type, including agents and sub-agents. Agents read and change the graph through the same commands as the user, via a CLI tool taught by a skill, not MCP. By default an agent continues its own tree, from itself or from a descendant.</li>
 <li>Container chrome and non-interactive surfaces preserve outer-canvas zoom-in/out, and containers keep navigation gutters between children.</li>
 <li>Automatic placement of new nodes is one pure shared function that never overlaps nodes and never moves user-placed nodes.</li>
 </ul>
