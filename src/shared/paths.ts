@@ -102,6 +102,21 @@ export function isPathInside(path: string, directory: string): boolean {
   return pathId !== directoryId && pathId.startsWith(prefix)
 }
 
+// A path whose access may contact another machine: a UNC share in any spelling, or a `\\?\` / `\\.\` device
+// path that is not a drive letter (device namespaces reach shares too, through GLOBALROOT\Device\Mup).
+// On Windows, touching one opens an SMB connection and may send the user's credentials.
+export function isNetworkPath(path: string): boolean {
+  const parsed = parsePath(path)
+  if (parsed.root.kind === 'unc') return true
+  return parsed.prefix !== null && !/^[A-Za-z]:$/.test(parsed.root.kind === 'drive' ? parsed.root.drive : '')
+}
+
+// SPADE never touches a network path because of text it was given unless the user approved it; the project
+// root and everything inside it are approved by opening the project.
+export function needsNetworkApproval(path: string, projectRoot: string): boolean {
+  return isNetworkPath(path) && !isSamePath(path, projectRoot) && !isPathInside(path, projectRoot)
+}
+
 export function isAbsolutePath(path: string): boolean {
   return parsePath(path).root.kind !== 'relative'
 }

@@ -14,6 +14,7 @@ import {
   createImageRequestHandler,
   parseImageUrl
 } from '../../src/main/files/imageProtocol'
+import { nodeFileSystem, type FileSystemReads } from '../../src/main/files/fileSystem'
 import { fitImageNodeSize } from '../../src/main/files/imageSizing'
 import { installWebviewPolicy, type WebviewPolicyTarget } from '../../src/main/files/webviewPolicy'
 import { AssetStore } from '../../src/main/persistence'
@@ -293,13 +294,135 @@ test('path inspection splits line and column suffixes before checking existence'
 
 test('path inspection reports missing, unreadable, and malformed paths as missing instead of failing', async () => {
   await withFixture(async ({ project, service }) => {
-    for (const input of ['nope.ts', 'nope.png:3', '', 'bad\0name', 'C:\\does\\not\\exist.png', '\\\\server\\share\\x']) {
+    for (const input of ['nope.ts', 'nope.png:3', '', 'bad\0name', 'C:\\does\\not\\exist.png']) {
       const info = await service.inspectPath(project, input)
       expect(info.kind, JSON.stringify(input)).toBe('missing')
       expect(info.input).toBe(input)
     }
     expect((await service.inspectPath(project, 'nope.png')).isImage).toBe(false)
   })
+})
+
+// ---------- Network paths ----------
+
+// Records every filesystem call the service makes, then performs it for real.
+function spyFileSystem(): { fileSystem: FileSystemReads; touched: string[] } {
+  const touched: string[] = []
+  return {
+    touched,
+    fileSystem: {
+      stat: (path) => (touched.push(path), nodeFileSystem.stat(path)),
+      openImage: (path, prefixBytes) => (touched.push(path), nodeFileSystem.openImage(path, prefixBytes)),
+      watchFile: (path, options, listener) => (touched.push(path), nodeFileSystem.watchFile(path, options, listener)),
+      unwatchFile: (path, listener) => nodeFileSystem.unwatchFile(path, listener)
+    }
+  }
+}
+
+test('a network path outside the project is never touched unless the user acts on it explicitly', async () => {
+  const { fileSystem, touched } = spyFileSystem()
+  await withFixture(
+    async ({ project, host, service }) => {
+      await service.start()
+      const share = '\\\\attacker.example\\share'
+      const paths = [`${share}\\loot.png`, '\\\\?\\UNC\\attacker.example\\share\\x.png', '//attacker.example/share/y.png:12']
+
+      for (const input of paths) {
+        const info = await service.inspectPath(project, input)
+        expect(info, input).toMatchObject({ input, kind: 'unchecked', isImage: false })
+        expect(await codeOf(service.describeImage(project, { kind: 'path', path: input.replace(/:12$/, '') })), input).toBe('network-path')
+      }
+      expect((await service.inspectPath(project, `${share}\\a.png:7`)).line).toBe(7)
+
+      const created = await service.imageEntityAdapter.create({
+        nodeId: 'n',
+        project,
+        sourceNode: null,
+        actor: userActor,
+        config: { source: { kind: 'path', path: `${share}\\loot.png` } }
+      })
+      expect(created).toEqual({ resourceRef: null, title: 'loot.png', config: { source: { kind: 'path', path: `${share}\\loot.png` } } })
+
+      const served = await host.imageHandler!(new Request(buildImageUrl({ kind: 'file', path: `${share}\\loot.png` }, 'x')))
+      expect(served.status).toBe(403)
+      expect(touched).toEqual([])
+
+      // An explicit request touches that path, and from then on it is approved for this session.
+      expect(await service.inspectPath(project, `${share}\\loot.png`, { explicit: true })).toMatchObject({ kind: 'missing' })
+      expect(touched).toEqual([`${share}\\loot.png`])
+      expect((await service.inspectPath(project, '//ATTACKER.example/share/loot.png')).kind).toBe('missing')
+      expect(await codeOf(service.describeImage(project, { kind: 'path', path: `${share}\\loot.png` }))).toBe('image-missing')
+      expect((await host.imageHandler!(new Request(buildImageUrl({ kind: 'file', path: `${share}\\loot.png` }, 'x')))).status).toBe(404)
+      // Approval covers that path only.
+      touched.length = 0
+      expect((await service.inspectPath(project, `${share}\\other.png`)).kind).toBe('unchecked')
+      expect(touched).toEqual([])
+
+      // An explicit image description approves and watches it.
+      expect(await codeOf(service.describeImage(project, { kind: 'path', path: `${share}\\other.png` }, { explicit: true }))).toBe('image-missing')
+      expect(touched).toEqual([`${share}\\other.png`, `${share}\\other.png`])
+    },
+    { fileSystem }
+  )
+})
+
+test('revealing a network path is an explicit request', async () => {
+  const { fileSystem, touched } = spyFileSystem()
+  await withFixture(
+    async ({ project, service }) => {
+      expect(await codeOf(service.reveal(project, '\\\\host\\share\\x.txt'))).toBe('path-missing')
+      expect(touched).toEqual(['\\\\host\\share\\x.txt'])
+      expect((await service.inspectPath(project, '\\\\host\\share\\x.txt')).kind).toBe('missing')
+    },
+    { fileSystem }
+  )
+})
+
+test('paths inside a project whose root is a network share are always checked', async () => {
+  const { fileSystem, touched } = spyFileSystem()
+  await withFixture(
+    async ({ service }) => {
+      await service.start()
+      const project: Project = {
+        version: 2,
+        id: 'project-unc',
+        name: 'Shared',
+        rootPath: '\\\\fileserver\\team\\framework',
+        createdAt: '2026-01-01T00:00:00.000Z'
+      }
+      expect((await service.inspectPath(project, 'src\\a.ts')).kind).toBe('missing')
+      expect((await service.inspectPath(project, '\\\\fileserver\\team\\framework')).kind).not.toBe('unchecked')
+      expect(await codeOf(service.describeImage(project, { kind: 'path', path: 'shots\\a.png' }))).toBe('image-missing')
+      await service.imageEntityAdapter.create({
+        nodeId: 'n',
+        project,
+        sourceNode: null,
+        actor: userActor,
+        config: { source: { kind: 'path', path: 'shots\\b.png' } }
+      })
+      expect(touched).toEqual([
+        '\\\\fileserver\\team\\framework\\src\\a.ts',
+        '\\\\fileserver\\team\\framework',
+        '\\\\fileserver\\team\\framework\\shots\\a.png',
+        '\\\\fileserver\\team\\framework\\shots\\a.png',
+        '\\\\fileserver\\team\\framework\\shots\\b.png'
+      ])
+
+      // `..` out of the root, or a sibling share, is outside it.
+      touched.length = 0
+      expect((await service.inspectPath(project, '..\\secrets\\x.txt')).kind).toBe('unchecked')
+      expect((await service.inspectPath(project, '\\\\fileserver\\other\\x.txt')).kind).toBe('unchecked')
+      expect(touched).toEqual([])
+    },
+    { fileSystem }
+  )
+})
+
+test('the image protocol refuses network paths by default', async () => {
+  const handle = createImageRequestHandler({ resolveAsset: async () => null })
+  for (const path of ['\\\\host\\share\\a.png', '\\\\?\\UNC\\host\\share\\a.png']) {
+    expect((await handle(new Request(buildImageUrl({ kind: 'file', path }, 'x')))).status, path).toBe(403)
+  }
 })
 
 // ---------- Reveal ----------

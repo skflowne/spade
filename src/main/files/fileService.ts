@@ -1,4 +1,3 @@
-import { stat } from 'node:fs/promises'
 import type { AssetStore } from '../persistence'
 import type { EntityCreateResult, FileService, MainEntityAdapter } from '../contracts'
 import {
@@ -10,9 +9,19 @@ import {
   type ImageSource
 } from '../../shared/builtinEntities'
 import type { Project } from '../../shared/domain'
-import type { ImageInfo, PathInfo, PathKind } from '../../shared/ipc'
-import { IMAGE_EXTENSIONS, isImagePath, pathBaseName, resolveProjectPath, splitLineSuffix } from '../../shared/paths'
+import type { ImageInfo, PathAccessOptions, PathInfo, PathKind } from '../../shared/ipc'
+import {
+  IMAGE_EXTENSIONS,
+  isImagePath,
+  isNetworkPath,
+  needsNetworkApproval,
+  pathBaseName,
+  pathKey,
+  resolveProjectPath,
+  splitLineSuffix
+} from '../../shared/paths'
 import { FileServiceError } from './errors'
+import { nodeFileSystem, type FileSystemReads } from './fileSystem'
 import type { FileServiceHost } from './host'
 import { probeImageFile } from './imageFile'
 import { imageTypeOfPath, type ImageDimensions } from './imageFormat'
@@ -25,13 +34,14 @@ export type FileServiceOptions = {
   host: FileServiceHost
   assetStore: Pick<AssetStore, 'import' | 'resolve'>
   watch?: ImageWatcherOptions
+  fileSystem?: FileSystemReads
 }
 
 type ImageChangedEvent = { type: 'image-changed'; path: string }
 
-async function kindOf(path: string): Promise<PathKind> {
+async function kindOf(fileSystem: FileSystemReads, path: string): Promise<PathKind> {
   try {
-    const stats = await stat(path)
+    const stats = await fileSystem.stat(path)
     return stats.isFile() ? 'file' : stats.isDirectory() ? 'directory' : 'missing'
   } catch {
     return 'missing'
@@ -72,18 +82,35 @@ function fittedSize(dimensions: ImageDimensions | null): Pick<EntityCreateResult
 
 export function createFileService(options: FileServiceOptions): FileService {
   const { host, assetStore } = options
+  const fileSystem = options.fileSystem ?? nodeFileSystem
   const listeners = new Set<(event: ImageChangedEvent) => void>()
-  const watcher = new ImageWatcher((path) => {
-    for (const listener of listeners) {
-      try {
-        listener({ type: 'image-changed', path })
-      } catch (error) {
-        console.error('An image-changed listener failed', error)
+  const watcher = new ImageWatcher(
+    (path) => {
+      for (const listener of listeners) {
+        try {
+          listener({ type: 'image-changed', path })
+        } catch (error) {
+          console.error('An image-changed listener failed', error)
+        }
       }
-    }
-  }, options.watch)
+    },
+    options.watch,
+    fileSystem
+  )
   let stopServingImages: (() => void) | null = null
   let removeWebviewPolicy: (() => void) | null = null
+  const probe = (path: string) => probeImageFile(path, fileSystem.openImage)
+
+  // Touching a network path may open an SMB connection to another machine and send the user's credentials,
+  // so one named in agent output is touched only once the user explicitly acted on it (then for the rest of
+  // the session) or when it lies inside the open project. Keys are pathKey()s.
+  const allowedNetworkPaths = new Set<string>()
+  function mayTouch(project: Project, path: string, access: PathAccessOptions | undefined): boolean {
+    if (!isNetworkPath(path)) return true
+    // Remembered so the image protocol, which knows no project, serves what describeImage allowed.
+    if (access?.explicit === true || !needsNetworkApproval(path, project.rootPath)) allowedNetworkPaths.add(pathKey(path))
+    return allowedNetworkPaths.has(pathKey(path))
+  }
 
   // Images and web pages have no external resource to track: the node's config (path, asset id, URL) is
   // the single source of truth, so their adapters return no resourceRef that could drift from it.
@@ -93,7 +120,7 @@ export function createFileService(options: FileServiceOptions): FileService {
       const config = parseImageConfig(input.config)
       if (config.source.kind === 'asset') {
         const path = await requireAssetPath(assetStore, config.source.assetId)
-        const dimensions = await probeImageFile(path).then((probe) => probe.dimensions, () => null)
+        const dimensions = await probe(path).then((probed) => probed.dimensions, () => null)
         return {
           resourceRef: null,
           title: 'Image',
@@ -104,7 +131,10 @@ export function createFileService(options: FileServiceOptions): FileService {
       const path = resolveProjectPath(input.project.rootPath, config.source.path)
       requireImagePath(path)
       // A missing or unreadable file still makes a node (plan §7.2); it shows its state once rendered.
-      const dimensions = await probeImageFile(path).then((probe) => probe.dimensions, () => null)
+      // An unapproved network path is not touched at all, so its node gets the default size.
+      const dimensions = mayTouch(input.project, path, undefined)
+        ? await probe(path).then((probed) => probed.dimensions, () => null)
+        : null
       return {
         resourceRef: null,
         title: pathBaseName(path),
@@ -138,7 +168,13 @@ export function createFileService(options: FileServiceOptions): FileService {
 
     async start() {
       if (stopServingImages) return
-      stopServingImages = host.handleImageProtocol(createImageRequestHandler({ resolveAsset: (id) => assetStore.resolve(id) }))
+      stopServingImages = host.handleImageProtocol(
+        createImageRequestHandler({
+          resolveAsset: (id) => assetStore.resolve(id),
+          allowsFile: (path) => !isNetworkPath(path) || allowedNetworkPaths.has(pathKey(path)),
+          openImage: fileSystem.openImage
+        })
+      )
       removeWebviewPolicy = installWebviewPolicy(host.guestWebviews())
     },
 
@@ -151,10 +187,10 @@ export function createFileService(options: FileServiceOptions): FileService {
       watcher.close()
     },
 
-    async inspectPath(project, input): Promise<PathInfo> {
+    async inspectPath(project, input, access): Promise<PathInfo> {
       const location = locate(project, input)
       if (location === null) return { input, absolutePath: '', kind: 'missing', isImage: false, line: null }
-      const kind = await kindOf(location.absolutePath)
+      const kind = mayTouch(project, location.absolutePath, access) ? await kindOf(fileSystem, location.absolutePath) : 'unchecked'
       return {
         input,
         absolutePath: location.absolutePath,
@@ -164,10 +200,13 @@ export function createFileService(options: FileServiceOptions): FileService {
       }
     },
 
-    // Plan §7.1 invariant: files are only revealed, never launched.
+    // Plan §7.1 invariant: files are only revealed, never launched. Revealing is always the user's explicit act.
     async reveal(project, input) {
       const location = locate(project, input)
-      const kind = location === null ? 'missing' : await kindOf(location.absolutePath)
+      const kind =
+        location !== null && mayTouch(project, location.absolutePath, { explicit: true })
+          ? await kindOf(fileSystem, location.absolutePath)
+          : 'missing'
       if (location === null || kind === 'missing') {
         throw new FileServiceError('path-missing', `${JSON.stringify(input)} does not exist.`)
       }
@@ -196,24 +235,27 @@ export function createFileService(options: FileServiceOptions): FileService {
       return chosen
     },
 
-    async describeImage(project, value: ImageSource): Promise<ImageInfo> {
+    async describeImage(project, value: ImageSource, access): Promise<ImageInfo> {
       const { source } = parseImageConfig({ source: value })
       let path: string
       if (source.kind === 'path') {
         path = resolveProjectPath(project.rootPath, source.path)
         requireImagePath(path)
+        if (!mayTouch(project, path, access)) {
+          throw new FileServiceError('network-path', `${path} is on another machine; SPADE loads it only when you ask for it.`)
+        }
         // Watched even when missing, so the renderer hears when it appears.
         watcher.watch(path)
       } else {
         path = await requireAssetPath(assetStore, source.assetId)
       }
-      const probe = await probeImageFile(path)
+      const probed = await probe(path)
       const location = source.kind === 'path' ? { kind: 'file' as const, path } : { kind: 'asset' as const, assetId: source.assetId }
       return {
-        url: buildImageUrl(location, probe.revision),
-        width: probe.dimensions?.width ?? null,
-        height: probe.dimensions?.height ?? null,
-        revision: probe.revision
+        url: buildImageUrl(location, probed.revision),
+        width: probed.dimensions?.width ?? null,
+        height: probed.dimensions?.height ?? null,
+        revision: probed.revision
       }
     },
 

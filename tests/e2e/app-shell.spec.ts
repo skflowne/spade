@@ -222,6 +222,44 @@ test('answers invalid bridge calls with failures instead of exceptions', async (
   }
 })
 
+test('path access options cross the bridge: a network path is touched only on an explicit request', async () => {
+  const { app, page } = await launch(await scratchDirectory('user-data'))
+  try {
+    await pickNext(app, await scratchDirectory('project'))
+    const answers = await page.evaluate(async () => {
+      const host = (window as unknown as HostWindow).spadeHost
+      const opened = await host.projects.open()
+      if (!opened.ok || !('project' in opened)) throw new Error('no project')
+      const id = opened.project.id
+      // `.invalid` never resolves, should a real lookup ever happen.
+      const path = '\\\\spade-test.invalid\\share\\shot.png'
+      const loose = host.files as unknown as {
+        inspectPath(id: string, path: string, options: unknown): Promise<unknown>
+        describeImage(id: string, source: unknown, options: unknown): Promise<unknown>
+      }
+      return {
+        quiet: await host.files.inspectPath(id, path),
+        image: await host.files.describeImage(id, { kind: 'path', path }),
+        badInspect: await loose.inspectPath(id, path, { explicit: 'yes' }).then(
+          () => 'resolved',
+          (error: Error) => error.message
+        ),
+        badDescribe: await loose.describeImage(id, { kind: 'path', path }, { explicit: true, extra: 1 }),
+        explicit: await host.files.inspectPath(id, path, { explicit: true }),
+        afterwards: await host.files.inspectPath(id, path)
+      }
+    })
+    expect(answers.quiet).toMatchObject({ kind: 'unchecked' })
+    expect(answers.image).toMatchObject({ ok: false, error: { code: 'network-path' } })
+    expect(answers.badInspect).toMatch(/^invalid-argument: /)
+    expect(answers.badDescribe).toMatchObject({ ok: false, error: { code: 'invalid-argument' } })
+    expect(answers.explicit).toMatchObject({ kind: 'missing' })
+    expect(answers.afterwards).toMatchObject({ kind: 'missing' })
+  } finally {
+    await app.close()
+  }
+})
+
 test('reports unexpected host errors as internal failures without their details', () => {
   const unexpected = Object.assign(new Error('EACCES: permission denied, open C:\\secret'), { code: 'EACCES' })
   const quiet = console.error

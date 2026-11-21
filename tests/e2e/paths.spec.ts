@@ -3,7 +3,9 @@ import {
   IMAGE_EXTENSIONS,
   isAbsolutePath,
   isImagePath,
+  isNetworkPath,
   isPathInside,
+  needsNetworkApproval,
   isSamePath,
   pathBaseName,
   pathKey,
@@ -113,4 +115,38 @@ test('recognizes image paths by extension, case-insensitively', () => {
   for (const path of ['a.ts', 'png', 'C:\\images.png\\notes.txt', 'a.png.txt', '.png', 'C:\\x\\']) {
     expect(isImagePath(path), path).toBe(false)
   }
+})
+
+test('network paths are UNC shares in every spelling, and device paths that are not a drive letter', () => {
+  for (const path of [
+    '\\\\server\\share\\x.png',
+    '\\\\server\\share',
+    '//server/share/x',
+    '\\/server/share',
+    '\\\\?\\UNC\\server\\share\\x',
+    '\\\\?\\unc\\server\\share',
+    '\\\\.\\UNC\\server\\share\\x',
+    // Device namespaces can reach other machines too (GLOBALROOT\Device\Mup).
+    '\\\\?\\GLOBALROOT\\Device\\Mup\\server\\share\\x',
+    '\\\\.\\pipe\\name'
+  ]) {
+    expect(isNetworkPath(path), path).toBe(true)
+  }
+  for (const path of ['C:\\x\\y.png', 'c:/x', '\\\\?\\C:\\x', '\\\\.\\C:\\x', '\\x', 'relative\\x', '/home/dev/x', '']) {
+    expect(isNetworkPath(path), path).toBe(false)
+  }
+})
+
+test('a network path needs approval unless it is the project root or inside it', () => {
+  expect(needsNetworkApproval('\\\\evil\\share\\x.png', 'C:\\Work\\Framework')).toBe(true)
+  expect(needsNetworkApproval('\\\\?\\UNC\\evil\\share\\x', 'C:\\Work\\Framework')).toBe(true)
+  expect(needsNetworkApproval('C:\\Work\\Other\\x.png', 'C:\\Work\\Framework')).toBe(false)
+
+  const root = '\\\\fileserver\\team\\framework'
+  expect(needsNetworkApproval('\\\\FileServer\\Team\\Framework\\src\\a.ts', root)).toBe(false)
+  expect(needsNetworkApproval('//fileserver/team/framework/', root)).toBe(false)
+  expect(needsNetworkApproval('\\\\?\\UNC\\fileserver\\team\\framework\\b.png', root)).toBe(false)
+  expect(needsNetworkApproval('\\\\fileserver\\team\\framework\\..\\secrets\\x', root)).toBe(true)
+  expect(needsNetworkApproval('\\\\fileserver\\team\\frameworkx\\a', root)).toBe(true)
+  expect(needsNetworkApproval('\\\\fileserver\\other\\a', root)).toBe(true)
 })

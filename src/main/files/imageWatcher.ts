@@ -1,5 +1,6 @@
-import { unwatchFile, watchFile, type Stats } from 'node:fs'
+import type { Stats } from 'node:fs'
 import { pathKey } from '../../shared/paths'
+import { nodeFileSystem, type FileSystemReads } from './fileSystem'
 
 export type ImageWatcherOptions = {
   // Least recently watched images stop being watched beyond this many.
@@ -26,7 +27,8 @@ export class ImageWatcher {
 
   constructor(
     private readonly onChange: (path: string) => void,
-    options: ImageWatcherOptions = {}
+    options: ImageWatcherOptions = {},
+    private readonly fileSystem: Pick<FileSystemReads, 'watchFile' | 'unwatchFile'> = nodeFileSystem
   ) {
     this.maxWatchedImages = options.maxWatchedImages ?? 256
     this.pollIntervalMs = options.pollIntervalMs ?? 1000
@@ -54,7 +56,7 @@ export class ImageWatcher {
         this.onChange(watch.path)
       }, this.debounceMs)
     }
-    watchFile(path, { interval: this.pollIntervalMs, persistent: false }, watch.listener)
+    this.fileSystem.watchFile(path, { interval: this.pollIntervalMs, persistent: false }, watch.listener)
     this.watches.set(key, watch)
 
     for (const [oldest] of this.watches) {
@@ -73,6 +75,6 @@ export class ImageWatcher {
     if (!watch) return
     this.watches.delete(key)
     if (watch.timer) clearTimeout(watch.timer)
-    unwatchFile(watch.path, watch.listener)
+    this.fileSystem.unwatchFile(watch.path, watch.listener)
   }
 }
