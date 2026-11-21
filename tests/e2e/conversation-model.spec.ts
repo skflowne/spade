@@ -9,6 +9,12 @@ import { effectiveExpansion, paneKindOf, withOverride } from '../../src/renderer
 import { splitMessage } from '../../src/renderer/src/entities/agent/messageSegments'
 import { agentStatusOf, lastAssistantExcerpt } from '../../src/renderer/src/entities/agent/status'
 import { AnnotationStore } from '../../src/renderer/src/entities/agent/annotations'
+import {
+  conversationState,
+  forgetConversationState,
+  noteTimelineChanged,
+  remainingDraft
+} from '../../src/renderer/src/entities/agent/conversationState'
 import { createAnswerSubmitter, formatSubmission } from '../../src/renderer/src/entities/agent/submission'
 import { mergeNewestPage, mergeOlderPage, type TimelineState } from '../../src/renderer/src/entities/agent/timeline'
 import type { AgentRuntime } from '../../src/shared/agents'
@@ -387,5 +393,37 @@ test.describe('agent status', () => {
     expect(lastAssistantExcerpt(items, 100)).toBe('Second line')
     expect(lastAssistantExcerpt([message('a', 'x'.repeat(20))], 10)).toBe(`${'x'.repeat(9)}…`)
     expect(lastAssistantExcerpt([tool('t', 'shell')], 10)).toBeNull()
+  })
+})
+
+test.describe('remembered conversation state', () => {
+  test('outlives the mounted view, keeps the last answer it saw, and is dropped with its node', () => {
+    const state = conversationState('node-remembered')
+    expect(state.stale).toBe(true)
+    state.setTimeline({ epoch: 'e1', items: [message('a', 'The answer'), tool('t', 'shell')], olderCursor: null })
+    expect(state.stale).toBe(false)
+    // A newer window without assistant text keeps the last answer known.
+    state.setTimeline({ epoch: 'e1', items: [tool('u', 'read')], olderCursor: 'c1' })
+    expect(lastAssistantExcerpt(state.lastAnswer ? [state.lastAnswer] : [], 100)).toBe('The answer')
+    state.draft = 'unsent'
+    expect(conversationState('node-remembered')).toBe(state)
+
+    noteTimelineChanged('node-remembered')
+    expect(state.stale).toBe(true)
+    // Nodes never shown are not tracked.
+    noteTimelineChanged('node-never-shown')
+
+    forgetConversationState('node-remembered')
+    const fresh = conversationState('node-remembered')
+    expect(fresh).not.toBe(state)
+    expect(fresh.draft).toBe('')
+    expect(fresh.timeline).toBeNull()
+  })
+
+  test('sending clears only the text that was sent', () => {
+    expect(remainingDraft('Hello', 'Hello')).toBe('')
+    expect(remainingDraft('Hello\nand more typed meanwhile', 'Hello')).toBe('and more typed meanwhile')
+    expect(remainingDraft('Replaced meanwhile', 'Hello')).toBe('Replaced meanwhile')
+    expect(remainingDraft('', 'Hello')).toBe('')
   })
 })

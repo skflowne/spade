@@ -6,11 +6,11 @@ import { focusNodeHeader } from '../../canvas/nodeFocus'
 import type { AnnotateHandler, SubmitHandler } from '../../rich'
 import { useAgentRuntime, useAppState } from '../../store/hooks'
 import type { EntityBodyProps } from '../types'
-import { AnnotationStore } from './annotations'
 import { ArtifactLayer } from './ArtifactLayer'
 import { Composer } from './Composer'
 import { ConversationContext, type ConversationServices } from './ConversationContext'
 import { ConversationView } from './ConversationView'
+import { conversationState } from './conversationState'
 import { effectiveExpansion, type ExpansionOverride } from './expansion'
 import { ExpansionControl } from './ExpansionControl'
 import { Permissions } from './Permissions'
@@ -26,11 +26,14 @@ export function AgentBody(props: EntityBodyProps<AgentConfig>): React.JSX.Elemen
   return props.detail === 'preview' ? <AgentPreview {...props} /> : <AgentConversation {...props} />
 }
 
-// Level-of-detail rendering: status and the last answer, from one small page.
+// Level-of-detail rendering: status and the last answer known. Reads one small page only when nothing is
+// remembered for the node or the conversation changed since.
 function AgentPreview({ node }: EntityBodyProps<AgentConfig>): React.JSX.Element {
   const runtime = useAgentRuntime(node.id)
-  const timeline = useTimeline(node.id, runtime?.resourceState ?? null, PREVIEW_PAGE_LIMIT)
-  const excerpt = timeline.state ? lastAssistantExcerpt(timeline.state.items, PREVIEW_EXCERPT_LIMIT) : null
+  // Re-renders whenever the remembered pages change.
+  useTimeline(node.id, runtime?.resourceState ?? null, PREVIEW_PAGE_LIMIT)
+  const answer = conversationState(node.id).lastAnswer
+  const excerpt = answer ? lastAssistantExcerpt([answer], PREVIEW_EXCERPT_LIMIT) : null
   return (
     <div className="agent-preview" data-testid="agent-preview">
       <p className="agent-preview__status">{runtime ? agentStatusOf(runtime).description : (node.cachedPresentation?.summary ?? 'No status yet')}</p>
@@ -47,7 +50,7 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
   const override = useOverride(config.expansion)
   const expansion = useMemo(() => effectiveExpansion(global, override.value), [global, override.value])
   const blocked = promptBlockReason(node, runtime)
-  const [annotations] = useState(() => new AnnotationStore())
+  const annotations = conversationState(node.id).annotations
   const latest = useRef({ blocked, nodeId: node.id })
   latest.current = { blocked, nodeId: node.id }
   const notify = useCallback((message: string) => host.notify(message), [host])
@@ -145,6 +148,7 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
           />
           {subagentList ? <Subagents subagents={subagentList} onOpen={openSubagent} /> : null}
           <ConversationView
+            nodeId={node.id}
             items={items}
             hasOlder={timeline.state?.olderCursor != null}
             loadingOlder={timeline.loadingOlder}

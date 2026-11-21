@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { PREVIEW_ZOOM_THRESHOLD } from '../../src/renderer/src/canvas/model/levelOfDetail'
 import type { AgentRuntime, ConversationItem } from '../../src/shared/agents'
 import { indexTree } from '../../src/shared/tree'
 import {
@@ -27,6 +28,7 @@ import {
   nodeMenu,
   openProjectFromSidebar,
   readCanvas,
+  renderedViewport,
   scratchDirectory,
   selectedProjectId,
   type Spade
@@ -315,6 +317,116 @@ test('a streaming update keeps earlier rich blocks mounted, older pages load on 
     await setTimeline(app, nodeId, { epoch: 'e2', olderCursor: null, items: [items.assistant('b1', 'After a daemon restart')] })
     await expect(log.getByText('After a daemon restart')).toBeVisible()
     await expect(log.getByText('The very first message')).toHaveCount(0)
+  } finally {
+    await app.close()
+  }
+})
+
+test('a failed request for older messages leaves the scroll position alone', async () => {
+  const session = await launchScripted()
+  const { page, app } = session
+  try {
+    const nodeId = await seedAgent(session)
+    const filler = Array.from({ length: 40 }, (_, index) => items.notice(`n${index}`, `Filler notice ${index}`))
+    // No older page is scripted for cursor-1: the request fails.
+    await setTimeline(app, nodeId, { epoch: 'e1', olderCursor: 'cursor-1', items: filler })
+    await pushRuntime(app, runtimeFor(session.projectId, nodeId))
+    const log = conversation(page, 'Agent')
+    await expect(log.getByText('Filler notice 39')).toBeVisible()
+    await activate(page, 'Agent')
+    const scrollToTop = (): Promise<void> =>
+      log.evaluate(
+        (element) =>
+          new Promise<void>((resolve) => {
+            if (element.scrollTop === 0) return resolve()
+            element.addEventListener('scroll', () => resolve(), { once: true })
+            element.scrollTop = 0
+          })
+      )
+    await scrollToTop()
+    await log.getByRole('button', { name: 'Load older messages' }).click()
+    await expect(nodeBody(page, 'Agent').getByTestId('agent-state')).toContainText('Could not load the conversation')
+    await setTimeline(app, nodeId, { epoch: 'e1', olderCursor: 'cursor-1', items: [...filler, items.notice('late', 'Late notice')] })
+    await expect(log.getByText('Late notice')).toBeAttached()
+    expect(await log.evaluate((element) => element.scrollTop)).toBe(0)
+  } finally {
+    await app.close()
+  }
+})
+
+test('collapsing or zooming out keeps the draft, shared context, annotations, history, and scroll position', async () => {
+  const session = await launchScripted()
+  const { page, app } = session
+  try {
+    const nodeId = await seedAgent(session)
+    await execute(page, { type: 'spawnChild', sourceNodeId: nodeId, origin: 'spawned', node: { entityType: 'note', config: { body: '' }, title: 'Spec' } })
+    const filler = Array.from({ length: 30 }, (_, index) => items.notice(`n${index}`, `Filler notice ${index}`))
+    const answer = '```spade-html Review\n<!doctype html><button onclick="window.spade.annotate({ text: \'Check this\' })">Note</button>\n```'
+    await pushRuntime(app, runtimeFor(session.projectId, nodeId))
+    await setTimeline(
+      app,
+      nodeId,
+      { epoch: 'e1', olderCursor: 'cursor-1', items: [...filler, items.assistant('a0', answer), items.assistant('a1', 'Final answer text')] },
+      { 'cursor-1': { epoch: 'e1', olderCursor: null, items: [items.user('old', 'The very first message')] } }
+    )
+    const log = conversation(page, 'Agent')
+    const body = await activate(page, 'Agent')
+    const input = body.getByRole('textbox', { name: 'Message' })
+    await input.fill('Half-written thought')
+    await body.getByRole('button', { name: 'Attach context' }).click()
+    await page.getByRole('dialog', { name: 'Attach context' }).getByRole('checkbox', { name: /Spec/ }).check()
+    await page.keyboard.press('Escape')
+    await page.frameLocator('iframe.rich-html__frame').getByRole('button', { name: 'Note' }).click()
+    await expect(log.getByRole('region', { name: 'Pending annotations' })).toContainText('Check this')
+    await log.getByRole('button', { name: 'Load older messages' }).click()
+    await expect(log.getByText('The very first message')).toBeAttached()
+    await log.evaluate(
+      (element) =>
+        new Promise<void>((resolve) => {
+          element.addEventListener('scroll', () => resolve(), { once: true })
+          element.scrollTop = 150
+        })
+    )
+
+    const remembered = async (): Promise<void> => {
+      await expect(input).toHaveValue('Half-written thought')
+      await expect(body.getByRole('list', { name: 'Shared with the agent' }).getByRole('listitem')).toHaveText([/child\s*Spec/])
+      await expect(log.getByRole('region', { name: 'Pending annotations' })).toContainText('Check this')
+      await expect(log.getByText('The very first message')).toBeAttached()
+      await expect(log.getByRole('button', { name: 'Load older messages' })).toHaveCount(0)
+      await expect.poll(() => log.evaluate((element) => element.scrollTop)).toBe(150)
+    }
+    await execute(page, { type: 'collapseNode', nodeId })
+    await expect(log).toHaveCount(0)
+    await execute(page, { type: 'expandNode', nodeId })
+    await remembered()
+
+    const toolbar = page.getByRole('toolbar', { name: 'Canvas' })
+    const zoom = async (direction: 'out' | 'in'): Promise<void> => {
+      while (direction === 'out' ? (await renderedViewport(page)).zoom >= PREVIEW_ZOOM_THRESHOLD : (await renderedViewport(page)).zoom < PREVIEW_ZOOM_THRESHOLD) {
+        await toolbar.getByRole('button', { name: direction === 'out' ? 'Zoom out' : 'Zoom in' }).click()
+      }
+    }
+    const preview = canvasNode(page, 'Agent').getByTestId('agent-preview')
+    await zoom('out')
+    await expect(preview).toContainText('Final answer text')
+    await zoom('in')
+    await remembered()
+
+    // The newest page now holds only tool calls. The preview keeps the last answer it knows, and crossing the
+    // zoom threshold reads nothing again.
+    await setTimeline(app, nodeId, {
+      epoch: 'e1',
+      olderCursor: 'cursor-3',
+      items: [items.tool('r1', { toolKind: 'read', name: 'Read', summary: 'a.txt' }), items.tool('r2', { toolKind: 'read', name: 'Read', summary: 'b.txt' })]
+    })
+    await expect(log.locator('[data-tool-kind="read"]')).toHaveCount(2)
+    const reads = (await agentCalls(app, 'agents.getTimeline')).length
+    await zoom('out')
+    await expect(preview).toContainText('Final answer text')
+    await zoom('in')
+    await expect(log.locator('[data-tool-kind="read"]')).toHaveCount(2)
+    expect(await agentCalls(app, 'agents.getTimeline')).toHaveLength(reads)
   } finally {
     await app.close()
   }

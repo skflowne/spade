@@ -5,12 +5,14 @@ import type { PathInfo } from '@shared/ipc'
 import { presentArtifact } from './artifactActions'
 import { useArtifacts } from './ArtifactLayer'
 import { ConversationItemView } from './ConversationItems'
+import { conversationState } from './conversationState'
 
 type ConversationViewProps = {
+  nodeId: string
   items: readonly ConversationItem[]
   hasOlder: boolean
   loadingOlder: boolean
-  onLoadOlder(): Promise<void>
+  onLoadOlder(): Promise<'prepended' | 'unchanged'>
   // Shown in place of items when there are none.
   empty: ReactNode
 }
@@ -19,11 +21,14 @@ type ConversationViewProps = {
 const STICK_THRESHOLD = 32
 
 // The scrolling item list. It follows new content while the user is at the bottom and never moves when
-// they scrolled up; loading older items keeps the visible content in place.
-export function ConversationView({ items, hasOlder, loadingOlder, onLoadOlder, empty }: ConversationViewProps): React.JSX.Element {
+// they scrolled up; loading older items keeps the visible content in place. Remounting (after a zoom or a
+// collapse) returns to the position the user left.
+export function ConversationView({ nodeId, items, hasOlder, loadingOlder, onLoadOlder, empty }: ConversationViewProps): React.JSX.Element {
   const scroller = useRef<HTMLDivElement>(null)
   const content = useRef<HTMLDivElement>(null)
-  const stuck = useRef(true)
+  const remembered = conversationState(nodeId)
+  const restoreScroll = useRef(remembered.scroll)
+  const stuck = useRef(remembered.scroll?.atBottom ?? true)
   // Where following last put the view. Its scroll event may arrive after the content grew again, so an
   // event at or below this position is not the user scrolling away.
   const followedTo = useRef(0)
@@ -31,20 +36,32 @@ export function ConversationView({ items, hasOlder, loadingOlder, onLoadOlder, e
     element.scrollTop = element.scrollHeight
     followedTo.current = element.scrollTop
   }
-  // Distance from the bottom to restore after older items are prepended.
-  const restore = useRef<number | null>(null)
+  // Distance from the bottom to restore once older items are prepended before `firstId`.
+  const restore = useRef<{ fromBottom: number; firstId: string | undefined } | null>(null)
   const { inspect } = useArtifacts()
 
   useLayoutEffect(() => {
     const element = scroller.current
     if (!element) return
-    if (restore.current !== null) {
-      element.scrollTop = element.scrollHeight - restore.current
+    const remembered = restoreScroll.current
+    restoreScroll.current = null
+    if (restore.current !== null && items[0]?.id !== restore.current.firstId) {
+      element.scrollTop = element.scrollHeight - restore.current.fromBottom
       restore.current = null
     } else if (stuck.current) {
       follow(element)
+    } else if (remembered) {
+      element.scrollTop = remembered.top
     }
   }, [items])
+
+  // Read while the element is still in the document, before the body unmounts.
+  useLayoutEffect(() => {
+    const element = scroller.current
+    return () => {
+      if (element) conversationState(nodeId).scroll = { top: element.scrollTop, atBottom: stuck.current }
+    }
+  }, [nodeId])
 
   // Content also grows without new items: images load, diagrams render, HTML answers resize.
   useEffect(() => {
@@ -64,8 +81,10 @@ export function ConversationView({ items, hasOlder, loadingOlder, onLoadOlder, e
 
   const loadOlder = async (): Promise<void> => {
     const element = scroller.current
-    if (element) restore.current = element.scrollHeight - element.scrollTop
-    await onLoadOlder()
+    if (element) restore.current = { fromBottom: element.scrollHeight - element.scrollTop, firstId: items[0]?.id }
+    // Nothing was prepended (the request failed, or another epoch replaced everything): no later update may
+    // restore this position.
+    if ((await onLoadOlder()) !== 'prepended') restore.current = null
   }
 
   return (
@@ -79,6 +98,7 @@ export function ConversationView({ items, hasOlder, loadingOlder, onLoadOlder, e
         const element = event.currentTarget
         if (stuck.current && element.scrollTop >= followedTo.current - 1) return
         stuck.current = element.scrollHeight - element.scrollTop - element.clientHeight <= STICK_THRESHOLD
+        remembered.scroll = { top: element.scrollTop, atBottom: stuck.current }
       }}
     >
       <div ref={content} className="agent-conversation__content">

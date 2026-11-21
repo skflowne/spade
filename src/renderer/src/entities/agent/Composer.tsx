@@ -4,6 +4,7 @@ import type { Canvas, CanvasNode } from '@shared/domain'
 import { indexTree } from '@shared/tree'
 import { useCanvasActions, useCanvasData } from '../../canvas/CanvasContext'
 import { entities } from '../registry'
+import { conversationState, remainingDraft } from './conversationState'
 import { Popover } from './Popover'
 
 type ComposerProps = {
@@ -28,8 +29,18 @@ const RELATION_LABELS: Record<Relation, string> = {
 // The prompt input with explicit context selection (plan §9): the nodes being shared are always shown.
 export function Composer({ nodeId, blocked, running, send, interrupt }: ComposerProps): React.JSX.Element {
   const { canvas } = useCanvasData()
-  const [text, setText] = useState('')
-  const [context, setContext] = useState<string[]>([])
+  // The draft and the shared nodes outlive the composer (conversationState.ts).
+  const remembered = conversationState(nodeId)
+  const [text, setTextState] = useState(remembered.draft)
+  const [context, setContextState] = useState<readonly string[]>(remembered.context)
+  const setText = (value: string): void => {
+    remembered.draft = value
+    setTextState(value)
+  }
+  const setContext = (value: readonly string[]): void => {
+    remembered.context = value
+    setContextState(value)
+  }
   const [sending, setSending] = useState(false)
   const [interrupting, setInterrupting] = useState(false)
   const [failure, setFailure] = useState<string | null>(null)
@@ -48,8 +59,9 @@ export function Composer({ nodeId, blocked, running, send, interrupt }: Composer
     const problem = await send(text, shared)
     setSending(false)
     if (problem === null) {
-      setText('')
-      setContext([])
+      // Only what was sent: the user may have typed on, or shared more, while the prompt was in flight.
+      setText(remainingDraft(remembered.draft, text))
+      setContext(remembered.context.filter((id) => !shared.includes(id)))
     } else {
       setFailure(problem)
     }
@@ -177,7 +189,7 @@ function ContextPicker(props: {
   connected: Connected
   selected: string[]
   disabled: boolean
-  onChange(selected: string[]): void
+  onChange(selected: readonly string[]): void
 }): React.JSX.Element {
   const actions = useCanvasActions()
   const { canvas } = useCanvasData()
