@@ -19,7 +19,8 @@
     "docs:compare": "node scripts/docs-compare.mjs",
     "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
     "lint": "eslint .",
-    "test": "npm run build && npm run prototype:p3:build && playwright test"
+    "test": "npm run build && npm run prototype:p3:build && playwright test",
+    "test:live": "npm run build && playwright test -c playwright.live.config.ts"
   },
   "engines": {
     "node": ">=22.12.0"
