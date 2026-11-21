@@ -42,21 +42,33 @@
 <tr>
 <td>Type contracts</td>
 <td><code>tests/domain.contract.ts</code></td>
-<td>Shared record exports and compile-time shapes</td>
+<td>Shared record exports and compile-time shapes, checked by <code>npm run typecheck</code></td>
 </tr>
 <tr>
 <td>Deterministic behavior</td>
-<td>Non-Electron specs in <code>tests/e2e</code></td>
-<td>Domain and renderer behavior without a process boundary</td>
+<td>Plain specs in <code>tests/e2e</code>, such as <code>canvas-reducer</code>, <code>layout</code>, <code>workspace-gateway</code>, <code>agent-service</code>, and <code>control-server</code></td>
+<td>Shared and main-process logic without Electron: the reducer, tree, placement, validation, paths, the store and gateway in temporary directories, the Paseo adapter and agent service against fake drivers, the control server and CLI against <code>tests/control-fakes.ts</code>, and renderer models</td>
 </tr>
 <tr>
 <td>Electron end-to-end</td>
-<td><code>tests/e2e/startup.spec.ts</code></td>
-<td>Startup, rendering, and interaction in the real desktop shell</td>
+<td>Specs in <code>tests/e2e</code> that launch the built app, with <code>ui-harness.ts</code> and <code>agent-harness.ts</code></td>
+<td>Startup, the host bridge, rendering, and interaction in the real desktop shell. Native dialogs, shell calls, and agent IPC handlers are replaced from the test through the Electron application handle</td>
+</tr>
+<tr>
+<td>Live checks</td>
+<td><code>npm run test:live</code> (<code>playwright.live.config.ts</code>, <code>tests/live</code>) and the <code>validateLive.ts</code> scripts in <code>src/main/paseo</code> and <code>src/main/agents</code></td>
+<td>The real app or services against a running Paseo daemon with real agents. Opt-in and outside <code>npm test</code></td>
 </tr>
 </tbody>
 </table>
-<p>Test at the lowest deterministic layer that can fail for the reason under test. Cross-process and real-UI behavior belongs in Electron end-to-end coverage; static TypeScript contracts belong in the contract fixture.</p>
+<p>Test at the lowest deterministic layer that can fail for the reason under test. Cross-process and real-UI behavior belongs in Electron end-to-end coverage; static TypeScript contracts belong in the contract fixture. <code>npm test</code> also runs the merged P3 prototype's specs.</p>
+<h2 id="isolation">Isolation</h2>
+<ul>
+<li>Electron specs never touch the real profile: each runs with its user data in a fresh temporary directory.</li>
+<li>Electron specs never reach a real Paseo daemon: the app launches with <code>SPADE_DISABLE_PASEO=1</code>, and agent behavior is scripted through the harness.</li>
+<li>Production code has no test-only switches or branches. Tests inject fakes through the same constructor options and service interfaces the composition uses, or replace Electron APIs from the test.</li>
+<li>Live checks spend real agent runs and depend on a running daemon, so they are never part of the gate.</li>
+</ul>
 <h2 id="behavioral-changes">Behavioral changes</h2>
 <ol>
 <li>Write or extend the test first.</li>
