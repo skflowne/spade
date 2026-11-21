@@ -37,25 +37,24 @@ function ImageCreateForm({ project, formId, onSubmit }: EntityCreateFormProps): 
       }}
     >
       <div className="image-form__pick">
-        <TextField
-          label="Path"
-          value={path}
-          onChange={setPath}
-          required
-          autoFocus
-          monospace
-          hint={
-            pickFailure ? (
-              <span className="image-form__error">{pickFailure}</span>
-            ) : (
-              'PNG, JPEG, GIF, WebP, or SVG. Absolute, or relative to the project root.'
-            )
-          }
-        />
         <button type="button" className="cr-button" onClick={() => void choose()}>
           Choose image…
         </button>
+        {pickFailure ? (
+          <span className="image-form__error" role="alert">
+            {pickFailure}
+          </span>
+        ) : null}
       </div>
+      <TextField
+        label="Path"
+        value={path}
+        onChange={setPath}
+        required
+        autoFocus
+        monospace
+        hint="PNG, JPEG, GIF, WebP, or SVG. Absolute, or relative to the project root."
+      />
       <TextField label="Caption" value={caption} onChange={setCaption} />
     </form>
   )

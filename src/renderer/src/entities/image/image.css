@@ -98,17 +98,13 @@
 
 .image-form__pick {
   display: flex;
-  align-items: end;
-  gap: var(--cr-space-4);
-}
-
-.image-form__pick .cr-field {
-  flex: 1;
-  min-width: 0;
+  align-items: center;
+  gap: var(--cr-space-5);
 }
 
 .image-form__error {
   color: var(--danger);
+  font-size: var(--cr-text-sm);
 }
 
 /* Full-size lightbox */
