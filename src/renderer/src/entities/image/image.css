@@ -54,6 +54,10 @@
   font-weight: 600;
 }
 
+.image-node__problem-title--neutral {
+  color: var(--text);
+}
+
 .image-node__problem-path {
   max-width: 100%;
   overflow-wrap: anywhere;

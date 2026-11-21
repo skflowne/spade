@@ -6,7 +6,9 @@ import {
   releaseGuest,
   type GuestBudget
 } from '../../src/renderer/src/entities/webpage/guestBudget'
-import { LocatorPersistence, type LocatorTimer } from '../../src/renderer/src/entities/webpage/locatorPersistence'
+import { LocatorPersistence } from '../../src/renderer/src/entities/webpage/locatorPersistence'
+import type { Timer } from '../../src/renderer/src/entities/webpage/timer'
+import { ZoomSettler } from '../../src/renderer/src/entities/webpage/zoomSettling'
 import { normalizeWebAddress, sameWebAddress } from '../../src/renderer/src/entities/webpage/webAddress'
 
 test.describe('web page addresses', () => {
@@ -129,29 +131,29 @@ test.describe('live guest budget', () => {
   })
 })
 
-test.describe('durable page locator', () => {
-  class ManualTimer implements LocatorTimer {
-    private queue: Array<{ callback: () => void; cancelled: boolean }> = []
+class ManualTimer implements Timer {
+  private queue: Array<{ callback: () => void; cancelled: boolean }> = []
 
-    schedule(callback: () => void): () => void {
-      const entry = { callback, cancelled: false }
-      this.queue.push(entry)
-      return () => {
-        entry.cancelled = true
-      }
-    }
-
-    get pending(): number {
-      return this.queue.filter((entry) => !entry.cancelled).length
-    }
-
-    elapse(): void {
-      const due = this.queue
-      this.queue = []
-      for (const entry of due) if (!entry.cancelled) entry.callback()
+  schedule(callback: () => void): () => void {
+    const entry = { callback, cancelled: false }
+    this.queue.push(entry)
+    return () => {
+      entry.cancelled = true
     }
   }
 
+  get pending(): number {
+    return this.queue.filter((entry) => !entry.cancelled).length
+  }
+
+  elapse(): void {
+    const due = this.queue
+    this.queue = []
+    for (const entry of due) if (!entry.cancelled) entry.callback()
+  }
+}
+
+test.describe('durable page locator', () => {
   function setup(saved = 'https://example.com/a'): { locator: LocatorPersistence; timer: ManualTimer; writes: string[] } {
     const timer = new ManualTimer()
     const writes: string[] = []
@@ -221,5 +223,120 @@ test.describe('durable page locator', () => {
     locator.navigated('https://example.com/elsewhere')
     timer.elapse()
     expect(writes).toEqual([])
+  })
+
+  test('treats an address from another writer as external even when it equals an earlier own write', () => {
+    const { locator, timer, writes } = setup()
+    locator.navigated('https://example.com/b')
+    timer.elapse()
+    locator.navigated('https://example.com/c')
+    timer.elapse()
+    expect(writes).toEqual(['https://example.com/b', 'https://example.com/c'])
+    // Each echo is consumed once.
+    expect(locator.recordChanged('https://example.com/b')).toBe(false)
+    expect(locator.recordChanged('https://example.com/c')).toBe(false)
+    expect(locator.recordChanged('https://example.com/b')).toBe(true)
+  })
+
+  test('an echo that overtakes the echoes of earlier writes consumes them too', () => {
+    const { locator, timer } = setup()
+    locator.navigated('https://example.com/b')
+    timer.elapse()
+    locator.navigated('https://example.com/c')
+    timer.elapse()
+    // The record moved B then C, but only C was observed.
+    expect(locator.recordChanged('https://example.com/c')).toBe(false)
+    expect(locator.recordChanged('https://example.com/b')).toBe(true)
+  })
+
+  test('an address from another writer is external again after its own echo of the same address', () => {
+    const { locator, timer } = setup()
+    locator.navigated('https://example.com/b')
+    timer.elapse()
+    expect(locator.recordChanged('https://example.com/b')).toBe(false)
+    expect(locator.recordChanged('https://example.com/elsewhere')).toBe(true)
+    locator.followed(null)
+    expect(locator.recordChanged('https://example.com/b')).toBe(true)
+  })
+
+  test('ignores guest navigations while the guest follows another writer, then writes again', () => {
+    const { locator, timer, writes } = setup()
+    expect(locator.recordChanged('https://example.com/b')).toBe(true)
+    // The page that was loading before the record moved commits late: it must not overwrite B.
+    locator.navigated('https://example.com/a-late')
+    timer.elapse()
+    expect(writes).toEqual([])
+    locator.followed(null)
+    locator.navigated('https://example.com/c')
+    timer.elapse()
+    expect(writes).toEqual(['https://example.com/c'])
+  })
+
+  test('writes the address the guest settles on when it differs from the one it followed', () => {
+    const { locator, timer, writes } = setup()
+    locator.recordChanged('https://example.com/b')
+    locator.followed('https://example.com/b')
+    timer.elapse()
+    expect(writes).toEqual([])
+    locator.recordChanged('https://example.com/redirects')
+    locator.followed('https://example.com/redirected')
+    timer.elapse()
+    expect(writes).toEqual(['https://example.com/redirected'])
+  })
+})
+
+test.describe('settled page zoom', () => {
+  function setup(initial = 1): { settler: ZoomSettler; timer: ManualTimer; applied: number[] } {
+    const timer = new ManualTimer()
+    const applied: number[] = []
+    const settler = new ZoomSettler({ initial, timer, apply: (zoom) => applied.push(zoom) })
+    return { settler, timer, applied }
+  }
+
+  test('applies small zoom changes once the zoom stops changing', () => {
+    const { settler, timer, applied } = setup()
+    settler.update(0.97)
+    settler.update(0.94)
+    settler.update(0.9)
+    expect(applied).toEqual([])
+    expect(timer.pending).toBe(1)
+    timer.elapse()
+    expect(applied).toEqual([0.9])
+  })
+
+  test('applies a large step at once, then settles on the final zoom', () => {
+    const { settler, timer, applied } = setup()
+    settler.update(0.7)
+    expect(applied).toEqual([0.7])
+    settler.update(0.68)
+    expect(applied).toEqual([0.7])
+    timer.elapse()
+    expect(applied).toEqual([0.7, 0.68])
+  })
+
+  test('measures the step from the last applied zoom, zooming in or out', () => {
+    const { settler, applied } = setup(0.5)
+    settler.update(0.55)
+    settler.update(0.6)
+    settler.update(0.66)
+    expect(applied).toEqual([0.66])
+    settler.update(0.5)
+    expect(applied).toEqual([0.66, 0.5])
+  })
+
+  test('applies nothing when the zoom comes back to the applied one', () => {
+    const { settler, timer, applied } = setup()
+    settler.update(0.9)
+    settler.update(1)
+    timer.elapse()
+    expect(applied).toEqual([])
+  })
+
+  test('applies nothing after it is disposed', () => {
+    const { settler, timer, applied } = setup()
+    settler.update(0.9)
+    settler.dispose()
+    timer.elapse()
+    expect(applied).toEqual([])
   })
 })

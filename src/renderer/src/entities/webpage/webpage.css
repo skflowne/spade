@@ -90,8 +90,12 @@
   text-align: center;
 }
 
-.webpage__placeholder-host {
+.webpage__placeholder-title {
+  max-width: 100%;
+  overflow: hidden;
   color: var(--text);
+  text-overflow: ellipsis;
+  white-space: nowrap;
   font-size: var(--cr-text-lg);
   font-weight: 600;
 }

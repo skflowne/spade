@@ -3,6 +3,8 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { crc32, deflateSync } from 'node:zlib'
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test'
+import { PREVIEW_ZOOM_THRESHOLD } from '../../src/renderer/src/canvas/model/levelOfDetail'
+import type { ImageInfo } from '../../src/shared/ipc'
 import {
   canvasNode,
   execute,
@@ -13,9 +15,11 @@ import {
   openProjectFromSidebar,
   pickNext,
   readCanvas,
+  renderedViewport,
   scratchDirectory,
   type Spade
 } from './ui-harness'
+import { failInMain, menuEntry, noticeAlerts } from './entity-harness'
 
 // A solid-color RGB PNG of the given size.
 function png(width: number, height: number, [red, green, blue]: [number, number, number]): Buffer {
@@ -165,6 +169,8 @@ test('an image node shows a picked file, follows it on disk, and keeps its tree 
     .toBe(200)
   await page.keyboard.press('Escape')
   await expect(lightbox).toBeHidden()
+  // Opened from the node menu, whose entry is gone: focus returns to the node.
+  await expect(nodeHeader(page, 'shot.png')).toBeFocused()
 
   await app.close()
   const relaunched = await launch(userData)
@@ -189,6 +195,12 @@ test('an image node opens a typed path relative to the project root, even before
   const record = (await readCanvas(page)).nodes.find((node) => node.title === 'later.png')!
   expect(record.config).toEqual({ source: { kind: 'path', path: file } })
 
+  // There is nothing to open at full size, and the menu says why.
+  const fullSize = await menuEntry(page, 'later.png', 'Open full size')
+  await expect(fullSize).toBeDisabled()
+  await expect(fullSize).toContainText('file not found')
+  await page.keyboard.press('Escape')
+
   await writeFile(file, png(120, 360, [10, 10, 10]))
   await expectShown(page, 'later.png', 120, 360)
 
@@ -196,6 +208,122 @@ test('an image node opens a typed path relative to the project root, even before
   await nodeBody(page, 'later.png').click()
   await canvasNode(page, 'later.png').getByRole('button', { name: 'Copy path' }).click()
   await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe(file)
+  // Closing the lightbox returns focus to the control that opened it.
+  const fullSizeButton = canvasNode(page, 'later.png').getByRole('button', { name: 'Full size' })
+  await fullSizeButton.click()
+  await expect(page.getByRole('dialog', { name: 'later.png' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog', { name: 'later.png' })).toBeHidden()
+  await expect(fullSizeButton).toBeFocused()
+
+  // A collapsed node has no body: Reload waits for it, and a failed menu action is still reported.
+  await nodeMenu(page, 'later.png', 'Collapse node')
+  const reload = await menuEntry(page, 'later.png', 'Reload')
+  await expect(reload).toBeDisabled()
+  await expect(reload).toContainText('node collapsed')
+  await page.keyboard.press('Escape')
+  await failInMain(app, 'files.reveal', 'Explorer could not be started.')
+  await nodeMenu(page, 'later.png', 'Reveal in Explorer')
+  await expect(noticeAlerts(page)).toContainText('Explorer could not be started.')
+  await app.close()
+})
+
+type DescribeCall = { explicit: boolean }
+
+// Answers describeImage in the main process the way it treats a network path outside the project root:
+// refused with `network-path` until a call marked explicit, which approves the path for the session.
+async function scriptNetworkImage(app: ElectronApplication, image: ImageInfo): Promise<void> {
+  await app.evaluate(({ ipcMain }, info) => {
+    const calls: DescribeCall[] = []
+    ;(globalThis as Record<string, unknown>).__spadeDescribeCalls = calls
+    let approved = false
+    ipcMain.removeHandler('spade:files.describeImage')
+    ipcMain.handle('spade:files.describeImage', (_event, _projectId, _source, options?: { explicit?: boolean }) => {
+      const explicit = options?.explicit === true
+      calls.push({ explicit })
+      if (explicit) approved = true
+      return approved
+        ? { ok: true, image: info }
+        : { ok: false, error: { code: 'network-path', message: 'A network path outside the project is only opened on request.' } }
+    })
+  }, image)
+}
+
+async function describeCalls(app: ElectronApplication): Promise<DescribeCall[]> {
+  return app.evaluate(() => (globalThis as Record<string, unknown>).__spadeDescribeCalls as DescribeCall[])
+}
+
+test('an image on a network path outside the project loads only when the user asks', async () => {
+  const project = await scratchDirectory(scratch, 'project')
+  const { app, page } = await launchWithProject(await scratchDirectory(scratch, 'user-data'), project)
+  const image = { url: `data:image/png;base64,${png(64, 32, [200, 160, 0]).toString('base64')}`, width: 64, height: 32, revision: '1' }
+  await scriptNetworkImage(app, image)
+  const remote = '\\\\fileserver\\share\\renders\\remote.png'
+
+  // Created by an agent through the CLI: nothing on another machine is touched.
+  const created = await execute(page, {
+    type: 'startTree',
+    node: { entityType: 'image', config: { source: { kind: 'path', path: remote } }, title: 'remote.png', position: { x: 0, y: 0 } }
+  })
+  expect(created.ok).toBe(true)
+  const network = canvasNode(page, 'remote.png').getByTestId('image-network')
+  await expect(network).toContainText('Network image — not loaded')
+  await expect(network).toContainText(remote)
+  await expect(nodeHeader(page, 'remote.png').getByText('Not loaded')).toBeVisible()
+  const fullSize = await menuEntry(page, 'remote.png', 'Open full size')
+  await expect(fullSize).toBeDisabled()
+  await expect(fullSize).toContainText('image not loaded')
+  await page.keyboard.press('Escape')
+
+  // Activating the node describes it again, still without touching the path.
+  await nodeBody(page, 'remote.png').click()
+  await expect.poll(async () => (await describeCalls(app)).length).toBeGreaterThan(1)
+  expect((await describeCalls(app)).filter((call) => call.explicit)).toEqual([])
+  await expect(network).toBeVisible()
+
+  // Only the click on Load asks for it.
+  await network.getByRole('button', { name: 'Load' }).click()
+  await expect
+    .poll(() => shownSize(page, 'remote.png'))
+    .toEqual({ url: image.url, width: 64, height: 32 })
+  await expect(network).toHaveCount(0)
+  await expect(nodeHeader(page, 'remote.png').getByText('64×32')).toBeVisible()
+
+  // Later descriptions stay passive; the approved path keeps loading.
+  const before = (await describeCalls(app)).length
+  await nodeMenu(page, 'remote.png', 'Reload')
+  await expect.poll(async () => (await describeCalls(app)).length).toBe(before + 1)
+  expect((await describeCalls(app)).filter((call) => call.explicit)).toHaveLength(1)
+  expect(await shownSize(page, 'remote.png')).toEqual({ url: image.url, width: 64, height: 32 })
+  await app.close()
+})
+
+test('at the preview level an image node keeps its image and offers no controls', async () => {
+  const project = await scratchDirectory(scratch, 'project')
+  await writeFile(join(project, 'wide.png'), png(320, 160, [30, 90, 200]))
+  const { app, page } = await launchWithProject(await scratchDirectory(scratch, 'user-data'), project)
+  for (const [title, x] of [['wide.png', 0], ['gone.png', 700]] as const) {
+    const created = await execute(page, {
+      type: 'startTree',
+      node: { entityType: 'image', config: { source: { kind: 'path', path: title } }, title, position: { x, y: 0 } }
+    })
+    expect(created.ok).toBe(true)
+  }
+  await expectShown(page, 'wide.png', 320, 160)
+  await expect(canvasNode(page, 'gone.png').getByTestId('image-problem')).toContainText('File not found')
+  await nodeBody(page, 'wide.png').click()
+  await expect(nodeBody(page, 'wide.png').getByRole('toolbar', { name: 'Image' })).toBeVisible()
+
+  const toolbar = page.getByRole('toolbar', { name: 'Canvas' })
+  while ((await renderedViewport(page)).zoom >= PREVIEW_ZOOM_THRESHOLD) {
+    await toolbar.getByRole('button', { name: 'Zoom out' }).click()
+  }
+  for (const title of ['wide.png', 'gone.png']) {
+    await expect(nodeBody(page, title)).toHaveAttribute('data-detail', 'preview')
+    await expect(nodeBody(page, title).getByRole('button')).toHaveCount(0)
+  }
+  await expect(canvasNode(page, 'wide.png').getByTestId('image-view')).toBeVisible()
+  expect(await shownSize(page, 'wide.png')).toMatchObject({ width: 320, height: 160 })
   await app.close()
 })
 

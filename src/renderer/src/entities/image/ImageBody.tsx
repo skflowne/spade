@@ -2,16 +2,28 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ImageConfig } from '@shared/builtinEntities'
 import type { ImageInfo } from '@shared/ipc'
 import { isSamePath, resolveProjectPath } from '@shared/paths'
+import { nodeHeader } from '../../canvas/nodeFocus'
 import type { EntityBodyProps, NodeStatus } from '../types'
 import { ImageLightbox } from './ImageLightbox'
-import { copyImagePath, onImageRequest, revealImage, useFailureNotices } from './imageRequests'
+import { copyImagePath, registerImageBody, revealImage } from './imageRequests'
 import './image.css'
 
 type Problem = { code: string; message: string }
 
 const MISSING = 'image-missing'
+// A network path outside the project root: the main process touches it only for an explicit request.
+const NETWORK = 'network-path'
+
+// Why the image cannot be opened at full size, or null when it can.
+function fullSizeUnavailable(image: ImageInfo | null, problem: Problem | null, isFile: boolean): string | null {
+  if (problem?.code === MISSING) return isFile ? 'file not found' : 'image not found'
+  if (problem?.code === NETWORK) return 'image not loaded'
+  if (problem) return 'image cannot be shown'
+  return image ? null : 'image not loaded'
+}
 
 function statusOf(image: ImageInfo | null, problem: Problem | null): NodeStatus | null {
+  if (problem?.code === NETWORK) return { label: 'Not loaded', tone: 'neutral', description: 'A network image loads only when you ask.' }
   if (problem) {
     return problem.code === MISSING
       ? { label: 'Missing', tone: 'warning', description: problem.message }
@@ -24,23 +36,26 @@ function statusOf(image: ImageInfo | null, problem: Problem | null): NodeStatus 
 }
 
 export function ImageBody({ node, config, project, active, detail, host }: EntityBodyProps<ImageConfig>): React.JSX.Element {
-  useFailureNotices()
   const { source } = config
   const path = source.kind === 'path' ? resolveProjectPath(project.rootPath, source.path) : null
   const sourceKey = source.kind === 'path' ? `path:${path}` : `asset:${source.assetId}`
   const [image, setImage] = useState<ImageInfo | null>(null)
   const [problem, setProblem] = useState<Problem | null>(null)
-  const [fullSize, setFullSize] = useState(false)
+  // Open, with the control that opened it (null from the node menu, whose entry is gone by then).
+  const [fullSize, setFullSize] = useState<{ opener: HTMLElement | null } | null>(null)
   const sequence = useRef(0)
   const latestSource = useRef(source)
   latestSource.current = source
 
-  // Only the newest description wins; a change event can overtake an activation's request.
-  const describe = useCallback(async () => {
+  // Only the newest description wins; a change event can overtake an activation's request. `explicit`: the
+  // user clicked to load this very image, which may reach another machine.
+  const describe = useCallback(async (explicit = false) => {
     const request = ++sequence.current
     let next: { image: ImageInfo } | { problem: Problem }
     try {
-      const result = await window.spadeHost.files.describeImage(project.id, latestSource.current)
+      const result = explicit
+        ? await window.spadeHost.files.describeImage(project.id, latestSource.current, { explicit: true })
+        : await window.spadeHost.files.describeImage(project.id, latestSource.current)
       next = result.ok ? { image: result.image } : { problem: result.error }
     } catch (error) {
       next = { problem: { code: 'image-unreadable', message: error instanceof Error ? error.message : String(error) } }
@@ -73,14 +88,17 @@ export function ImageBody({ node, config, project, active, detail, host }: Entit
     wasActive.current = active
   }, [active, describe])
 
+  const unavailable = fullSizeUnavailable(image, problem, path !== null)
   useEffect(
     () =>
-      onImageRequest(node.id, (request) => {
-        if (request === 'reload') void describe()
-        else setFullSize(true)
+      registerImageBody(node.id, {
+        reload: () => void describe(),
+        openFullSize: () => setFullSize({ opener: null }),
+        fullSizeUnavailable: unavailable
       }),
-    [node.id, describe]
+    [node.id, describe, unavailable]
   )
+  const notify = (message: string): void => host.notify(message)
 
   const status = statusOf(image, problem)
   const statusKey = status ? `${status.label}|${status.tone}|${status.description}` : ''
@@ -109,7 +127,18 @@ export function ImageBody({ node, config, project, active, detail, host }: Entit
             onError={() => setProblem({ code: 'image-unreadable', message: 'The file could not be decoded as an image.' })}
           />
         ) : null}
-        {problem ? (
+        {problem?.code === NETWORK ? (
+          <div className="image-node__problem" role="status" data-testid="image-network">
+            <p className="image-node__problem-title image-node__problem-title--neutral">Network image — not loaded</p>
+            <p className="mono image-node__problem-path">{location}</p>
+            <p className="image-node__problem-reason">This file is on another machine. SPADE opens it only when you ask.</p>
+            {detail === 'full' ? (
+              <button type="button" className="cr-button" onClick={() => void describe(true)}>
+                Load
+              </button>
+            ) : null}
+          </div>
+        ) : problem ? (
           <div className="image-node__problem" role="status" data-testid="image-problem">
             <p className="image-node__problem-title">
               {problem.code === MISSING ? (path ? 'File not found' : 'Image not found') : 'This image cannot be shown'}
@@ -132,10 +161,10 @@ export function ImageBody({ node, config, project, active, detail, host }: Entit
           <div className="image-node__toolbar" role="toolbar" aria-label="Image">
             {path ? (
               <>
-                <button type="button" className="cr-button cr-button--ghost image-node__action" onClick={() => void revealImage(project.id, path)}>
+                <button type="button" className="cr-button cr-button--ghost image-node__action" onClick={() => void revealImage(project.id, path, notify)}>
                   Reveal
                 </button>
-                <button type="button" className="cr-button cr-button--ghost image-node__action" onClick={() => void copyImagePath(path)}>
+                <button type="button" className="cr-button cr-button--ghost image-node__action" onClick={() => void copyImagePath(path, notify)}>
                   Copy path
                 </button>
               </>
@@ -143,8 +172,8 @@ export function ImageBody({ node, config, project, active, detail, host }: Entit
             <button
               type="button"
               className="cr-button cr-button--ghost image-node__action"
-              disabled={!image || problem !== null}
-              onClick={() => setFullSize(true)}
+              disabled={unavailable !== null}
+              onClick={(event) => setFullSize({ opener: event.currentTarget })}
             >
               Full size
             </button>
@@ -160,7 +189,13 @@ export function ImageBody({ node, config, project, active, detail, host }: Entit
         </figcaption>
       ) : null}
       {fullSize && image && !problem ? (
-        <ImageLightbox title={node.title} alt={alt} image={image} onClose={() => setFullSize(false)} />
+        <ImageLightbox
+          title={node.title}
+          alt={alt}
+          image={image}
+          onClose={() => setFullSize(null)}
+          returnFocusTo={() => (fullSize.opener?.isConnected ? fullSize.opener : nodeHeader(node.id))}
+        />
       ) : null}
     </figure>
   )
