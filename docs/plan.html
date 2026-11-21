@@ -176,7 +176,7 @@
 <li>No worktree management. Users work in fixed checkouts; Paseo-managed worktrees can be added later.</li>
 <li>No terminal, Monaco editor, LSP, whiteboard, or task-board entities until the bricks in §20 are in use.</li>
 <li>No embedded full IDE; no containerized execution isolation.</li>
-<li>No ACP or SPADE-owned MCP integration in v1, unless the narrow spawn-target tool in §21 is adopted.</li>
+<li>No ACP or SPADE-owned MCP integration. Agent-facing capabilities are a CLI tool plus a skill (§4.6).</li>
 <li>No security hardening or sandbox restrictions for agent-authored HTML/JavaScript; runtime isolation may still be used to prevent CSS/lifecycle collisions.</li>
 <li>No assumption that a branch name is workspace identity, and no use of Git branches as a canvas concept.</li>
 </ul>
@@ -318,7 +318,7 @@ type ProjectFolder = {
 <li><strong>A node below it:</strong> a child of any descendant of the agent in its own tree, which continues an existing branch.</li>
 </ol>
 <p>An agent cannot start a new tree, attach to an ancestor, a sibling, or any node outside its own subtree. SPADE enforces this when the command is executed by checking that the chosen node is the agent's node or one of its descendants; anything else is rejected with an error returned to the agent. If the chosen node no longer exists, the spawn fails rather than falling back silently. When an agent does not choose, a spawned child defaults to a child of the agent itself. A user can always override placement with the full target choice above.</p>
-<p>The agent-facing channel through which an agent names its target is an open decision (§21).</p>
+<p><strong>Agent channel:</strong> agents act on the canvas through a SPADE <strong>CLI tool</strong> taught by a <strong>skill</strong>, not through MCP. The skill tells the agent when and how to spawn children; the CLI command names the target (itself or a descendant) and the node to create, and the running application validates it against the rule above. The CLI must identify the calling agent from its own environment so an agent cannot act as another node. Its exact command surface, how it reaches the running app, and how Paseo-launched agents receive the skill are decided in brick B5.</p>
 <p>Commands: <code>spawnChild(sourceNodeId, type, config, target, origin)</code>, <code>startTree(type, config, placement)</code>, <code>reparent(nodeId, newParentId | null)</code> (moves the whole branch; rejects cycles; <code>null</code> makes the node a new root), <code>collapseBranch</code> / <code>expandBranch</code> (hides descendants and shows a count), and <code>archiveBranch</code>.</p>
 <p>Removing a single node never deletes its children: they are promoted to the removed node's parent, or become roots if it had none. Deleting a whole branch is an explicit action. Removing a node removes only SPADE records.</p>
 <p>Sub-agents use the same mechanic. A managed sub-agent identified by Paseo's durable parent identity appears as a collapsed <code>child</code> node with origin <code>delegated</code>. A sub-agent can itself have children of any type, so a branch can start at a sub-agent and continue with images and web pages.</p>
@@ -652,7 +652,7 @@ const defaultConversationExpansion = {
 <h3 id="mcp">MCP</h3>
 <p>MCP is a tool/resource protocol between an agent host and external capability servers.</p>
 <p>The harness/provider may support transporting MCP tools, and Paseo can inject MCP server configuration into supported providers. That does <strong>not</strong> automatically define how an agent reads SPADE nodes.</p>
-<p>MCP is out of scope for v1, with one candidate exception: the narrow agent spawn-target tool described in §21. Prompt/attachment context projection is otherwise sufficient. Revisit a SPADE node tool service only after a prototype demonstrates that bounded prompt projections are inadequate.</p>
+<p>MCP is not used. Agent-facing SPADE capabilities, starting with spawning children (§4.6), are a CLI tool plus a skill. Prompt/attachment context projection supplies read context. Revisit a SPADE node tool service only after a prototype demonstrates that bounded prompt projections are inadequate.</p>
 <h2 id="11-rich-agent-responses-and-generated-html">11. Rich agent responses and generated HTML</h2>
 <p>V1 supports both standard rich blocks and full agent-authored HTML/JavaScript. Security hardening is explicitly deferred for the prototype.</p>
 <h3 id="standard-rich-blocks">Standard rich blocks</h3>
@@ -927,7 +927,7 @@ const defaultConversationExpansion = {
 </tr>
 <tr>
 <td>B5 Agents and sub-agents</td>
-<td>Generalized Paseo adapter (§13), spawn from a project folder, conversation renderer, permissions, delegated sub-agent children, restart reconciliation without duplicates.</td>
+<td>Generalized Paseo adapter (§13), spawn from a project folder, conversation renderer, permissions, delegated sub-agent children, restart reconciliation without duplicates, and the agent CLI plus skill for spawning on itself or a descendant (§4.6).</td>
 <td>Run an agent that delegates to a sub-agent in one of the project's folders; both appear as a tree, and an agent spawn can target itself or a descendant while any other target is rejected; quitting and relaunching SPADE and restarting Paseo reproduces the same nodes.</td>
 </tr>
 <tr>
@@ -941,7 +941,7 @@ const defaultConversationExpansion = {
 <h2 id="21-open-decisions">21. Open decisions</h2>
 <ol>
 <li>Final default sizes and spacing in §8; they are initial values to tune against real content in B3.</li>
-<li>The channel through which an agent names its spawn target (§4.6). Sub-agents created through Paseo carry only a parent identity, so naming a descendant target needs a SPADE-facing mechanism. Recommendation: a minimal SPADE-owned tool limited to <code>spawn_child(target, type, config)</code> and a read-only listing of the agent's own subtree, as an explicit, narrow exception to the v1 MCP deferral (§10). Until decided, B5 implements only the default (child of the agent itself) for Paseo-created sub-agents.</li>
+<li>The exact CLI command surface for agents, its transport to the running app, and how the skill reaches Paseo-launched agents (§4.6). The channel itself is decided: CLI tool plus skill.</li>
 <li>Which connected nodes are included automatically as agent context versus requiring explicit selection (§9).</li>
 <li>Acceptable active-node budget for webview and conversation renderers on a large canvas.</li>
 <li>Whether to watch image files for changes, or reload only on focus or request, given many images on a canvas.</li>
