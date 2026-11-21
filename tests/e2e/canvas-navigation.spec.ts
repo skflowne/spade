@@ -6,6 +6,8 @@ import type { NodeSeed } from '../../src/shared/commands'
 import {
   canvasNode,
   execute,
+  expectCenteredInView,
+  expectClearOfMinimap,
   expectNoNotice,
   fitAll,
   launch,
@@ -58,18 +60,9 @@ const currentFocus = (page: Page): Locator => breadcrumb(page).locator('[aria-cu
 const sidePanel = (page: Page, name: string): Locator => page.getByRole('region', { name, exact: true })
 const searchInput = (page: Page): Locator => page.getByRole('combobox', { name: 'Search nodes' })
 
+// Centered in the canvas area the breadcrumb and the minimap leave free.
 async function expectCentered(page: Page, title: string): Promise<void> {
-  await expect
-    .poll(async () => {
-      const node = await canvasNode(page, title).boundingBox()
-      const pane = await page.getByTestId('canvas').boundingBox()
-      if (!node || !pane) return Number.POSITIVE_INFINITY
-      return Math.max(
-        Math.abs(node.x + node.width / 2 - (pane.x + pane.width / 2)),
-        Math.abs(node.y + node.height / 2 - (pane.y + pane.height / 2))
-      )
-    })
-    .toBeLessThan(3)
+  await expectCenteredInView(page, canvasNode(page, title))
 }
 
 async function relatedMenu(page: Page, title: string, item: string | RegExp): Promise<void> {
@@ -267,6 +260,37 @@ test('searches by title, type and agent status with the keyboard, and opens the 
   }
 })
 
+test('focuses a node larger than the free canvas area clear of the minimap and the breadcrumb', async () => {
+  const spade = await launchWithProject()
+  const { page } = spade
+  try {
+    await seed(page, 'Large', { seed: { size: { width: 960, height: 640 }, position: { x: 0, y: 0 } } })
+    await seed(page, 'Small', { seed: { position: { x: 1400, y: 0 } } })
+    await fitAll(page)
+
+    await searchInput(page).fill('Large')
+    await page.keyboard.press('Enter')
+    const node = canvasNode(page, 'Large')
+    await expectCentered(page, 'Large')
+    await expectClearOfMinimap(page, node)
+    await expectClearOfMinimap(page, node.locator('.react-flow__resize-control.bottom.right'))
+    const header = (await nodeHeader(page, 'Large').boundingBox())!
+    const bar = (await breadcrumb(page).boundingBox())!
+    expect(header.y).toBeGreaterThan(bar.y + bar.height)
+
+    // Without the minimap, the node uses that room.
+    const withMinimap = (await renderedViewport(page)).zoom
+    await toolbar(page).getByRole('button', { name: 'Minimap' }).click()
+    await fitAll(page)
+    await searchInput(page).fill('Large')
+    await page.keyboard.press('Enter')
+    await expectCentered(page, 'Large')
+    expect((await renderedViewport(page)).zoom).toBeGreaterThan(withMinimap)
+  } finally {
+    await spade.app.close()
+  }
+})
+
 test('moves back and forward through explicit focus moves, shown as the path from the root', async () => {
   test.setTimeout(90_000)
   const spade = await launchWithProject()
@@ -341,6 +365,9 @@ test('follows edges from node chrome, steps between related nodes by keyboard, a
     await expectCentered(page, 'Second')
 
     // Alt+arrows and Alt+brackets move between related nodes.
+    await relatedMenu(page, 'Second', /Root/)
+    await relatedMenu(page, 'Root', /First/)
+    await expectCentered(page, 'First')
     await nodeHeader(page, 'First').click({ position: { x: 60, y: 10 } })
     await page.keyboard.press('Alt+ArrowUp')
     await expectCentered(page, 'Root')

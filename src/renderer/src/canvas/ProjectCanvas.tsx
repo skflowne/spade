@@ -44,6 +44,7 @@ import { overviewTitleScale } from './model/levelOfDetail'
 import { relatedTarget } from './model/relatedNodes'
 import { canvasShortcut } from './model/shortcuts'
 import { focusNodeHeader, isOnNodeHeader } from './nodeFocus'
+import { FOCUS_BAR_BAND } from './navigation/FocusBar'
 import { MINIMAP_BAND } from './overview/CanvasMiniMap'
 import { MoveDialog } from './spawn/MoveDialog'
 import { SpawnDialog, type SpawnDialogMode } from './spawn/SpawnDialog'
@@ -225,14 +226,16 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
   )
 
   const pendingFocus = useRef<{ nodeId: string; mode: FocusMode } | null>(null)
+  // Focusing centers in the area the breadcrumb (shown once a node has the focus) and the minimap leave free.
   const focusRect = useCallback(
     (rect: Rect, mode: FocusMode = 'readable') => {
       const element = container.current
       if (!element) return
       const screen = { width: element.clientWidth, height: element.clientHeight }
-      void flow.setViewport(focusViewport(rect, screen, mode, ZOOM_LIMITS))
+      const covered = { top: FOCUS_BAR_BAND, bottom: minimap ? MINIMAP_BAND : 0 }
+      void flow.setViewport(focusViewport(rect, screen, mode, ZOOM_LIMITS, covered))
     },
-    [flow]
+    [flow, minimap]
   )
   const tryFocus = useCallback(() => {
     const target = pendingFocus.current

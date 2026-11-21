@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test'
 import { bodyShown, branchMoves, canvasView } from '../../src/renderer/src/canvas/viewModel'
-import { focusViewport } from '../../src/renderer/src/canvas/viewportMath'
+import { FOCUS_MARGIN, focusViewport } from '../../src/renderer/src/canvas/viewportMath'
 import { createBuiltinEntityRegistry } from '../../src/shared/builtinEntities'
 import {
   DOMAIN_RECORD_VERSION,
@@ -191,6 +191,26 @@ test.describe('focus viewport', () => {
     // Its width overflows the screen rather than shrinking the node.
     expect(2000 * fullHeight.zoom).toBeGreaterThan(1000)
     expect(1000 * fullHeight.zoom + fullHeight.x).toBeCloseTo(500)
+  })
+
+  test('centers in the area the overlays leave free and keeps a large node inside it', () => {
+    const covered = { top: 48, bottom: 165 }
+    const small = focusViewport({ x: 100, y: 200, width: 320, height: 200 }, screen, 'readable', limits, covered)
+    expect(small.zoom).toBe(1)
+    expect(260 * small.zoom + small.x).toBeCloseTo(500)
+    expect(300 * small.zoom + small.y).toBeCloseTo(48 + (800 - 48 - 165) / 2)
+
+    // A 960×640 node: zoomed out until it fits between the breadcrumb and the minimap, with the margin kept.
+    const large = focusViewport({ x: 0, y: 0, width: 960, height: 640 }, screen, 'readable', limits, covered)
+    expect(large.zoom).toBeLessThan(1)
+    const top = large.y
+    const bottom = 640 * large.zoom + large.y
+    expect(top).toBeGreaterThanOrEqual(48 + FOCUS_MARGIN - 0.001)
+    expect(bottom).toBeLessThanOrEqual(800 - 165 - FOCUS_MARGIN + 0.001)
+    expect(bottom - top).toBeGreaterThan(800 - 48 - 165 - 2 * FOCUS_MARGIN - 1)
+
+    const fullHeight = focusViewport({ x: 0, y: 0, width: 2000, height: 400 }, screen, 'full-height', limits, covered)
+    expect(400 * fullHeight.zoom).toBeCloseTo(800 - 48 - 165 - 2 * FOCUS_MARGIN)
   })
 
   test('stays within the zoom limits', () => {

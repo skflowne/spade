@@ -10,6 +10,7 @@ import {
   countBodyRenders,
   createNoteFromToolbar,
   execute,
+  expectCenteredInView,
   expectNoNotice,
   fitAll,
   heldCanvasCommands,
@@ -96,14 +97,11 @@ test('spawns nodes with every target choice, readable and without overlap, and n
   try {
     await createNoteFromToolbar(page, { title: 'Root A', body: 'The first tree' })
 
-    // A user-initiated spawn centers the new node at 100%.
+    // A user-initiated spawn centers the new node at 100%, in the area the breadcrumb and the minimap leave free.
     await spawnFrom(page, 'Root A', 'Child 1')
     expect(await parentTitleOf(page, 'Child 1')).toBe('Root A')
     expect((await renderedViewport(page)).zoom).toBeCloseTo(1, 3)
-    const childBox = (await canvasNode(page, 'Child 1').boundingBox())!
-    const center = await screenCenterOf(page)
-    expect(Math.abs(childBox.x + childBox.width / 2 - center.x)).toBeLessThan(2)
-    expect(Math.abs(childBox.y + childBox.height / 2 - center.y)).toBeLessThan(2)
+    await expectCenteredInView(page, canvasNode(page, 'Child 1'))
 
     // Pick a node on the canvas.
     await spawnFrom(page, 'Child 1', 'Child 2', async (dialog) => {
@@ -190,8 +188,9 @@ test('spawns nodes with every target choice, readable and without overlap, and n
     const offset = header.y > (await screenCenterOf(page)).y ? -120 : 120
     await page.mouse.move(header.x + 30, header.y + header.height / 2)
     await page.mouse.down()
-    await page.mouse.move(header.x + 30, header.y + header.height / 2 + offset / 2, { steps: 8 })
-    await page.mouse.move(header.x + 30, header.y + header.height / 2 + offset, { steps: 8 })
+    // Fine steps: React Flow starts the drag on the first move past its threshold, so the first step is not carried.
+    await page.mouse.move(header.x + 30, header.y + header.height / 2 + offset / 2, { steps: 16 })
+    await page.mouse.move(header.x + 30, header.y + header.height / 2 + offset, { steps: 16 })
     await page.mouse.up()
     // Within a few screen pixels of the pointer's travel.
     await expect
