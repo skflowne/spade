@@ -421,6 +421,61 @@ test('keeps a note in step with changes made elsewhere: never writes what was on
   }
 })
 
+test('contains a failing body to its node and shows it again after the node changes or on Retry', async () => {
+  const spade = await launchWithProject()
+  const { page } = spade
+  try {
+    // The page cannot show one particular text, as a body that throws while rendering would behave. React
+    // reads the text area's value setter when the text area mounts.
+    const breakText = (): Promise<void> =>
+      page.evaluate(() => {
+        const value = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!
+        ;(window as unknown as { restoreText(): void }).restoreText = () =>
+          Object.defineProperty(HTMLTextAreaElement.prototype, 'value', value)
+        Object.defineProperty(HTMLTextAreaElement.prototype, 'value', {
+          ...value,
+          set(next: string) {
+            if (next === 'Unshowable') throw new Error('This text cannot be shown')
+            value.set!.call(this, next)
+          }
+        })
+      })
+    const restoreText = (): Promise<void> => page.evaluate(() => (window as unknown as { restoreText(): void }).restoreText())
+
+    await breakText()
+    const nodeId = await seedNote(page, 'Fragile')
+    await seedNote(page, 'Neighbor')
+    const body = nodeBody(page, 'Fragile')
+    const text = body.getByRole('textbox', { name: 'Note text' })
+    const failure = body.getByRole('alert')
+    const change = (value: string): ReturnType<typeof execute> =>
+      execute(page, { type: 'updateNode', nodeId, patch: { config: { body: value } } })
+    await change('Unshowable')
+    await expect(failure).toContainText("This node's content could not be shown: This text cannot be shown")
+    await expect(nodeBody(page, 'Neighbor').getByRole('textbox', { name: 'Note text' })).toBeVisible()
+
+    // A later change to the node shows its body again.
+    await restoreText()
+    await change('Shown again')
+    await expect(text).toHaveValue('Shown again')
+    await expect(failure).toHaveCount(0)
+
+    // So does Retry, once whatever failed works again.
+    await breakText()
+    await canvasNode(page, 'Fragile').getByRole('button', { name: 'Collapse node' }).click()
+    await canvasNode(page, 'Fragile').getByRole('button', { name: 'Expand node' }).click()
+    await expect(text).toHaveValue('Shown again')
+    await change('Unshowable')
+    await expect(failure).toBeVisible()
+    await restoreText()
+    await body.click()
+    await failure.getByRole('button', { name: 'Retry' }).click()
+    await expect(text).toHaveValue('Unshowable')
+  } finally {
+    await spade.app.close()
+  }
+})
+
 test('reparents, collapses, renames and removes through node chrome, surfacing a rejected cycle', async () => {
   test.setTimeout(90_000)
   const spade = await launchWithProject()

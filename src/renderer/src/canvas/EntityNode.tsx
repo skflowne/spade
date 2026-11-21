@@ -147,7 +147,7 @@ function EntityNodeView({ id, data, selected }: NodeProps<EntityFlowNode>): Reac
           }}
         >
           <div className="spade-node__content" inert={!active}>
-            <BodyBoundary key={record.entityType}>
+            <BodyBoundary key={record.entityType} resetKey={record.updatedAt}>
               {resolved.kind === 'ready' ? (
                 <resolved.renderer.Body
                   node={record}
@@ -407,8 +407,15 @@ function FallbackBody({ record, problem }: { record: CanvasNode; problem: string
   )
 }
 
-// One failing entity renderer must never take down the canvas.
-class BodyBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+type BodyBoundaryProps = {
+  // Changes whenever the record does: a failed body is tried again with the changed record.
+  resetKey: string
+  children: ReactNode
+}
+
+// One failing entity renderer must never take down the canvas. The failure stays until the record changes
+// or the user retries.
+class BodyBoundary extends Component<BodyBoundaryProps, { error: Error | null }> {
   state: { error: Error | null } = { error: null }
 
   static getDerivedStateFromError(error: Error): { error: Error } {
@@ -419,11 +426,20 @@ class BodyBoundary extends Component<{ children: ReactNode }, { error: Error | n
     console.error('An entity renderer failed', error, info.componentStack)
   }
 
+  componentDidUpdate(previous: BodyBoundaryProps): void {
+    if (this.state.error && previous.resetKey !== this.props.resetKey) this.setState({ error: null })
+  }
+
   render(): ReactNode {
     if (this.state.error) {
       return (
-        <div className="entity-summary entity-summary--fallback">
+        <div className="entity-summary entity-summary--fallback" role="alert">
           <p className="entity-summary__problem">This node's content could not be shown: {this.state.error.message}</p>
+          <div>
+            <button type="button" className="cr-button" onClick={() => this.setState({ error: null })}>
+              Retry
+            </button>
+          </div>
         </div>
       )
     }
