@@ -16,6 +16,9 @@ export type ImageConfig = { source: ImageSource; caption?: string }
 
 export type WebPageConfig = { url: string }
 
+// The persistent session every web page guest uses; the main process forces it on each attached <webview>.
+export const WEB_PAGE_PARTITION = 'persist:spade-web'
+
 export const NOTE_ENTITY = 'note'
 export const AGENT_ENTITY = 'agent'
 export const IMAGE_ENTITY = 'image'
