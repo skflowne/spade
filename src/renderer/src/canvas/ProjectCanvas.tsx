@@ -44,11 +44,13 @@ import { overviewTitleScale } from './model/levelOfDetail'
 import { relatedTarget } from './model/relatedNodes'
 import { canvasShortcut } from './model/shortcuts'
 import { focusNodeHeader, isOnNodeHeader } from './nodeFocus'
+import { FOCUS_BAR_BAND } from './navigation/FocusBar'
 import { MINIMAP_BAND } from './overview/CanvasMiniMap'
 import { MoveDialog } from './spawn/MoveDialog'
 import { SpawnDialog, type SpawnDialogMode } from './spawn/SpawnDialog'
+import { SpawnRequests, type SpawnEntry } from './spawn/spawnRequests'
 import { Toolbar } from './Toolbar'
-import { branchMoves, canvasView, type CanvasView, type EdgeView, type NodeView } from './viewModel'
+import { bodyShown, branchMoves, canvasView, type CanvasView, type EdgeView, type NodeView } from './viewModel'
 import { FOCUS_MARGIN, focusViewport, type FocusMode } from './viewportMath'
 
 const ZOOM_LIMITS = { minZoom: 0.1, maxZoom: 2 }
@@ -73,13 +75,19 @@ export function ProjectCanvas({ project }: { project: Project }): React.JSX.Elem
   )
 }
 
-type SpawnState = { mode: SpawnDialogMode; resolve?: (nodeId: string | null) => void }
 type Picking = { prompt: string; resolve(nodeId: string | null): void }
 type PanelState = { id: PanelId; highlight: string | null }
 
 function isFocusable(canvas: Canvas, nodeId: string): boolean {
   const node = canvasIndex(canvas).byId.get(nodeId)
   return node !== undefined && !node.archived
+}
+
+// An open dialog or menu owns Escape: it closes the overlay and must not also deactivate the node behind it.
+// A native <dialog> reacts only after this window listener has seen the key, so the key cannot be claimed there.
+function belongsToOverlay(target: EventTarget | null): boolean {
+  if (document.querySelector('dialog[open]')) return true
+  return target instanceof Element && target.closest('dialog, [role="dialog"], [role="alertdialog"], [role="menu"]') !== null
 }
 
 function isEditable(target: EventTarget | null): boolean {
@@ -93,8 +101,10 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
   const flow = useReactFlow()
   const flowStore = useStoreApi()
   const container = useRef<HTMLDivElement>(null)
-  const view = useMemo(() => canvasView(canvas, entities), [canvas])
-  const records = useMemo(() => canvasIndex(canvas).byId, [canvas])
+  // Only the nodes and edges shape what is drawn: a viewport or activity push leaves the view and the nodes alone.
+  // The store keeps unchanged records (and lists) identical across pushes, which is what these dependencies rely on.
+  const view = useMemo(() => canvasView(canvas, entities), [canvas.nodes, canvas.edges])
+  const records = useMemo(() => canvasIndex(canvas).byId, [canvas.nodes])
 
   // Alt+drag moves the whole branch: the node and every descendant.
   const branchDrag = useRef<{ nodeId: string; origins: Map<string, Point> } | null>(null)
@@ -125,15 +135,12 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
   const [initialViewport] = useState(canvas.viewport)
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null)
   const [picking, setPicking] = useState<Picking | null>(null)
-  const [spawn, setSpawnState] = useState<SpawnState | null>(null)
-  const spawnRef = useRef<SpawnState | null>(null)
-  // One spawn dialog at a time: a newer request cancels the pending one, whose caller gets null.
-  const setSpawn = useCallback((next: SpawnState | null) => {
-    const previous = spawnRef.current
-    spawnRef.current = next
-    setSpawnState(next)
-    if (previous && previous !== next) previous.resolve?.(null)
-  }, [])
+  const [spawn, setSpawn] = useState<SpawnEntry<SpawnDialogMode> | null>(null)
+  // Set once navigation exists below; a node created from the dialog still shown is focused.
+  const focusCreated = useRef<(nodeId: string) => void>(() => {})
+  const [spawns] = useState(
+    () => new SpawnRequests<SpawnDialogMode>({ show: setSpawn, focusCreated: (nodeId) => focusCreated.current(nodeId) })
+  )
   const [moving, setMoving] = useState<string | null>(null)
   const [history, setHistory] = useState<FocusHistory>(EMPTY_FOCUS_HISTORY)
   const [currentNodeId, setCurrentNodeId] = useState<string | null>(null)
@@ -142,9 +149,10 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
   const latest = useRef({ view, canvas, picking, history, activeNodeId, currentNodeId })
   latest.current = { view, canvas, picking, history, activeNodeId, currentNodeId }
 
+  // A collapsed, hidden, archived, or removed node has no body to hold the input: the canvas takes it back.
   useEffect(() => {
-    if (activeNodeId !== null && !view.nodes.some((node) => node.id === activeNodeId)) setActiveNodeId(null)
-  }, [view, activeNodeId])
+    if (activeNodeId !== null && !bodyShown(canvas, view, activeNodeId)) setActiveNodeId(null)
+  }, [canvas, view, activeNodeId])
 
   const agentChanges = useAgentChanges(canvas)
 
@@ -218,14 +226,16 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
   )
 
   const pendingFocus = useRef<{ nodeId: string; mode: FocusMode } | null>(null)
+  // Focusing centers in the area the breadcrumb (shown once a node has the focus) and the minimap leave free.
   const focusRect = useCallback(
     (rect: Rect, mode: FocusMode = 'readable') => {
       const element = container.current
       if (!element) return
       const screen = { width: element.clientWidth, height: element.clientHeight }
-      void flow.setViewport(focusViewport(rect, screen, mode, ZOOM_LIMITS))
+      const covered = { top: FOCUS_BAR_BAND, bottom: minimap ? MINIMAP_BAND : 0 }
+      void flow.setViewport(focusViewport(rect, screen, mode, ZOOM_LIMITS, covered))
     },
-    [flow]
+    [flow, minimap]
   )
   const tryFocus = useCallback(() => {
     const target = pendingFocus.current
@@ -255,6 +265,8 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
     [execute, tryFocus]
   )
 
+  focusCreated.current = (nodeId) => navigate(nodeId, 'readable', true)
+
   const stepHistory = useCallback(
     (step: -1 | 1) => {
       const next = stepFocus(latest.current.history, step, (id) => isFocusable(latest.current.canvas, id))
@@ -278,7 +290,7 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
           event.preventDefault()
           setPicking(null)
           current.resolve(null)
-        } else if (latest.current.activeNodeId !== null) {
+        } else if (latest.current.activeNodeId !== null && !belongsToOverlay(event.target)) {
           const nodeId = latest.current.activeNodeId
           setActiveNodeId(null)
           focusNodeHeader(nodeId)
@@ -356,10 +368,10 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
         await execute({ type: 'connectNodes', fromNodeId: nodeId, toNodeId: target, ...(label ? { label } : {}) })
       },
       openCreate({ entityType, sourceNodeId }) {
-        setSpawn({ mode: { kind: 'create', entityType: entityType ?? null, sourceNodeId: sourceNodeId ?? null } })
+        spawns.open({ kind: 'create', entityType: entityType ?? null, sourceNodeId: sourceNodeId ?? null })
       },
       requestSpawn(request: SpawnRequest) {
-        return new Promise<string | null>((resolve) => setSpawn({ mode: { kind: 'seeded', request }, resolve }))
+        return spawns.open({ kind: 'seeded', request }).result
       },
       openMove: setMoving,
       pickNode,
@@ -376,15 +388,7 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
       }
     }
     // commitMoves and clearPending only touch refs and stable setters.
-  }, [execute, focusRect, navigate, stepHistory, flow, fitViewOptions, setSpawn, store, prompts])
-
-  const finishSpawn = (nodeId: string | null): void => {
-    const current = spawnRef.current
-    spawnRef.current = null
-    setSpawnState(null)
-    if (nodeId !== null) actions.focusNode(nodeId)
-    current?.resolve?.(nodeId)
-  }
+  }, [execute, focusRect, navigate, stepHistory, flow, fitViewOptions, spawns, store, prompts])
 
   // --- Dragging ---
 
@@ -518,7 +522,16 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
                     ) : null}
                   </div>
                 </div>
-                {spawn ? <SpawnDialog key={spawnKey(spawn)} mode={spawn.mode} open={picking === null} onDone={finishSpawn} /> : null}
+                {spawn ? (
+                  <SpawnDialog
+                    key={spawn.id}
+                    mode={spawn.mode}
+                    open={picking === null}
+                    // Both bound to this dialog's own request, whatever is shown by the time they run.
+                    onCreate={(command) => spawns.create(spawn, () => execute(command))}
+                    onCancel={() => spawns.dismiss(spawn)}
+                  />
+                ) : null}
                 {moving ? <MoveDialog key={moving} nodeId={moving} open={picking === null} onDone={() => setMoving(null)} /> : null}
               </CanvasInteractionContext.Provider>
             </AgentChangeContext.Provider>
@@ -527,12 +540,6 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
       </CanvasDataContext.Provider>
     </CanvasProjectContext.Provider>
   )
-}
-
-function spawnKey(spawn: SpawnState): string {
-  return spawn.mode.kind === 'seeded'
-    ? `seeded:${spawn.mode.request.sourceNodeId}`
-    : `create:${spawn.mode.entityType}:${spawn.mode.sourceNodeId}`
 }
 
 function sameNodeView(a: NodeView, b: NodeView): boolean {

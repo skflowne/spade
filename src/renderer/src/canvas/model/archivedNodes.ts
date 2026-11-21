@@ -35,6 +35,14 @@ export function archivedEntries(index: CanvasIndex): ArchivedEntry[] {
   return entries.sort((a, b) => b.archivedAt.localeCompare(a.archivedAt))
 }
 
+// The nodes archiving `nodeId` (with its branch, or alone) would archive now: what undoing it must restore,
+// and nothing archived before.
+export function newlyArchived(index: CanvasIndex, nodeId: string, branch: boolean): string[] {
+  if (!index.byId.has(nodeId)) return []
+  const affected = branch ? index.tree.branchOf(nodeId) : [nodeId]
+  return affected.filter((id) => index.byId.get(id)?.archived === false)
+}
+
 // The entry an archived node is listed under; null when the node is not archived.
 export function archivedEntryOf(index: CanvasIndex, nodeId: string): string | null {
   if (!index.byId.get(nodeId)?.archived) return null

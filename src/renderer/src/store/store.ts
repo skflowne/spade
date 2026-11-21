@@ -2,6 +2,7 @@ import type { AgentRuntime } from '@shared/agents'
 import type { CanvasCommand, CanvasCommandResponse } from '@shared/commands'
 import type { AppSettings, Canvas } from '@shared/domain'
 import type { AppState, Failure, Result, SpadeHostBridge } from '@shared/ipc'
+import { shareCanvas, shareRecords } from './sharing'
 
 // The renderer's view of SPADE's records. The main process is authoritative: everything here is a copy
 // refreshed by the bridge's pushes, and nothing is written back except through bridge calls.
@@ -173,7 +174,9 @@ export class SpadeStore {
 
   // --- Internals ---
 
-  private receiveAppState(app: AppState): void {
+  private receiveAppState(pushed: AppState): void {
+    // Unchanged projects keep their identity, so a state push does not re-render every canvas node.
+    const app = this.state.app ? { ...pushed, projects: shareRecords(this.state.app.projects, pushed.projects) } : pushed
     const known = new Set(app.projects.map((project) => project.id))
     const canvases = new Map([...this.state.canvases].filter(([id]) => known.has(id)))
     const runtimes = new Map([...this.state.runtimes].filter(([, runtime]) => known.has(runtime.projectId)))
@@ -221,7 +224,10 @@ export class SpadeStore {
     return this.state.app?.projects.some((project) => project.id === projectId) ?? true
   }
 
-  private setCanvas(canvas: Canvas): void {
+  private setCanvas(pushed: Canvas): void {
+    const previous = this.state.canvases.get(pushed.projectId)
+    const canvas = shareCanvas(previous, pushed)
+    if (canvas === previous) return
     const canvases = new Map(this.state.canvases)
     canvases.set(canvas.projectId, canvas)
     this.update({ canvases })

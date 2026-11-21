@@ -5,11 +5,16 @@ import { expect, test, type Page } from '@playwright/test'
 import { indexTree } from '../../src/shared/tree'
 import { installAgentScript, setProviders } from './agent-harness'
 import {
+  bodyRenders,
   canvasNode,
+  countBodyRenders,
   createNoteFromToolbar,
   execute,
+  expectCenteredInView,
   expectNoNotice,
   fitAll,
+  heldCanvasCommands,
+  holdCanvasCommands,
   launch,
   nodeBody,
   nodeHeader,
@@ -17,6 +22,7 @@ import {
   nodeMenu,
   openProjectFromSidebar,
   readCanvas,
+  releaseCanvasCommands,
   renderedViewport,
   scratchDirectory,
   type Spade
@@ -91,14 +97,11 @@ test('spawns nodes with every target choice, readable and without overlap, and n
   try {
     await createNoteFromToolbar(page, { title: 'Root A', body: 'The first tree' })
 
-    // A user-initiated spawn centers the new node at 100%.
+    // A user-initiated spawn centers the new node at 100%, in the area the breadcrumb and the minimap leave free.
     await spawnFrom(page, 'Root A', 'Child 1')
     expect(await parentTitleOf(page, 'Child 1')).toBe('Root A')
     expect((await renderedViewport(page)).zoom).toBeCloseTo(1, 3)
-    const childBox = (await canvasNode(page, 'Child 1').boundingBox())!
-    const center = await screenCenterOf(page)
-    expect(Math.abs(childBox.x + childBox.width / 2 - center.x)).toBeLessThan(2)
-    expect(Math.abs(childBox.y + childBox.height / 2 - center.y)).toBeLessThan(2)
+    await expectCenteredInView(page, canvasNode(page, 'Child 1'))
 
     // Pick a node on the canvas.
     await spawnFrom(page, 'Child 1', 'Child 2', async (dialog) => {
@@ -185,8 +188,9 @@ test('spawns nodes with every target choice, readable and without overlap, and n
     const offset = header.y > (await screenCenterOf(page)).y ? -120 : 120
     await page.mouse.move(header.x + 30, header.y + header.height / 2)
     await page.mouse.down()
-    await page.mouse.move(header.x + 30, header.y + header.height / 2 + offset / 2, { steps: 8 })
-    await page.mouse.move(header.x + 30, header.y + header.height / 2 + offset, { steps: 8 })
+    // Fine steps: React Flow starts the drag on the first move past its threshold, so the first step is not carried.
+    await page.mouse.move(header.x + 30, header.y + header.height / 2 + offset / 2, { steps: 16 })
+    await page.mouse.move(header.x + 30, header.y + header.height / 2 + offset, { steps: 16 })
     await page.mouse.up()
     // Within a few screen pixels of the pointer's travel.
     await expect
@@ -327,8 +331,145 @@ test('zooms the canvas over chrome and inactive bodies, and gives an activated b
 
     await body.click()
     await expect(body).toHaveAttribute('data-active', 'true')
+
+    // Escape that closes a dialog or a menu opened over the active node leaves the node active.
+    await nodeMenu(page, 'Scratch', 'Move to…')
+    const move = page.getByRole('dialog', { name: 'Move Scratch' })
+    await expect(move).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(move).toBeHidden()
+    await expect(body).toHaveAttribute('data-active', 'true')
+    await page.getByRole('toolbar', { name: 'Canvas' }).getByRole('button', { name: 'Keyboard shortcuts' }).click()
+    await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeHidden()
+    await expect(body).toHaveAttribute('data-active', 'true')
+    await canvasNode(page, 'Scratch').getByRole('button', { name: 'Node actions' }).click()
+    await expect(page.getByRole('menu', { name: 'Actions for Scratch' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('menu', { name: 'Actions for Scratch' })).toBeHidden()
+    await expect(body).toHaveAttribute('data-active', 'true')
+
     await nodeHeader(page, 'Scratch').click({ position: { x: 60, y: 10 } })
     await expect(body).toHaveAttribute('data-active', 'false')
+  } finally {
+    await spade.app.close()
+  }
+})
+
+test('keeps a note in step with changes made elsewhere: never writes what was only read, and asks before replacing edits', async () => {
+  test.setTimeout(60_000)
+  const spade = await launchWithProject()
+  const { page, app } = spade
+  try {
+    const nodeId = await seedNote(page, 'Shared')
+    await page.getByRole('button', { name: 'Zoom to 100%' }).click()
+    const body = nodeBody(page, 'Shared')
+    const text = body.getByRole('textbox', { name: 'Note text' })
+    const bodyOnRecord = async (): Promise<unknown> =>
+      ((await readCanvas(page)).nodes.find((node) => node.id === nodeId)!.config as { body: string }).body
+    const change = (value: string): ReturnType<typeof execute> =>
+      execute(page, { type: 'updateNode', nodeId, patch: { config: { body: value } } })
+
+    // The user opens the note to read it; meanwhile an agent rewrites it. The open note follows.
+    await body.click()
+    await expect(body).toHaveAttribute('data-active', 'true')
+    await change('Rewritten by an agent')
+    await expect(text).toHaveValue('Rewritten by an agent')
+    const writes = (await readCanvas(page)).activity.length
+    await page.keyboard.press('Escape')
+    await expect(body).toHaveAttribute('data-active', 'false')
+    await page.waitForTimeout(900)
+    expect(await bodyOnRecord()).toBe('Rewritten by an agent')
+    expect((await readCanvas(page)).activity).toHaveLength(writes)
+
+    // The user edits; another change arrives before the edit is stored. Neither side is silently lost.
+    await holdCanvasCommands(app, { type: 'updateNode', nodeId, patch: { config: { body: 'Mine' } } })
+    await body.click()
+    await text.fill('Mine')
+    await expect.poll(() => heldCanvasCommands(app)).toBe(1)
+    await change('Theirs')
+    const conflict = body.getByRole('alert')
+    await expect(conflict).toContainText('This note changed elsewhere')
+    await expect(conflict).toContainText('Theirs')
+    await expect(text).toHaveValue('Mine')
+    await page.keyboard.press('Escape')
+    await expect(body).toHaveAttribute('data-active', 'false')
+    await releaseCanvasCommands(app)
+    // The held save was already on its way and lands; the choice stays open.
+    await expect.poll(bodyOnRecord).toBe('Mine')
+    await expect(conflict).toBeVisible()
+
+    await body.click()
+    await conflict.getByRole('button', { name: 'Take theirs' }).click()
+    await expect(conflict).toHaveCount(0)
+    await expect(text).toHaveValue('Theirs')
+    await expect.poll(bodyOnRecord).toBe('Theirs')
+
+    await holdCanvasCommands(app, { type: 'updateNode', nodeId, patch: { config: { body: 'Mine again' } } })
+    await text.fill('Mine again')
+    await expect.poll(() => heldCanvasCommands(app)).toBe(1)
+    await change('Theirs again')
+    await conflict.getByRole('button', { name: 'Keep mine' }).click()
+    await releaseCanvasCommands(app)
+    await expect.poll(bodyOnRecord).toBe('Mine again')
+    await expect(text).toHaveValue('Mine again')
+    await expectNoNotice(page)
+  } finally {
+    await spade.app.close()
+  }
+})
+
+test('contains a failing body to its node and shows it again after the node changes or on Retry', async () => {
+  const spade = await launchWithProject()
+  const { page } = spade
+  try {
+    // The page cannot show one particular text, as a body that throws while rendering would behave. React
+    // reads the text area's value setter when the text area mounts.
+    const breakText = (): Promise<void> =>
+      page.evaluate(() => {
+        const value = Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, 'value')!
+        ;(window as unknown as { restoreText(): void }).restoreText = () =>
+          Object.defineProperty(HTMLTextAreaElement.prototype, 'value', value)
+        Object.defineProperty(HTMLTextAreaElement.prototype, 'value', {
+          ...value,
+          set(next: string) {
+            if (next === 'Unshowable') throw new Error('This text cannot be shown')
+            value.set!.call(this, next)
+          }
+        })
+      })
+    const restoreText = (): Promise<void> => page.evaluate(() => (window as unknown as { restoreText(): void }).restoreText())
+
+    await breakText()
+    const nodeId = await seedNote(page, 'Fragile')
+    await seedNote(page, 'Neighbor')
+    const body = nodeBody(page, 'Fragile')
+    const text = body.getByRole('textbox', { name: 'Note text' })
+    const failure = body.getByRole('alert')
+    const change = (value: string): ReturnType<typeof execute> =>
+      execute(page, { type: 'updateNode', nodeId, patch: { config: { body: value } } })
+    await change('Unshowable')
+    await expect(failure).toContainText("This node's content could not be shown: This text cannot be shown")
+    await expect(nodeBody(page, 'Neighbor').getByRole('textbox', { name: 'Note text' })).toBeVisible()
+
+    // A later change to the node shows its body again.
+    await restoreText()
+    await change('Shown again')
+    await expect(text).toHaveValue('Shown again')
+    await expect(failure).toHaveCount(0)
+
+    // So does Retry, once whatever failed works again.
+    await breakText()
+    await canvasNode(page, 'Fragile').getByRole('button', { name: 'Collapse node' }).click()
+    await canvasNode(page, 'Fragile').getByRole('button', { name: 'Expand node' }).click()
+    await expect(text).toHaveValue('Shown again')
+    await change('Unshowable')
+    await expect(failure).toBeVisible()
+    await restoreText()
+    await body.click()
+    await failure.getByRole('button', { name: 'Retry' }).click()
+    await expect(text).toHaveValue('Unshowable')
   } finally {
     await spade.app.close()
   }
@@ -463,6 +604,83 @@ test('keeps a resized node across a relaunch and shows external commands without
     expect(box.height / zoom).toBeCloseTo(size.height, 0)
   } finally {
     await second.app.close()
+  }
+})
+
+test('re-renders only the body whose node changed: not on a saved viewport, not for another node', async () => {
+  const spade = await launch(await scratchDirectory(scratch, 'user-data'))
+  const { page } = spade
+  try {
+    await countBodyRenders(page)
+    await openProjectFromSidebar(spade, await scratchDirectory(scratch, 'project'))
+    const stillId = await seedNote(page, 'Still')
+    const changingId = await seedNote(page, 'Changing')
+    await fitAll(page)
+    // The fit is saved as the canvas's viewport a moment later.
+    await expect.poll(async () => (await readCanvas(page)).viewport).toEqual(await renderedViewport(page))
+    await page.waitForTimeout(200)
+    const still = await bodyRenders(page, stillId)
+    const changing = await bodyRenders(page, changingId)
+    expect(still).toBeGreaterThan(0)
+
+    // Panning saves the viewport, which comes back as a canvas push.
+    const saved = (await readCanvas(page)).viewport
+    const pane = (await page.getByTestId('canvas').boundingBox())!
+    await page.mouse.move(pane.x + 20, pane.y + pane.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(pane.x + 140, pane.y + pane.height / 2 + 30, { steps: 6 })
+    await page.mouse.up()
+    await expect.poll(async () => (await readCanvas(page)).viewport).not.toEqual(saved)
+    await page.waitForTimeout(200)
+    expect(await bodyRenders(page, stillId)).toBe(still)
+    expect(await bodyRenders(page, changingId)).toBe(changing)
+
+    await execute(page, { type: 'updateNode', nodeId: changingId, patch: { config: { body: 'Changed text' } } })
+    await expect(nodeBody(page, 'Changing').getByRole('textbox', { name: 'Note text' })).toHaveValue('Changed text')
+    expect(await bodyRenders(page, changingId)).toBeGreaterThan(changing)
+    expect(await bodyRenders(page, stillId)).toBe(still)
+  } finally {
+    await spade.app.close()
+  }
+})
+
+test('lets a slow creation finish after its dialog is closed, without taking a later dialog or the view', async () => {
+  const spade = await launchWithProject()
+  const { page, app } = spade
+  try {
+    await createNoteFromToolbar(page, { title: 'Anchor' })
+    const newNote = async (): Promise<ReturnType<Page['getByRole']>> => {
+      await page.getByRole('toolbar', { name: 'Canvas' }).getByRole('button', { name: 'New node' }).click()
+      await page.getByRole('menu', { name: 'New node' }).getByRole('menuitem', { name: 'Note' }).click()
+      return page.getByRole('dialog', { name: 'New note' })
+    }
+
+    await holdCanvasCommands(app, { type: 'startTree', node: { title: 'Slow' } })
+    const slow = await newNote()
+    await slow.getByLabel('Title', { exact: true }).fill('Slow')
+    await slow.getByRole('button', { name: 'Create' }).click()
+    await expect(slow.getByRole('status')).toContainText('Creating')
+    await expect(slow.getByRole('status')).toContainText('without moving your view')
+    await expect(slow.getByRole('button', { name: 'Create' })).toBeDisabled()
+    await slow.getByRole('button', { name: 'Close' }).click()
+    await expect(slow).toBeHidden()
+
+    const viewport = await renderedViewport(page)
+    const other = await newNote()
+    await other.getByLabel('Title', { exact: true }).fill('Other')
+    await releaseCanvasCommands(app)
+    await expect(canvasNode(page, 'Slow')).toBeVisible()
+    await page.waitForTimeout(300)
+    await expect(other).toBeVisible()
+    await expect(other.getByLabel('Title', { exact: true })).toHaveValue('Other')
+    expect(await renderedViewport(page)).toEqual(viewport)
+
+    await other.getByRole('button', { name: 'Create' }).click()
+    await expect(other).toBeHidden()
+    await expect(page.getByRole('navigation', { name: 'Current focus' }).locator('[aria-current="location"]')).toHaveText(/Other/)
+    await expectNoNotice(page)
+  } finally {
+    await spade.app.close()
   }
 })
 

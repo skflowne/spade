@@ -1,4 +1,4 @@
-import { Component, useEffect, useId, useMemo, useState, type ErrorInfo, type ReactNode } from 'react'
+import { Component, memo, useEffect, useId, useMemo, useState, type ErrorInfo, type ReactNode } from 'react'
 import { Handle, NodeResizer, Position, useReactFlow, useStore, type Node, type NodeProps } from '@xyflow/react'
 import type { CanvasNode } from '@shared/domain'
 import { entityRenderers, resolveEntity } from '../entities'
@@ -9,7 +9,7 @@ import { MenuButton, type MenuItem } from '../ui/Menu'
 import { usePrompts } from '../ui/prompts'
 import { StatusBadge } from '../ui/StatusBadge'
 import { useAgentChange, useCanvasActions, useCanvasInteraction, useCanvasProject } from './CanvasContext'
-import { archivedEntryOf } from './model/archivedNodes'
+import { archivedEntryOf, newlyArchived } from './model/archivedNodes'
 import { canvasIndex } from './model/canvasIndex'
 import { detailForZoom } from './model/levelOfDetail'
 import { RelatedMenu } from './RelatedMenu'
@@ -20,10 +20,16 @@ export type EntityFlowNode = Node<EntityNodeData, 'entity'>
 
 // React Flow starts node drags only from elements matching this selector: the header (plan §6).
 export const DRAG_HANDLE_CLASS = 'spade-node__drag'
-const MIN_SIZE = { width: 240, height: 140 }
+// The smallest size the resize grips allow. A UI constraint on resizing by hand, not a rule on node records:
+// commands from agents or the CLI may store any positive size.
+const MIN_RESIZE_SIZE = { width: 240, height: 140 }
 
-// The generic node wrapper (plan §6, container-owned behavior) around every entity body.
-export function EntityNode({ id, data, selected }: NodeProps<EntityFlowNode>): React.JSX.Element {
+// The generic node wrapper (plan §6, container-owned behavior) around every entity body. Memoized: React Flow
+// re-renders its node wrappers whenever the canvas's handlers or other nodes change; this node and its body
+// re-render only when its own props do (the store keeps an unchanged record identical across pushes).
+export const EntityNode = memo(EntityNodeView)
+
+function EntityNodeView({ id, data, selected }: NodeProps<EntityFlowNode>): React.JSX.Element {
   const { record, view } = data
   const project = useCanvasProject()
   const actions = useCanvasActions()
@@ -73,8 +79,8 @@ export function EntityNode({ id, data, selected }: NodeProps<EntityFlowNode>): R
     <article className={className} data-testid="canvas-node" data-node-id={id} data-detail={detail} aria-labelledby={titleId}>
       <NodeResizer
         isVisible={!record.collapsed && !picking}
-        minWidth={MIN_SIZE.width}
-        minHeight={MIN_SIZE.height}
+        minWidth={MIN_RESIZE_SIZE.width}
+        minHeight={MIN_RESIZE_SIZE.height}
         lineClassName="spade-node__resize-line"
         handleClassName="spade-node__resize-handle"
         onResizeEnd={(_event, params) => actions.finishResize(id, params)}
@@ -143,7 +149,7 @@ export function EntityNode({ id, data, selected }: NodeProps<EntityFlowNode>): R
           }}
         >
           <div className="spade-node__content" inert={!active}>
-            <BodyBoundary key={record.entityType}>
+            <BodyBoundary key={record.entityType} resetKey={record.updatedAt}>
               {resolved.kind === 'ready' ? (
                 <resolved.renderer.Body
                   node={record}
@@ -222,15 +228,19 @@ function NodeControls({
   const branchHidden = record.branchCollapsed
   const run = (command: Parameters<typeof actions.execute>[0]): void => void actions.execute(command)
 
-  // Archiving is undoable from the confirmation it shows.
+  // Archiving is undoable from the confirmation it shows. Undo restores exactly what this archive archived:
+  // nodes in the branch that were archived before stay archived.
   const archive = async (branch: boolean): Promise<void> => {
-    const count = branch ? canvasIndex(actions.getCanvas()).tree.branchOf(nodeId).length : 1
+    const archived = newlyArchived(canvasIndex(actions.getCanvas()), nodeId, branch)
     const response = await actions.execute({ type: branch ? 'archiveBranch' : 'archiveNode', nodeId })
     if (!response.ok) return
+    const count = archived.length
     const what = branch ? `the branch “${record.title}” (${count} ${count === 1 ? 'node' : 'nodes'})` : `“${record.title}”`
     store.inform(`Archived ${what}.`, {
       label: 'Undo',
-      run: () => void actions.execute({ type: 'restoreNode', nodeId, ...(branch ? { branch: true } : {}) })
+      run: () => {
+        for (const id of archived) void actions.execute({ type: 'restoreNode', nodeId: id })
+      }
     })
   }
 
@@ -399,8 +409,15 @@ function FallbackBody({ record, problem }: { record: CanvasNode; problem: string
   )
 }
 
-// One failing entity renderer must never take down the canvas.
-class BodyBoundary extends Component<{ children: ReactNode }, { error: Error | null }> {
+type BodyBoundaryProps = {
+  // Changes whenever the record does: a failed body is tried again with the changed record.
+  resetKey: string
+  children: ReactNode
+}
+
+// One failing entity renderer must never take down the canvas. The failure stays until the record changes
+// or the user retries.
+class BodyBoundary extends Component<BodyBoundaryProps, { error: Error | null }> {
   state: { error: Error | null } = { error: null }
 
   static getDerivedStateFromError(error: Error): { error: Error } {
@@ -411,11 +428,20 @@ class BodyBoundary extends Component<{ children: ReactNode }, { error: Error | n
     console.error('An entity renderer failed', error, info.componentStack)
   }
 
+  componentDidUpdate(previous: BodyBoundaryProps): void {
+    if (this.state.error && previous.resetKey !== this.props.resetKey) this.setState({ error: null })
+  }
+
   render(): ReactNode {
     if (this.state.error) {
       return (
-        <div className="entity-summary entity-summary--fallback">
+        <div className="entity-summary entity-summary--fallback" role="alert">
           <p className="entity-summary__problem">This node's content could not be shown: {this.state.error.message}</p>
+          <div>
+            <button type="button" className="cr-button" onClick={() => this.setState({ error: null })}>
+              Retry
+            </button>
+          </div>
         </div>
       )
     }

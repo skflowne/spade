@@ -14,8 +14,9 @@ export function Toolbar(): React.JSX.Element {
   const store = useSpadeStore()
   const { minimap } = useSession()
   const flow = useReactFlow()
-  const zoom = useStore((state) => state.transform[2])
-  const percent = `${Math.round(zoom * 100)}%`
+  // A primitive selector at the readout's precision: zoom frames that round the same re-render nothing.
+  const zoomPercent = useStore((state) => Math.round(state.transform[2] * 100))
+  const percent = `${zoomPercent}%`
 
   return (
     <div className="canvas-toolbar">

@@ -132,6 +132,132 @@ export async function expectClearOfMinimap(page: Page, element: Locator): Promis
   expect(overlaps, `${JSON.stringify(box)} overlaps the minimap at ${JSON.stringify(minimap)}`).toBe(false)
 }
 
+type Box = { x: number; y: number; width: number; height: number }
+
+// The part of the canvas no overlay covers, in page coordinates: below the shown breadcrumb and above the shown
+// minimap. Measured from the rendered overlays, independently of how the canvas computes its focus.
+export async function unobstructedArea(page: Page): Promise<Box> {
+  const pane = (await page.getByTestId('canvas').boundingBox())!
+  const breadcrumb = page.getByRole('navigation', { name: 'Current focus' })
+  const minimap = page.getByRole('img', { name: 'Minimap' })
+  const bar = (await breadcrumb.count()) > 0 ? await breadcrumb.boundingBox() : null
+  const top = bar ? bar.y + bar.height : pane.y
+  const bottom = (await minimap.count()) > 0 ? (await minimap.boundingBox())!.y : pane.y + pane.height
+  return { x: pane.x, y: top, width: pane.width, height: bottom - top }
+}
+
+// The element's center sits on the center of the unobstructed canvas area, within a few pixels.
+export async function expectCenteredInView(page: Page, element: Locator): Promise<void> {
+  await expect
+    .poll(async () => {
+      const box = await element.boundingBox()
+      if (!box) return Number.POSITIVE_INFINITY
+      const area = await unobstructedArea(page)
+      return Math.max(
+        Math.abs(box.x + box.width / 2 - (area.x + area.width / 2)),
+        Math.abs(box.y + box.height / 2 - (area.y + area.height / 2))
+      )
+    })
+    .toBeLessThan(3)
+}
+
+type HoldGlobal = {
+  __canvasHold?: {
+    original: (...args: unknown[]) => unknown
+    pattern: unknown
+    waiting: Array<() => void>
+  }
+}
+
+// Holds the window's canvas commands that match `pattern` (a partial command, compared field by field) in the
+// main process until released, as a slow creation or save would. Other commands run at once.
+export async function holdCanvasCommands(app: ElectronApplication, pattern: Record<string, unknown>): Promise<void> {
+  await app.evaluate(({ ipcMain }, pattern) => {
+    const channel = 'spade:canvas.execute'
+    const state = globalThis as unknown as HoldGlobal
+    if (!state.__canvasHold) {
+      // Electron keeps invoke handlers in this map; the original handler still serves every command.
+      const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, (...args: unknown[]) => unknown> })._invokeHandlers
+      const hold = { original: handlers.get(channel)!, pattern: null as unknown, waiting: [] as Array<() => void> }
+      state.__canvasHold = hold
+      const matches = (value: unknown, expected: unknown): boolean =>
+        typeof expected === 'object' && expected !== null
+          ? typeof value === 'object' &&
+            value !== null &&
+            Object.entries(expected).every(([key, field]) => matches((value as Record<string, unknown>)[key], field))
+          : value === expected
+      ipcMain.removeHandler(channel)
+      ipcMain.handle(channel, async (event, ...args: unknown[]) => {
+        if (hold.pattern !== null && matches(args[1], hold.pattern)) await new Promise<void>((release) => hold.waiting.push(release))
+        return hold.original(event, ...args)
+      })
+    }
+    state.__canvasHold.pattern = pattern
+  }, pattern)
+}
+
+// Canvas commands held right now.
+export async function heldCanvasCommands(app: ElectronApplication): Promise<number> {
+  return app.evaluate(() => (globalThis as unknown as HoldGlobal).__canvasHold?.waiting.length ?? 0)
+}
+
+// Lets every held command through and stops holding.
+export async function releaseCanvasCommands(app: ElectronApplication): Promise<void> {
+  await app.evaluate(() => {
+    const hold = (globalThis as unknown as HoldGlobal).__canvasHold
+    if (!hold) return
+    hold.pattern = null
+    for (const release of hold.waiting.splice(0)) release()
+  })
+}
+
+type RenderGlobal = { __spadeBodyRenders: Record<string, number> }
+
+// Counts, per node id, the React commits in which that node's entity body rendered, through the hook React
+// offers developer tools. Reloads the window so the hook exists before React starts.
+export async function countBodyRenders(page: Page): Promise<void> {
+  await page.addInitScript(() => {
+    const renders: Record<string, number> = {}
+    const seen = new Map<string, object>()
+    ;(window as unknown as RenderGlobal).__spadeBodyRenders = renders
+    type Fiber = { child: Fiber | null; sibling: Fiber | null; type: unknown; flags: number; memoizedProps: unknown }
+    // React's PerformedWork flag: the component function ran in this render.
+    const PERFORMED_WORK = 1
+    const isBody = (props: unknown): props is { node: { id: string } } =>
+      typeof props === 'object' && props !== null && 'host' in props && 'detail' in props && 'active' in props && 'node' in props
+    const visit = (root: Fiber): void => {
+      const stack: Fiber[] = [root]
+      while (stack.length > 0) {
+        const fiber = stack.pop()!
+        if (typeof fiber.type === 'function' && isBody(fiber.memoizedProps)) {
+          const id = fiber.memoizedProps.node.id
+          if (seen.get(id) !== fiber && (fiber.flags & PERFORMED_WORK) !== 0) renders[id] = (renders[id] ?? 0) + 1
+          seen.set(id, fiber)
+        }
+        if (fiber.sibling) stack.push(fiber.sibling)
+        if (fiber.child) stack.push(fiber.child)
+      }
+    }
+    ;(window as unknown as { __REACT_DEVTOOLS_GLOBAL_HOOK__: unknown }).__REACT_DEVTOOLS_GLOBAL_HOOK__ = {
+      supportsFiber: true,
+      isDisabled: false,
+      renderers: new Map(),
+      inject: () => 1,
+      checkDCE: () => {},
+      onScheduleFiberRoot: () => {},
+      onCommitFiberRoot: (_renderer: number, root: { current: Fiber }) => visit(root.current),
+      onCommitFiberUnmount: () => {},
+      onPostCommitFiberRoot: () => {}
+    }
+  })
+  await page.reload()
+  await expect(page.getByTestId('app-shell')).toBeVisible()
+}
+
+export async function bodyRenders(page: Page, nodeId: string): Promise<number> {
+  return page.evaluate((id) => (window as unknown as RenderGlobal).__spadeBodyRenders[id] ?? 0, nodeId)
+}
+
 // Fits every node and waits for React Flow to apply the new viewport.
 export async function fitAll(page: Page): Promise<void> {
   await page.getByRole('toolbar', { name: 'Canvas' }).getByRole('button', { name: 'Fit all' }).click()

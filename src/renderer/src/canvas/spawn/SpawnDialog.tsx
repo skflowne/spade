@@ -1,5 +1,5 @@
 import { useId, useState } from 'react'
-import type { CanvasCommand, NodeSeed } from '@shared/commands'
+import type { CanvasCommand, CanvasCommandResponse, NodeSeed } from '@shared/commands'
 import { entities, entityRenderers } from '../../entities'
 import type { SpawnRequest } from '../../entities/types'
 import { Dialog } from '../../ui/Dialog'
@@ -16,8 +16,10 @@ type SpawnDialogProps = {
   mode: SpawnDialogMode
   // False while the user picks a node on the canvas; the dialog keeps its state.
   open: boolean
-  // The created node's id, or null when cancelled.
-  onDone(nodeId: string | null): void
+  // Runs the creation for this dialog's own request; closing the dialog when it succeeds is the caller's.
+  onCreate(command: CanvasCommand): Promise<CanvasCommandResponse>
+  // Escape, Cancel, or Close while the node is being created (the creation still completes).
+  onCancel(): void
 }
 
 // Builds the command for a seed and a target. Without a source, the picked node is the source.
@@ -45,7 +47,7 @@ export function spawnCommand(input: {
   }
 }
 
-export function SpawnDialog({ mode, open, onDone }: SpawnDialogProps): React.JSX.Element {
+export function SpawnDialog({ mode, open, onCreate, onCancel }: SpawnDialogProps): React.JSX.Element {
   const { canvas, project } = useCanvasData()
   const actions = useCanvasActions()
   const formId = useId()
@@ -81,10 +83,9 @@ export function SpawnDialog({ mode, open, onDone }: SpawnDialogProps): React.JSX
     if (command === null || busy) return
     setBusy(true)
     setFailure(null)
-    const response = await actions.execute(command)
+    const response = await onCreate(command)
     setBusy(false)
     if (!response.ok) setFailure(response.error.message)
-    else if (response.nodeId) onDone(response.nodeId)
   }
 
   const pickOnCanvas = async (): Promise<void> => {
@@ -97,11 +98,17 @@ export function SpawnDialog({ mode, open, onDone }: SpawnDialogProps): React.JSX
       open={open}
       wide
       title={title}
-      onCancel={() => onDone(null)}
+      onCancel={onCancel}
       footer={
         <>
-          <button type="button" className="cr-button" onClick={() => onDone(null)}>
-            Cancel
+          {busy ? (
+            <p className="spawn-progress" role="status">
+              Creating the node… You can close this dialog: the node still appears when it is ready, without moving your
+              view.
+            </p>
+          ) : null}
+          <button type="button" className="cr-button" onClick={onCancel}>
+            {busy ? 'Close' : 'Cancel'}
           </button>
           {mode.kind === 'seeded' ? (
             <button

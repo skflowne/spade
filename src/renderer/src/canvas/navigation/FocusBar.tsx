@@ -8,6 +8,10 @@ import { canvasIndex } from '../model/canvasIndex'
 // Path segments shown before the rest fold into a menu: the root and the last few.
 const SHOWN_TAIL = 3
 
+// The strip along the canvas's top edge that the shown bar covers, in screen pixels: its margin and height
+// (app.css, .focus-bar and .breadcrumb). Focusing a node keeps its header below it.
+export const FOCUS_BAR_BAND = 48
+
 // The current-focus indicator (plan §12): the focused node's path from its root, each segment a jump.
 export function FocusBar(): React.JSX.Element | null {
   const { canvas } = useCanvasData()

@@ -28,6 +28,8 @@ export type EntityHost = {
   execute(command: CanvasCommand): Promise<CanvasCommandResponse>
   // Asks the user for the target (plan §4.6), creates the node, and centers it.
   // Resolves with the new node's id, or null when the user cancels or the command fails.
+  // A user who closes the dialog while the node is being created does not cancel it: the promise then resolves
+  // when the creation ends, and the node appears without taking focus.
   requestSpawn(request: SpawnRequest): Promise<string | null>
   // Centers the node at a readable zoom.
   focusNode(nodeId: string): void
