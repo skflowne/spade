@@ -9,7 +9,7 @@ import type {
 import type { ImageSource } from '../shared/builtinEntities'
 import type { CanvasCommand, CanvasCommandOutcome } from '../shared/commands'
 import type { Actor, AppSettings, Canvas, CanvasNode, Project, ResourceRef, Size } from '../shared/domain'
-import type { ImageInfo, PathInfo } from '../shared/ipc'
+import type { ImageInfo, PathAccessOptions, PathInfo } from '../shared/ipc'
 
 // Seams between the main-process services. Each service depends on these interfaces, never on
 // another service's implementation; `src/main/index.ts` is the only place they are wired together.
@@ -41,6 +41,9 @@ export type EntityCreateResult = {
 export type MainEntityAdapter = {
   type: string
   create(input: EntityCreateInput): Promise<EntityCreateResult>
+  // Called when the command fails after `create` succeeded, so the adapter can release the resource
+  // it just created instead of leaving it without a node.
+  discard?(input: EntityCreateInput, created: EntityCreateResult): Promise<void>
 }
 
 export type WorkspaceGatewayEvent =
@@ -95,12 +98,12 @@ export interface FileService {
   // Registers the read-only image protocol and guest-webview policy. Call once, before any window opens.
   start(): Promise<void>
   stop(): Promise<void>
-  inspectPath(project: Project, path: string): Promise<PathInfo>
+  inspectPath(project: Project, path: string, options?: PathAccessOptions): Promise<PathInfo>
   reveal(project: Project, path: string): Promise<void>
   openExternal(url: string): Promise<void>
   copyText(text: string): void
   pickImage(project: Project): Promise<string | null>
-  describeImage(project: Project, source: ImageSource): Promise<ImageInfo>
+  describeImage(project: Project, source: ImageSource, options?: PathAccessOptions): Promise<ImageInfo>
   importImage(input: { data: ArrayBuffer; mimeType: string }): Promise<{ assetId: string }>
   subscribe(listener: (event: { type: 'image-changed'; path: string }) => void): () => void
 }

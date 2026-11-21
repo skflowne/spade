@@ -47,6 +47,8 @@ export function presentArtifact(artifact: Artifact, info: PathInfo | undefined):
         : { state: 'file', quiet: false, actions: ['reveal', 'copy-path'] }
     case 'missing':
       return { state: 'missing', quiet: isRelativePath(artifact.value), actions: ['copy-path'] }
+    case 'unchecked':
+      return { state: 'checking', quiet: false, actions: ['copy-path'] }
   }
 }
 

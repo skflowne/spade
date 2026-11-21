@@ -33,6 +33,8 @@ export type EntityHost = {
   focusNode(nodeId: string): void
   // Fills the header status slot while the body is mounted; null clears it.
   setStatus(status: NodeStatus | null): void
+  // Shows the user a dismissible error notice, for failures of entity actions.
+  notify(message: string): void
 }
 
 export type EntityBodyProps<Config = unknown> = {
@@ -51,6 +53,8 @@ export type EntityStatusProps<Config = unknown> = {
   node: CanvasNode
   config: Config
   project: Project
+  // Marks the whole node as waiting for the user, visibly even while collapsed.
+  setAttention(attention: boolean): void
 }
 
 export type EntityCreateFormProps = {

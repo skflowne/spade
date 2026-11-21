@@ -921,6 +921,11 @@ legend {
   transition: border-color var(--cr-duration-fast) var(--cr-ease-standard);
 }
 
+/* Declared before the active and picking states so they still win. */
+.spade-node--attention {
+  border-color: var(--warning);
+}
+
 .spade-node--active {
   border-color: var(--accent);
   box-shadow:

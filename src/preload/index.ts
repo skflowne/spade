@@ -62,12 +62,12 @@ const bridge: SpadeHostBridge = {
     openProviderSubagent: (nodeId, subagentId) => request('agents.openProviderSubagent', nodeId, subagentId)
   },
   files: {
-    inspectPath: (projectId, path) => unwrap('files.inspectPath', projectId, path),
+    inspectPath: (projectId, path, options) => unwrap('files.inspectPath', projectId, path, options),
     reveal: (projectId, path) => request('files.reveal', projectId, path),
     openExternal: (url) => request('files.openExternal', url),
     copyText: (text) => request('files.copyText', text),
     pickImage: (projectId) => unwrap('files.pickImage', projectId),
-    describeImage: (projectId, source) => request('files.describeImage', projectId, source),
+    describeImage: (projectId, source, options) => request('files.describeImage', projectId, source, options),
     importImage: (input) => request('files.importImage', input),
     onImageChanged: listen(SPADE_HOST_EVENTS.imageChanged)
   }

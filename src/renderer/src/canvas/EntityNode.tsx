@@ -30,6 +30,8 @@ export function EntityNode({ id, data, selected }: NodeProps<EntityFlowNode>): R
   const { activeNodeId, picking } = useCanvasInteraction()
   const resolved = useMemo(() => resolveEntity(entityRenderers, record), [record])
   const [status, setStatus] = useState<NodeStatus | null>(null)
+  const [attention, setAttention] = useState(false)
+  const store = useSpadeStore()
   // A primitive selector: the node re-renders when the zoom crosses the threshold, not on every zoom frame.
   const detail = useStore((state) => detailForZoom(state.transform[2]))
   const agentChange = useAgentChange(id)
@@ -47,15 +49,17 @@ export function EntityNode({ id, data, selected }: NodeProps<EntityFlowNode>): R
       execute: actions.execute,
       requestSpawn: actions.requestSpawn,
       focusNode: (nodeId) => actions.focusNode(nodeId),
-      setStatus
+      setStatus,
+      notify: (message) => store.notify(message)
     }),
-    [actions]
+    [actions, store]
   )
 
   const Status = resolved.kind === 'ready' ? resolved.renderer.Status : undefined
   const className = [
     'spade-node',
     selected ? 'spade-node--selected' : '',
+    attention ? 'spade-node--attention' : '',
     active ? 'spade-node--active' : '',
     record.collapsed ? 'spade-node--collapsed' : '',
     picking ? 'spade-node--pickable' : '',
@@ -122,7 +126,7 @@ export function EntityNode({ id, data, selected }: NodeProps<EntityFlowNode>): R
           )}
         </div>
         <div className="spade-node__status">
-          {Status && resolved.kind === 'ready' ? <Status node={record} config={resolved.config} project={project} /> : null}
+          {Status && resolved.kind === 'ready' ? <Status node={record} config={resolved.config} project={project} setAttention={setAttention} /> : null}
           {status ? <StatusBadge status={status} /> : null}
         </div>
         <NodeControls record={record} view={view} host={host} resolved={resolved} />

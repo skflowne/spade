@@ -36,7 +36,13 @@ export type AppState = {
 export type Failure = { ok: false; error: { code: string; message: string } }
 export type Result<Value extends object = object> = ({ ok: true } & Value) | Failure
 
-export type PathKind = 'file' | 'directory' | 'missing'
+// 'unchecked': a network (UNC) path outside the project root. SPADE never contacts another machine
+// because of text in a conversation; such a path is only touched after an explicit user action.
+export type PathKind = 'file' | 'directory' | 'missing' | 'unchecked'
+
+// `explicit` marks a call made because the user clicked on this very path. Only explicit calls may touch
+// a network path outside the project root; the main process then keeps allowing that path for the session.
+export type PathAccessOptions = { explicit?: boolean }
 
 export type PathInfo = {
   // The path as written in the conversation.
@@ -96,7 +102,7 @@ export type SpadeHostBridge = {
   }
   files: {
     // Lazy existence check for a path found in a conversation. Never throws for a missing path.
-    inspectPath(projectId: string, path: string): Promise<PathInfo>
+    inspectPath(projectId: string, path: string, options?: PathAccessOptions): Promise<PathInfo>
     // Files are selected in Explorer (never launched); directories are opened in Explorer.
     reveal(projectId: string, path: string): Promise<Result>
     // http and https only.
@@ -104,7 +110,12 @@ export type SpadeHostBridge = {
     copyText(text: string): Promise<Result>
     // Native file picker limited to supported image formats; null when cancelled.
     pickImage(projectId: string): Promise<string | null>
-    describeImage(projectId: string, source: ImageSource): Promise<Result<{ image: ImageInfo }>>
+    // Fails with code `network-path` for an unapproved network path outside the project root.
+    describeImage(
+      projectId: string,
+      source: ImageSource,
+      options?: PathAccessOptions
+    ): Promise<Result<{ image: ImageInfo }>>
     // Stores a pasted or tool-produced image in SPADE's asset store.
     importImage(input: { data: ArrayBuffer; mimeType: string }): Promise<Result<{ assetId: string }>>
     // Fires when a watched image file changes; the listener calls describeImage again.
