@@ -1,4 +1,4 @@
-import { Component, useEffect, useId, useMemo, useState, type ErrorInfo, type ReactNode } from 'react'
+import { Component, memo, useEffect, useId, useMemo, useState, type ErrorInfo, type ReactNode } from 'react'
 import { Handle, NodeResizer, Position, useReactFlow, useStore, type Node, type NodeProps } from '@xyflow/react'
 import type { CanvasNode } from '@shared/domain'
 import { entityRenderers, resolveEntity } from '../entities'
@@ -22,8 +22,12 @@ export type EntityFlowNode = Node<EntityNodeData, 'entity'>
 export const DRAG_HANDLE_CLASS = 'spade-node__drag'
 const MIN_SIZE = { width: 240, height: 140 }
 
-// The generic node wrapper (plan §6, container-owned behavior) around every entity body.
-export function EntityNode({ id, data, selected }: NodeProps<EntityFlowNode>): React.JSX.Element {
+// The generic node wrapper (plan §6, container-owned behavior) around every entity body. Memoized: React Flow
+// re-renders its node wrappers whenever the canvas's handlers or other nodes change; this node and its body
+// re-render only when its own props do (the store keeps an unchanged record identical across pushes).
+export const EntityNode = memo(EntityNodeView)
+
+function EntityNodeView({ id, data, selected }: NodeProps<EntityFlowNode>): React.JSX.Element {
   const { record, view } = data
   const project = useCanvasProject()
   const actions = useCanvasActions()

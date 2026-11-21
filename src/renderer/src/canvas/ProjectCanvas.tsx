@@ -93,8 +93,10 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
   const flow = useReactFlow()
   const flowStore = useStoreApi()
   const container = useRef<HTMLDivElement>(null)
-  const view = useMemo(() => canvasView(canvas, entities), [canvas])
-  const records = useMemo(() => canvasIndex(canvas).byId, [canvas])
+  // Only the nodes and edges shape what is drawn: a viewport or activity push leaves the view and the nodes alone.
+  // The store keeps unchanged records (and lists) identical across pushes, which is what these dependencies rely on.
+  const view = useMemo(() => canvasView(canvas, entities), [canvas.nodes, canvas.edges])
+  const records = useMemo(() => canvasIndex(canvas).byId, [canvas.nodes])
 
   // Alt+drag moves the whole branch: the node and every descendant.
   const branchDrag = useRef<{ nodeId: string; origins: Map<string, Point> } | null>(null)

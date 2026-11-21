@@ -5,7 +5,9 @@ import { expect, test, type Page } from '@playwright/test'
 import { indexTree } from '../../src/shared/tree'
 import { installAgentScript, setProviders } from './agent-harness'
 import {
+  bodyRenders,
   canvasNode,
+  countBodyRenders,
   createNoteFromToolbar,
   execute,
   expectNoNotice,
@@ -463,6 +465,43 @@ test('keeps a resized node across a relaunch and shows external commands without
     expect(box.height / zoom).toBeCloseTo(size.height, 0)
   } finally {
     await second.app.close()
+  }
+})
+
+test('re-renders only the body whose node changed: not on a saved viewport, not for another node', async () => {
+  const spade = await launch(await scratchDirectory(scratch, 'user-data'))
+  const { page } = spade
+  try {
+    await countBodyRenders(page)
+    await openProjectFromSidebar(spade, await scratchDirectory(scratch, 'project'))
+    const stillId = await seedNote(page, 'Still')
+    const changingId = await seedNote(page, 'Changing')
+    await fitAll(page)
+    // The fit is saved as the canvas's viewport a moment later.
+    await expect.poll(async () => (await readCanvas(page)).viewport).toEqual(await renderedViewport(page))
+    await page.waitForTimeout(200)
+    const still = await bodyRenders(page, stillId)
+    const changing = await bodyRenders(page, changingId)
+    expect(still).toBeGreaterThan(0)
+
+    // Panning saves the viewport, which comes back as a canvas push.
+    const saved = (await readCanvas(page)).viewport
+    const pane = (await page.getByTestId('canvas').boundingBox())!
+    await page.mouse.move(pane.x + 20, pane.y + pane.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(pane.x + 140, pane.y + pane.height / 2 + 30, { steps: 6 })
+    await page.mouse.up()
+    await expect.poll(async () => (await readCanvas(page)).viewport).not.toEqual(saved)
+    await page.waitForTimeout(200)
+    expect(await bodyRenders(page, stillId)).toBe(still)
+    expect(await bodyRenders(page, changingId)).toBe(changing)
+
+    await execute(page, { type: 'updateNode', nodeId: changingId, patch: { config: { body: 'Changed text' } } })
+    await expect(nodeBody(page, 'Changing').getByRole('textbox', { name: 'Note text' })).toHaveValue('Changed text')
+    expect(await bodyRenders(page, changingId)).toBeGreaterThan(changing)
+    expect(await bodyRenders(page, stillId)).toBe(still)
+  } finally {
+    await spade.app.close()
   }
 })
 
