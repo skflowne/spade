@@ -179,6 +179,7 @@ export class FakeAgentService implements AgentService {
       id: 'claude',
       label: 'Claude',
       available: true,
+      status: 'ready',
       error: null,
       models: [{ id: 'opus', label: 'Opus', isDefault: true }],
       modes: [{ id: 'default', label: 'Default' }],
