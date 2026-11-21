@@ -1,0 +1,529 @@
+/* Rich conversation content. Consumes the Control Room tokens loaded by the app shell.
+   Wide content (code, tables, diagrams) scrolls inside its block and never widens the node. */
+
+.rich-markdown {
+  min-width: 0;
+  max-width: 100%;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: var(--cr-text-body);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.rich-markdown > :first-child {
+  margin-top: 0;
+}
+
+.rich-markdown > :last-child {
+  margin-bottom: 0;
+}
+
+.rich-markdown p {
+  margin: var(--cr-space-4) 0;
+}
+
+.rich-heading {
+  margin: var(--cr-space-6) 0 var(--cr-space-4);
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+
+h1.rich-heading {
+  font-size: var(--cr-text-xl);
+  font-weight: 650;
+}
+
+h2.rich-heading {
+  font-size: var(--cr-text-lg);
+  font-weight: 650;
+}
+
+h3.rich-heading {
+  font-size: var(--cr-text-md);
+  font-weight: 600;
+}
+
+h4.rich-heading,
+h5.rich-heading,
+h6.rich-heading {
+  color: var(--muted);
+  font-size: var(--cr-text-body);
+  font-weight: 600;
+}
+
+.rich-markdown strong {
+  font-weight: 650;
+}
+
+.rich-markdown del {
+  color: var(--muted);
+}
+
+/* Lists */
+
+.rich-list {
+  margin: var(--cr-space-4) 0;
+  padding-left: var(--cr-space-8);
+}
+
+.rich-list li + li {
+  margin-top: var(--cr-space-2);
+}
+
+.rich-list--tight .rich-list__content > p {
+  margin: 0;
+}
+
+.rich-list__content > :first-child {
+  margin-top: 0;
+}
+
+.rich-list__content > :last-child {
+  margin-bottom: 0;
+}
+
+.rich-task {
+  display: flex;
+  gap: var(--cr-space-4);
+  align-items: baseline;
+  margin-left: calc(-1 * var(--cr-space-6));
+  list-style: none;
+}
+
+.rich-task input {
+  flex: none;
+  margin: 0;
+  accent-color: var(--accent);
+}
+
+.rich-task .rich-list__content {
+  min-width: 0;
+}
+
+/* Quotes and callouts */
+
+.rich-quote,
+.rich-callout {
+  margin: var(--cr-space-5) 0;
+  padding: var(--cr-space-3) var(--cr-space-5);
+  border-left: 2px solid var(--line);
+  color: var(--muted);
+}
+
+.rich-quote > :first-child,
+.rich-callout > :first-child {
+  margin-top: 0;
+}
+
+.rich-quote > :last-child,
+.rich-callout > :last-child {
+  margin-bottom: 0;
+}
+
+.rich-callout {
+  --callout-color: var(--accent);
+
+  border: 1px solid color-mix(in srgb, var(--callout-color) 35%, transparent);
+  border-left: 2px solid var(--callout-color);
+  border-radius: 0 var(--cr-radius-control) var(--cr-radius-control) 0;
+  background: color-mix(in srgb, var(--callout-color) 6%, transparent);
+  color: var(--text);
+}
+
+.rich-callout--tip {
+  --callout-color: var(--success);
+}
+
+.rich-callout--warning {
+  --callout-color: var(--warning);
+}
+
+.rich-callout--caution {
+  --callout-color: var(--danger);
+}
+
+.rich-markdown .rich-callout__label {
+  margin: 0 0 var(--cr-space-2);
+  color: var(--callout-color);
+  font: 700 var(--cr-text-xs) var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.rich-rule {
+  height: 1px;
+  margin: var(--cr-space-6) 0;
+  border: 0;
+  background: var(--line);
+}
+
+/* Tables */
+
+.rich-scroll {
+  max-width: 100%;
+  margin: var(--cr-space-5) 0;
+  overflow-x: auto;
+  border: var(--cr-border);
+  border-radius: var(--cr-radius-control);
+}
+
+.rich-table {
+  min-width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.rich-table th,
+.rich-table td {
+  padding: var(--cr-space-3) var(--cr-space-5);
+  border-bottom: var(--cr-border);
+  text-align: left;
+  vertical-align: top;
+  overflow-wrap: normal;
+}
+
+.rich-table th {
+  background: var(--panel-2);
+  color: var(--muted);
+  font-size: var(--cr-text-sm);
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.rich-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Inline code, raw HTML, links, and artifact chips */
+
+.rich-inline-code,
+.rich-raw-html {
+  padding: 0.0625rem var(--cr-space-2);
+  border: var(--cr-border);
+  border-radius: var(--cr-radius-compact);
+  background: var(--cr-ink-950);
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+
+.rich-raw-html {
+  color: var(--muted);
+}
+
+pre.rich-raw-html {
+  max-width: 100%;
+  margin: var(--cr-space-4) 0;
+  padding: var(--cr-space-4) var(--cr-space-5);
+  overflow-x: auto;
+  white-space: pre;
+}
+
+pre.rich-raw-html code {
+  font: inherit;
+}
+
+.rich-link,
+.rich-artifact {
+  display: inline;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--accent);
+  font: inherit;
+  text-align: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  text-underline-offset: 0.15em;
+  cursor: pointer;
+  transition: text-decoration-color var(--cr-duration-fast) var(--cr-ease-standard);
+}
+
+.rich-link:hover,
+.rich-artifact:hover {
+  text-decoration-color: currentColor;
+}
+
+.rich-link:focus-visible,
+.rich-artifact:focus-visible,
+.rich-image--interactive:focus-visible,
+.rich-block__action:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.rich-link--inert {
+  color: var(--text);
+  text-decoration-color: var(--line);
+  cursor: default;
+}
+
+.rich-artifact--path,
+.rich-artifact--image {
+  font-family: var(--mono);
+  font-size: 0.92em;
+}
+
+.rich-inline-code .rich-artifact {
+  font-size: inherit;
+}
+
+/* Images */
+
+.rich-image {
+  display: inline-block;
+  max-width: 100%;
+  margin: var(--cr-space-2) 0;
+  padding: 0;
+  overflow: hidden;
+  border: var(--cr-border);
+  border-radius: var(--cr-radius-control);
+  background: var(--cr-ink-950);
+  vertical-align: middle;
+}
+
+.rich-image img {
+  display: block;
+  max-width: 100%;
+  max-height: 240px;
+  object-fit: contain;
+}
+
+.rich-image--interactive {
+  cursor: zoom-in;
+  transition: border-color var(--cr-duration-fast) var(--cr-ease-standard);
+}
+
+.rich-image--interactive:hover {
+  border-color: var(--faint);
+}
+
+.rich-image--pending {
+  width: 96px;
+  height: 64px;
+}
+
+.rich-image--missing {
+  padding: var(--cr-space-2) var(--cr-space-4);
+  color: var(--muted);
+  font-size: var(--cr-text-sm);
+}
+
+/* Block chrome shared by code, diagrams, and HTML answers */
+
+.rich-block {
+  min-width: 0;
+  max-width: 100%;
+  margin: var(--cr-space-5) 0;
+  overflow: hidden;
+  border: var(--cr-border);
+  border-radius: var(--cr-radius-control);
+  background: var(--cr-ink-950);
+}
+
+.rich-block__header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--cr-space-4);
+  align-items: center;
+  min-height: 28px;
+  padding: var(--cr-space-2) var(--cr-space-2) var(--cr-space-2) var(--cr-space-5);
+  border-bottom: var(--cr-border);
+  background: var(--panel-2);
+}
+
+.rich-block__label {
+  flex: none;
+  color: var(--muted);
+  font: 700 var(--cr-text-xs) var(--mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.rich-block__title {
+  flex: 1 1 4rem;
+  min-width: 4rem;
+  overflow: hidden;
+  font-size: var(--cr-text-sm);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.rich-block__actions {
+  display: flex;
+  flex: none;
+  gap: var(--cr-space-1);
+  margin-left: auto;
+}
+
+.rich-block__action {
+  min-height: 22px;
+  padding: 0 var(--cr-space-4);
+  border: 1px solid transparent;
+  border-radius: var(--cr-radius-compact);
+  background: transparent;
+  color: var(--muted);
+  font: 650 var(--cr-text-xs) var(--font);
+  cursor: pointer;
+  transition:
+    background var(--cr-duration-fast) var(--cr-ease-standard),
+    border-color var(--cr-duration-fast) var(--cr-ease-standard);
+}
+
+.rich-block__action:hover {
+  border-color: var(--line);
+  background: var(--panel);
+  color: var(--text);
+}
+
+.rich-block__action[aria-pressed='true'] {
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 8%, transparent);
+  color: var(--accent);
+}
+
+.rich-block__action:disabled {
+  border-color: transparent;
+  background: transparent;
+  color: var(--faint);
+  cursor: not-allowed;
+}
+
+.rich-block__error {
+  margin: 0;
+  padding: var(--cr-space-4) var(--cr-space-5);
+  overflow-x: auto;
+  border-bottom: var(--cr-border);
+  background: color-mix(in srgb, var(--danger) 8%, transparent);
+  color: var(--danger);
+  font: var(--cr-text-sm) / 1.5 var(--mono);
+  white-space: pre-wrap;
+}
+
+/* Code */
+
+.rich-code__body {
+  margin: 0;
+  padding: var(--cr-space-5);
+  overflow-x: auto;
+  color: var(--text);
+  font: var(--cr-text-sm) / 1.6 var(--mono);
+  tab-size: 2;
+  white-space: pre;
+  overflow-wrap: normal;
+}
+
+.rich-code__body code {
+  font: inherit;
+}
+
+.hljs-comment,
+.hljs-quote,
+.hljs-meta {
+  color: var(--muted);
+  font-style: italic;
+}
+
+.hljs-keyword,
+.hljs-selector-tag,
+.hljs-built_in,
+.hljs-doctag,
+.hljs-tag .hljs-name {
+  color: var(--accent);
+}
+
+.hljs-string,
+.hljs-regexp,
+.hljs-addition,
+.hljs-template-tag,
+.hljs-symbol {
+  color: var(--success);
+}
+
+.hljs-number,
+.hljs-literal,
+.hljs-variable.constant_,
+.hljs-attr,
+.hljs-attribute,
+.hljs-selector-attr,
+.hljs-selector-class,
+.hljs-selector-id {
+  color: var(--warning);
+}
+
+.hljs-title,
+.hljs-section,
+.hljs-type,
+.hljs-title.class_,
+.hljs-title.function_ {
+  color: var(--text);
+  font-weight: 650;
+}
+
+.hljs-deletion {
+  color: var(--danger);
+}
+
+.hljs-emphasis {
+  font-style: italic;
+}
+
+.hljs-strong {
+  font-weight: 650;
+}
+
+/* Mermaid */
+
+.rich-mermaid__diagram {
+  padding: var(--cr-space-5);
+  overflow-x: auto;
+  background: var(--panel);
+}
+
+.rich-mermaid__canvas {
+  max-width: none;
+  margin: 0 auto;
+}
+
+.rich-mermaid__canvas svg {
+  display: block;
+  height: auto;
+}
+
+.rich-mermaid__diagram--loading {
+  color: var(--muted);
+  font-size: var(--cr-text-sm);
+}
+
+/* HTML answers */
+
+.rich-html__runtime[hidden] {
+  display: none;
+}
+
+.rich-html__frame {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: var(--panel);
+  transition: height var(--cr-duration-base) var(--cr-ease-standard);
+}
+
+.rich-html__disposed {
+  margin: 0;
+  padding: var(--cr-space-6) var(--cr-space-5);
+  color: var(--muted);
+  font-size: var(--cr-text-sm);
+  text-align: center;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .rich-html__frame,
+  .rich-link,
+  .rich-artifact,
+  .rich-image--interactive,
+  .rich-block__action {
+    transition: none;
+  }
+}
