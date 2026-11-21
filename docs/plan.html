@@ -314,7 +314,7 @@
 <li><strong>Attribution.</strong> The CLI identifies the calling agent from its own environment. Every agent-made change records the acting agent, so the UI can show who changed what and the user can undo or review it. An agent cannot act as another node.</li>
 <li><strong>Failure.</strong> A command naming a node that no longer exists fails with an error returned to the agent; it never falls back silently.</li>
 </ul>
-<p>Scoping what an agent may touch (for example limiting it to its own subtree) is not part of the first usable phase. It can be added later as a permission setting without changing the command surface. The exact CLI command surface, how it reaches the running application, and how Paseo-launched agents receive the skill are decided in brick B5.</p>
+<p>Scoping what an agent may touch (for example limiting it to its own subtree) is not part of the first usable phase. It can be added later as a permission setting without changing the command surface. The exact CLI command surface, how it reaches the running application, and how Paseo-launched agents receive the skill are decided in brick B3.</p>
 <p>Commands: <code>spawnChild(sourceNodeId, type, config, target, origin)</code>, <code>startTree(type, config, placement)</code>, <code>reparent(nodeId, newParentId | null)</code> (moves the whole branch; rejects cycles; <code>null</code> makes the node a new root), <code>collapseBranch</code> / <code>expandBranch</code> (hides descendants and shows a count), and <code>archiveBranch</code>.</p>
 <p>Removing a single node never deletes its children: they are promoted to the removed node's parent, or become roots if it had none. Deleting a whole branch is an explicit action. Removing a node removes only SPADE records.</p>
 <p>Sub-agents use the same mechanic. A managed sub-agent identified by Paseo's durable parent identity appears as a collapsed <code>child</code> node with origin <code>delegated</code>. A sub-agent can itself have children of any type, so a branch can start at a sub-agent and continue with images and web pages.</p>
@@ -496,7 +496,7 @@
 <li>Disposal/unmount without losing the durable resource</li>
 </ul>
 <h2 id="7-required-initial-entities">7. Required initial entities</h2>
-<p>The first usable version has three entities: agent conversation, image, and web page. Everything else is deferred (§7.4).</p>
+<p>The core (B1 to B3) needs one entity: the agent conversation. Image and web page viewers follow (B4), then the rich conversation actions that spawn them (B5). Everything else is deferred (§7.4).</p>
 <h3 id="7-1-agent-conversation">7.1 Agent conversation</h3>
 <ul>
 <li>Uses Paseo normalized events rather than scraping terminal ANSI.</li>
@@ -890,7 +890,7 @@ const defaultConversationExpansion = {
 </table>
 <p>Unresolved P3 findings that still bear on the agent brick: a full Claude run stalled on Paseo 0.14, sub-agent coverage after parent archival is unproven, and timeline epochs/ranges change after a daemon restart.</p>
 <h2 id="20-proposed-implementation-sequence">20. Implementation sequence</h2>
-<p>The first usable version is bricks B1 to B6, built in this order. Each brick is its own issue and pull request, ends with a working application, and follows the repository's verification rules. Build in <code>src/</code> on the existing entity registry and canvas commands; update <code>docs/foundation.html</code> and <code>docs/architecture.html</code> as each brick lands.</p>
+<p>The core is <strong>project, agents, and tree</strong> (B1 to B3), which together are the first usable version. Viewer nodes and rich conversation come next (B4, B5), then groups (B6). Bricks are built in this order. Each brick is its own issue and pull request, ends with a working application, and follows the repository's verification rules. Build in <code>src/</code> on the existing entity registry and canvas commands; update <code>docs/foundation.html</code> and <code>docs/architecture.html</code> as each brick lands.</p>
 <table>
 <thead>
 <tr>
@@ -906,14 +906,14 @@ const defaultConversationExpansion = {
 <td>Open two project directories, put different nodes on each canvas, switch between them, quit, relaunch, and find both canvases unchanged. No file was created in either directory.</td>
 </tr>
 <tr>
-<td>B2 Grouping</td>
-<td>Group container, explicit membership by drop/menu, nesting of groups, auto-fit, <code>Fit</code> and <code>Full height</code>, navigation gutters, minimap.</td>
-<td>Group several nodes, nest one group in another, move the outer group, remove a node from it; membership and positions persist across relaunch.</td>
-</tr>
-<tr>
-<td>B3 Tree mechanic and layout</td>
+<td>B2 Tree mechanic and layout</td>
 <td><code>child</code> edges, <code>spawnChild</code> / <code>startTree</code> / <code>reparent</code> / collapse / archive branch, target picker (child of source, pick tree or node, new tree), removal promotes children, and the §8 placement function with its tests. Verified with the existing mock note node.</td>
 <td>Spawn 20 nodes across several trees; none overlap, each is readable at 100% zoom, and a user-moved node is never repositioned.</td>
+</tr>
+<tr>
+<td>B3 Agents and sub-agents</td>
+<td>Generalized Paseo adapter (§13), spawn from the project root, conversation renderer, permissions, delegated sub-agent children, restart reconciliation without duplicates, and the agent CLI plus skill for reading the graph and changing it (§4.6).</td>
+<td>Run an agent in the project root that delegates to a sub-agent; both appear as a tree; the agent reads the graph through the CLI, spawns a child on itself and another on a descendant, and reparents a node; every change is attributed to it; quitting and relaunching SPADE and restarting Paseo reproduces the same nodes.</td>
 </tr>
 <tr>
 <td>B4 Viewer nodes</td>
@@ -921,21 +921,21 @@ const defaultConversationExpansion = {
 <td>Open an image and a page; both persist and reload; the page survives pan, zoom, and resize.</td>
 </tr>
 <tr>
-<td>B5 Agents and sub-agents</td>
-<td>Generalized Paseo adapter (§13), spawn from the project root, conversation renderer, permissions, delegated sub-agent children, restart reconciliation without duplicates, and the agent CLI plus skill for reading the graph and changing it (§4.6).</td>
-<td>Run an agent in the project root that delegates to a sub-agent; both appear as a tree; the agent reads the graph through the CLI, spawns a child on itself and another on a descendant, and reparents a node; every change is attributed to it; quitting and relaunching SPADE and restarting Paseo reproduces the same nodes.</td>
-</tr>
-<tr>
-<td>B6 Rich conversation</td>
+<td>B5 Rich conversation</td>
 <td>Artifact detection and actions from §7.1: Reveal in Explorer, inline images, Spawn as node with the tree target choice, Markdown, Mermaid, and custom HTML.</td>
 <td>An agent message with a path, an image, and a URL offers every action; spawned images attach to the chosen tree or start a new one.</td>
+</tr>
+<tr>
+<td>B6 Grouping</td>
+<td>Group container, explicit membership by drop/menu, nesting of groups, auto-fit, <code>Fit</code> and <code>Full height</code>, navigation gutters, minimap.</td>
+<td>Group several nodes, nest one group in another, move the outer group, remove a node from it; membership and positions persist across relaunch.</td>
 </tr>
 </tbody>
 </table>
 <p>Everything else is deferred until these are in use. Add the task board, terminal, file editor, or other entities only after the tree and context semantics have stabilized in real use.</p>
 <h2 id="21-open-decisions">21. Open decisions</h2>
 <ol>
-<li>Final default sizes and spacing in §8; they are initial values to tune against real content in B3.</li>
+<li>Final default sizes and spacing in §8; they are initial values to tune against real content in B2.</li>
 <li>The exact CLI command surface for agents, its transport to the running app, and how the skill reaches Paseo-launched agents (§4.6). The channel itself is decided: CLI tool plus skill.</li>
 <li>Which connected nodes are included automatically as agent context versus requiring explicit selection (§9).</li>
 <li>Acceptable active-node budget for webview and conversation renderers on a large canvas.</li>
