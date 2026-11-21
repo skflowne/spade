@@ -27,47 +27,58 @@
       <header class="docs-hero">
         <p class="docs-eyebrow">SPADE DOCUMENTATION</p>
         <h1>SPADE Plan</h1>
-        <p>Product direction, proposed capabilities, prototypes, and open decisions.</p>
+        <p>Product direction, the generic first usable version, recorded decisions, and open decisions.</p>
       </header>
       <article class="docs-content">
-<p><em>Last updated: 2026-09-24</em></p>
+<p><em>Last updated: 2026-11-21</em></p>
 <h2 id="1-product-vision">1. Product vision</h2>
 <p>SPADE (Spatial Agent Development Environment) is a desktop, graph/canvas-based development environment built around a spatial representation of agent work.</p>
-<p>The canvas is a <strong>mind map of ongoing work</strong>, not an executable dataflow engine. Nodes represent live resources and durable artifacts: agent conversations, terminals, workspaces, diffs, browsers, files, whiteboards, and later task boards. Directed connections record where work came from, what it references, and how it branched over time.</p>
-<p>The central workflow is:</p>
-<pre><code class="language-text">GitHub issues browser
-  -&gt; spawn connected agent
-  -&gt; create/attach branch-backed worktree workspace
-  -&gt; agent works in that workspace
-  -&gt; diff, terminal, file, and browser nodes remain attached to it
-  -&gt; agent-created subagents appear as connected collapsed conversation nodes
-  -&gt; commit / open PR from the workspace diff surface
+<p>The canvas is a <strong>mind map of ongoing work</strong>, not an executable dataflow engine. Nodes represent live resources and durable artifacts: agent conversations, images, web pages, and later terminals, files, and boards. Directed parent-child connections record where each piece of work came from.</p>
+<p>SPADE is deliberately <strong>workflow-agnostic</strong>. It does not assume GitHub issues, pull requests, reviews, or any particular agent workflow. The first usable version is built from a small set of generic bricks that adapt to any kind of work, for example agent and sub-agent runs, image review, and several fixed checkouts kept inside a larger framework project:</p>
+<pre><code class="language-text">Project            user-declared folders (a framework root plus fixed checkouts)
+  Group            optional spatial hull around related projects or nodes
+  Agent            Paseo agent, run in one of the project's folders
+    Sub-agents     children of the agent
+  Image, Web page  viewer nodes
+  Rich conversation  paths, images and links become actions:
+                     reveal in Explorer, or spawn as a new node in a tree
 </code></pre>
+<p>Everything on the canvas that has a lineage is part of a <strong>tree</strong>. Any node, including agents and sub-agents, can have children, and any artifact inside a node can start a new tree or join an existing one (§4.6).</p>
+<h3 id="decisions">Recorded decisions</h3>
+<p>These decisions were taken on 2026-11-21 and govern the first usable version. Prototypes P1–P3 answered their questions; the next work is production code, not further prototypes.</p>
+<ul>
+<li><strong>Generic over workflow-specific.</strong> The GitHub issue → agent → worktree → diff → PR workflow is no longer used. It is not part of v1; its code is kept for recovery (§19).</li>
+<li><strong>No GitHub ceremony.</strong> No issue, pull-request, review, check, diff, commit, push, or merge surfaces in v1 (§14).</li>
+<li><strong>Windows only.</strong> v1 targets native Windows. WSL, macOS, and Linux are out of scope and must not shape the design.</li>
+<li><strong>SPADE never touches user projects.</strong> The application keeps all of its own state in its application data directory (§4.7). It writes no files, markers, ignore entries, or Git state into project folders.</li>
+<li><strong>Parent-child trees, not branches.</strong> The structural relationship is a parent-child edge. A "branch" is only a derived view: a child together with everything below it (§4.6).</li>
+<li><strong>Legible by default.</strong> Default sizes and automatic placement must leave enough room that every new node is readable without manual rearrangement (§8). Users will still move things; automatic layout never overrides them.</li>
+<li><strong>Prototypes stay as reference.</strong> The P3 work is merged to <code>main</code> and the prototypes remain in the repository. They are not extended and not imported; code is copied into <code>src/</code> and generalized (§19).</li>
+</ul>
 <h2 id="2-core-design-pillars">2. Core design pillars</h2>
 <ol>
 <li>
 <p><strong>Spatial work representation</strong></p>
 <ul>
 <li>Position and grouping communicate meaning.</li>
-<li>Connections communicate provenance, references, delegation, and chronology.</li>
+<li>Parent-child connections communicate lineage; reference connections communicate context.</li>
 <li>Connections do not trigger execution.</li>
 </ul>
 </li>
 <li>
-<p><strong>Everything useful can become a node</strong></p>
+<p><strong>Everything useful can become a node, and every node can grow a tree</strong></p>
 <ul>
 <li>Live resources and static artifacts use the same outer node behavior.</li>
-<li>Any node can spawn a connected node or connect an existing node.</li>
+<li>Any node, and any artifact inside a node, can spawn a child node or start a new tree. The mechanic is implemented once, generically, not per entity.</li>
 </ul>
 </li>
 <li>
-<p><strong>Projects, logical work, and execution workspaces are separate concepts</strong></p>
+<p><strong>Projects, groups, and workspaces are separate concepts</strong></p>
 <ul>
-<li>One global canvas contains auto-sized project containers; the sidebar is an activity overview and jump surface, not a project switcher.</li>
-<li>Issues and ad-hoc tasks become logical work items grouped automatically inside their project container.</li>
-<li>Projects that belong together can be arranged spatially inside higher-level group containers without merging their identities.</li>
-<li>A logical work item may contain many Paseo workspaces, branches, and agents, related by explicit opaque identities rather than inferred workflow stages.</li>
-<li>A workspace remains the concrete checkout/worktree/cwd execution fact; it is visible on nodes but is not the primary manual grouping unit.</li>
+<li>One global canvas contains auto-sized project containers; the sidebar is an overview and jump surface, not a project switcher.</li>
+<li>A project is a user-declared set of folders. SPADE does not infer, scan, or reorganize them.</li>
+<li>Groups are optional, user-created spatial hulls with no status or workflow meaning.</li>
+<li>A workspace is the concrete working directory an agent runs in. It is a fact about a node, not a grouping unit.</li>
 </ul>
 </li>
 <li>
@@ -75,24 +86,22 @@
 <ul>
 <li>SPADE should use an unmodified Paseo daemon where possible.</li>
 <li>SPADE owns the canvas, entity registry, renderers, and spatial persistence.</li>
-<li>Paseo remains the source of truth for agents, terminals, workspaces, Git state, and normalized conversation events.</li>
+<li>Paseo remains the source of truth for agents, workspaces, and normalized conversation events.</li>
 </ul>
 </li>
 <li>
 <p><strong>Rich rendering without rebuilding every tool</strong></p>
 <ul>
-<li>Agent answers render as structured Markdown, Mermaid, full custom HTML/JavaScript, code, tool calls, file reads, and diffs.</li>
-<li>Full IDE support initially means opening the current workspace/file in a configured external IDE.</li>
-<li>Whiteboards remain a later entity if real workflows prove them useful.</li>
+<li>Agent answers render as structured Markdown, Mermaid, full custom HTML/JavaScript, code, tool calls, and file references.</li>
+<li>Paths, images, and links inside a conversation are actionable (§7.1).</li>
+<li>Full IDE support, when added, means opening the file in an external IDE.</li>
 </ul>
 </li>
 <li>
-<p><strong>Prototype uncertain interaction boundaries before fixing the architecture</strong></p>
+<p><strong>SPADE owns its state and leaves projects alone</strong></p>
 <ul>
-<li>Workspace creation and agent creation ordering.</li>
-<li>Browser rendering inside transformed canvas nodes.</li>
-<li>Heavy interactive child surfaces inside React Flow.</li>
-<li>Paseo subagent identity and reconnect behavior.</li>
+<li>Canvas, layout, and entity references persist in SPADE's own application data.</li>
+<li>Resource owners (Paseo, the filesystem) keep their own state; SPADE stores locators.</li>
 </ul>
 </li>
 </ol>
@@ -101,41 +110,29 @@
 <thead>
 <tr>
 <th>Layer</th>
-<th>Initial direction</th>
+<th>Direction</th>
 </tr>
 </thead>
 <tbody>
 <tr>
+<td>Platform</td>
+<td>Native Windows only for v1</td>
+</tr>
+<tr>
 <td>Desktop shell</td>
-<td>Electron baseline; Tauri does not remove the native-webview positioning problem, so compare only if the Electron browser spike fails or footprint becomes decisive</td>
+<td>Electron. Tauri does not remove the native-webview positioning problem (§16)</td>
 </tr>
 <tr>
 <td>Outer canvas</td>
 <td>React Flow / xyflow</td>
 </tr>
 <tr>
-<td>Whiteboard node</td>
-<td>Deferred until the core workflow proves a real need</td>
-</tr>
-<tr>
 <td>Agent control plane</td>
-<td>Unmodified Paseo daemon</td>
-</tr>
-<tr>
-<td>Terminal</td>
-<td>Paseo terminal protocol rendered with xterm.js</td>
+<td>Unmodified Paseo daemon on the same machine; local host only in v1</td>
 </tr>
 <tr>
 <td>Agent conversation</td>
 <td>Paseo normalized timeline rendered as native SPADE HTML</td>
-</tr>
-<tr>
-<td>Embedded editor</td>
-<td>Monaco plus a small workspace LSP service</td>
-</tr>
-<tr>
-<td>Full IDE</td>
-<td>External open action; VS Code/Remote-WSL first, configurable commands later</td>
 </tr>
 <tr>
 <td>Markdown</td>
@@ -150,33 +147,38 @@
 <td>Full agent-authored HTML/JavaScript blocks in an unsandboxed iframe/document runtime, with a SPADE interaction bridge</td>
 </tr>
 <tr>
-<td>Browser</td>
-<td>Electron guest <code>&lt;webview&gt;</code> prototype; compare a bounds-synchronized native overlay only if required</td>
+<td>Web page node</td>
+<td>Electron guest <code>&lt;webview&gt;</code>, selected by the P2 prototype (§16)</td>
 </tr>
 <tr>
-<td>Git/GitHub</td>
-<td>Paseo workspace/forge/Git operations first; GitHub App only when webhook/organization automation is needed</td>
+<td>Image node</td>
+<td>Local image files displayed from their path</td>
+</tr>
+<tr>
+<td>File explorer</td>
+<td>Electron <code>shell</code> reveal/open through typed main-process commands</td>
+</tr>
+<tr>
+<td>Persistence</td>
+<td>SPADE application data directory, one main-process writer (§4.7)</td>
 </tr>
 <tr>
 <td>Execution</td>
 <td>Current host user environment; no Docker/container isolation in v1</td>
 </tr>
-<tr>
-<td>Persistence</td>
-<td>SPADE persists canvas/layout/entity references; resource owners persist their own state</td>
-</tr>
 </tbody>
 </table>
 <h3 id="explicit-deferrals">Explicit deferrals</h3>
 <ul>
+<li>No GitHub, pull-request, review, diff, commit, or push integration (§14).</li>
+<li>No WSL, macOS, or Linux support, and no remote hosts.</li>
 <li>No executable workflow/dataflow engine.</li>
-<li>No containerized repository setup or execution isolation.</li>
-<li>No embedded full IDE in v1.</li>
-<li>No X6 dependency in v1. Mermaid and rich HTML should first prove insufficient for architecture diagrams.</li>
-<li>No tldraw integration until the issue workflow and core entities are validated.</li>
+<li>No worktree management. Users work in fixed checkouts; Paseo-managed worktrees can be added later.</li>
+<li>No terminal, Monaco editor, LSP, whiteboard, or task-board entities until the bricks in §20 are in use.</li>
+<li>No embedded full IDE; no containerized execution isolation.</li>
 <li>No ACP or SPADE-owned MCP integration in v1.</li>
-<li>No security hardening or sandbox restrictions for agent-authored HTML/JavaScript in the prototype; runtime isolation may still be used to prevent CSS/lifecycle collisions.</li>
-<li>No assumption that branch name is workspace identity.</li>
+<li>No security hardening or sandbox restrictions for agent-authored HTML/JavaScript; runtime isolation may still be used to prevent CSS/lifecycle collisions.</li>
+<li>No assumption that a branch name is workspace identity, and no use of Git branches as a canvas concept.</li>
 </ul>
 <h2 id="4-domain-model">4. Domain model</h2>
 <h3 id="4-1-canvas-node">4.1 Canvas node</h3>
@@ -193,8 +195,8 @@
   size?: { width: number; height: number };
   collapsed: boolean;
   projectId: string;
-  workItemId: string | null;
-  workspaceId: string | null;
+  groupId: string | null;       // ordinary Group membership, explicit
+  workspaceId: string | null;   // working directory, when the node has one
 
   config: unknown;              // versioned and validated by the entity definition
   resourceRef: ResourceRef | null;
@@ -208,10 +210,10 @@
   updatedAt: string;
 };
 </code></pre>
-<p>A node does not copy a file, agent transcript, Git diff, PTY, or browser page into the canvas record as its source of truth. It stores a locator and may retain a bounded presentation cache.</p>
+<p>A node does not copy a file, image, agent transcript, or browser page into the canvas record as its source of truth. It stores a locator and may retain a bounded presentation cache. Tree position is not stored on the node; it is carried by <code>child</code> edges (§4.6).</p>
 <h3 id="4-2-resource-reference">4.2 Resource reference</h3>
 <pre><code class="language-ts">type ResourceRef = {
-  provider: &quot;paseo&quot; | &quot;filesystem&quot; | &quot;electron&quot; | &quot;spade&quot; | string;
+  provider: "paseo" | "filesystem" | "electron" | "spade" | string;
   kind: string;
   id: string;
   revision?: string;
@@ -220,123 +222,109 @@
 <p>Examples:</p>
 <ul>
 <li>Paseo agent ID</li>
-<li>Paseo terminal ID</li>
-<li>Paseo workspace ID</li>
-<li>Filesystem path plus workspace identity</li>
+<li>Filesystem path plus project folder identity (images, later files)</li>
 <li>Electron browser instance ID</li>
-<li>SPADE whiteboard document ID</li>
-<li>SPADE board document ID</li>
+<li>SPADE-owned asset ID for an image SPADE had to store itself (§4.7)</li>
 </ul>
-<h3 id="4-3-workspace">4.3 Workspace</h3>
-<p>A workspace is a durable SPADE identity mapped to a concrete checkout.</p>
-<pre><code class="language-ts">type Workspace = {
-  version: DomainRecordVersion;
-  id: string;
-  paseoWorkspaceId?: string;
-  projectId: string;
-  workItemId: string | null;
-
-  cwd: string;
-  worktreeRoot?: string | null;
-  mainRepoRoot?: string | null;
-
-  baseRef?: string | null;
-  baseRevision?: string | null;
-  branch?: string | null;
-
-  name: string;
-  role?: &quot;integrator&quot; | &quot;review&quot; | &quot;fix&quot; | &quot;exploration&quot; | string;
-  createdAt: string;
-};
-</code></pre>
-<h4 id="workspace-identity-rule">Workspace identity rule</h4>
-<p>A branch is <strong>not</strong> workspace identity:</p>
-<ul>
-<li>Branches can be renamed or switched.</li>
-<li>Two worktrees can temporarily point at the same branch.</li>
-<li>A checkout can be detached.</li>
-<li>Paseo already uses opaque workspace IDs and stores branch as mutable metadata.</li>
-</ul>
-<p>The workspace is the checkout/worktree instance. Its base reference determines the intended comparison lineage, while <code>branch</code> reports the current head branch.</p>
-<h4 id="workspace-membership-rule">Workspace membership rule</h4>
-<p>Membership is explicit through <code>node.workspaceId</code>; it is not inferred from an edge or branch name.</p>
-<p>Typical membership:</p>
-<ul>
-<li>Agent, terminal, diff and edited-file nodes: workspace-bound and also assigned to a logical work item.</li>
-<li>GitHub issue browser: project-scoped; assigning it to a work item makes it the logical root.</li>
-<li>PR browser: normally assigned to the work item and optionally to the workspace that produced it.</li>
-<li>Whiteboard and board, if added: project-scoped or work-item-scoped, and only workspace-bound when that relationship is useful.</li>
-</ul>
-<p>A work item may own several workspaces. Workspace badges/details communicate branch, cwd, role, lifecycle, and diff base without forcing the user to arrange separate workspace groups manually.</p>
-<h3 id="4-4-project">4.4 Project</h3>
-<p>A project represents the repository/product context independently of an individual checkout.</p>
+<h3 id="4-3-project">4.3 Project</h3>
+<p>A project is a user-declared set of folders. It is a SPADE concept; it does not require a Git repository and SPADE never inspects or changes the folders' contents beyond reading what the user opens.</p>
 <pre><code class="language-ts">type Project = {
   version: DomainRecordVersion;
   id: string;
-  paseoProjectId?: string;
-  projectKey?: string;
-  hostId: string;
-  rootPath: string;
-  gitRemote?: string;
   name: string;
+  folders: ProjectFolder[];
+  createdAt: string;
+};
+
+type ProjectFolder = {
+  id: string;            // stable SPADE identity; the path is mutable
+  path: string;          // absolute Windows path, as the user selected it
+  label?: string;
+  role?: "root" | "checkout" | string;   // descriptive only
 };
 </code></pre>
-<p>This lets an issue browser be associated with a repository before any worktree exists. The host and root folder are explicit project-creation inputs rather than being inferred later from a workspace.</p>
-<h4 id="selected-project-navigation-direction">Selected project navigation direction</h4>
-<p>SPADE uses one persisted global canvas. Each project is represented by an auto-sized <strong>Project container</strong>, which specializes the shared Group container with project identity, host/root metadata, activity state, and project actions.</p>
-<p>The sidebar is an activity overview and jump-to bar, not a canvas switcher:</p>
+<p>The motivating shape is a framework project containing several fixed checkouts that the framework's own version control ignores. SPADE models this as one project with several explicit folders. Nesting is allowed; SPADE does not infer parent-child folder relationships and does not care what any ignore file says. An agent's working directory is chosen from the project's folders.</p>
+<h4 id="project-creation-and-navigation">Project creation and navigation</h4>
+<p>SPADE uses one persisted global canvas. Each project is represented by an auto-sized <strong>Project container</strong>, a specialization of the shared Group container (§6) with project identity, its folders, and project actions.</p>
 <ul>
-<li>Its top action opens or creates a project by selecting a configured host and root folder.</li>
-<li>Its header summarizes activity with a status indicator, running count, and active work-item count.</li>
-<li>It lists projects with collapsible work-item rows and current activity/status.</li>
-<li>Selecting a project or work item immediately centers that container on the global canvas; it does not replace the canvas or restore a separate per-project viewport.</li>
+<li><code>Open project…</code> opens a native Windows folder picker, proposes the folder name as the project name, creates the Project and its container, and jumps to it. It is available on the empty canvas as an overlay and at the top of the sidebar.</li>
+<li>Further folders are added to the project with <code>Add folder…</code>; folders can be relabeled or removed. Removing a folder removes only the SPADE record.</li>
+<li>The sidebar is an overview and jump bar, not a canvas switcher. It lists projects, groups, and their running agents; selecting an entry centers that container on the global canvas.</li>
 </ul>
-<p>Projects may be positioned near one another or placed in user-created Group containers when they belong together. Spatial grouping does not alter project identity, host/root ownership, or work-item membership.</p>
-<h4 id="project-empty-state-and-creation">Project empty state and creation</h4>
-<p>When no projects exist, the global canvas remains visible and shows an <code>Open project…</code> action as a canvas overlay. The same action remains available at the top of the activity sidebar after projects exist.</p>
-<p>Project creation first selects the execution host, then a root folder on that host. SPADE derives a proposed name and Git metadata when available, allows confirmation, creates the Project record and Project container, and jumps to it.</p>
-<h3 id="4-5-logical-work-item">4.5 Logical work item</h3>
-<p>A WorkItem is the semantic Group specialization for an issue, request, investigation, or ad-hoc objective. It reuses Group hull geometry while adding explicit membership, source/task, status, and activity-sidebar presence. An ordinary Group remains a visual hull only: spatial containment does not assign work-item membership or status.</p>
-<pre><code class="language-ts">type WorkItem = {
+<h3 id="4-4-workspace">4.4 Workspace</h3>
+<p>A workspace is the concrete working directory an agent runs in.</p>
+<pre><code class="language-ts">type Workspace = {
   version: DomainRecordVersion;
   id: string;
   projectId: string;
-  title: string;
-  kind: &quot;github_issue&quot; | &quot;task&quot; | &quot;investigation&quot; | &quot;ad_hoc&quot;;
-  sourceUrl?: string;
-  sourceIdentifier?: string;
-  status: &quot;active&quot; | &quot;blocked&quot; | &quot;review&quot; | &quot;done&quot; | &quot;archived&quot;;
-  rootNodeId?: string;
+  folderId: string | null;      // the project folder it belongs to
+  cwd: string;
+  paseoWorkspaceId?: string;    // opaque Paseo identity
+  name: string;
   createdAt: string;
 };
 </code></pre>
-<p>Membership is explicit through <code>node.workItemId</code>, with automatic propagation only from durable facts:</p>
+<p>Rules:</p>
 <ul>
-<li>A node spawned from a WorkItem member inherits its <code>projectId</code> and <code>workItemId</code>.</li>
-<li>An agent or workspace created or attached through a WorkItem command receives that exact stable WorkItem ID.</li>
-<li>A managed descendant with an explicit durable parent relation inherits the root agent's WorkItem.</li>
-<li>A user may reassign membership, but normal workflows should not require manual grouping.</li>
+<li>Workspace identity is the opaque SPADE/Paseo ID. A path or Git branch is descriptive and may change; it never identifies a workspace.</li>
+<li>Membership is explicit through <code>node.workspaceId</code>; it is never inferred from an edge, a path, or a name.</li>
+<li>v1 agents run in a fixed project folder chosen by the caller. SPADE does not create worktrees.</li>
 </ul>
-<p>The canvas draws an auto-sized WorkItem hull around semantic members and projects the same record into the activity sidebar. Moving a node does not silently change membership. Titles, prompts, branches, paths, skill names, and creation order never determine membership or a workflow role.</p>
-<h3 id="4-6-connections">4.6 Connections</h3>
+<h3 id="4-5-group">4.5 Group</h3>
+<p>A Group is a user-created spatial hull with a title and color. It carries no status, source, or workflow meaning.</p>
+<pre><code class="language-ts">type Group = {
+  version: DomainRecordVersion;
+  id: string;
+  title: string;
+  color?: string;
+  parentGroupId: string | null;   // groups and Project containers can nest
+  position: { x: number; y: number };   // size is computed from members
+  collapsed: boolean;
+  createdAt: string;
+};
+</code></pre>
+<p>Membership is explicit: dropping a node or container onto a group, or choosing <code>Add to group</code>, sets <code>groupId</code>/<code>parentGroupId</code>; dragging it out or choosing <code>Remove from group</code> clears it. Merely overlapping a group never changes membership, and moving a group moves its members. Projects can be placed in groups without changing project identity.</p>
+<h3 id="4-6-connections">4.6 Connections and trees</h3>
 <pre><code class="language-ts">type CanvasEdge = {
   version: DomainRecordVersion;
   id: string;
-  fromNodeId: string;
-  toNodeId: string;
-  relation: &quot;spawned&quot; | &quot;delegated&quot; | &quot;references&quot; | &quot;derived&quot;;
+  fromNodeId: string;               // parent for "child"
+  toNodeId: string;                 // child for "child"
+  relation: "child" | "references";
+  origin?: "spawned" | "delegated" | "artifact";   // for "child"
+  sourceArtifact?: { kind: string; value: string };  // for origin "artifact"
   label?: string;
   createdAt: string;
 };
 </code></pre>
-<p>Relations:</p>
+<h4 id="tree-rules">The tree mechanic</h4>
+<p>One generic mechanic applies to every node type. Entity code never implements tree behavior.</p>
 <ul>
-<li><code>spawned</code>: the source node initiated creation of the target.</li>
-<li><code>delegated</code>: a parent agent created or owns a subagent.</li>
-<li><code>references</code>: the target was given the source as relevant context.</li>
-<li><code>derived</code>: the target artifact/result was produced from the source.</li>
+<li><code>child</code> edges form a forest: a node has at most one parent, cycles are rejected, and a node with no parent is a <strong>root</strong>. A <strong>tree</strong> is a root and all of its descendants.</li>
+<li>A <strong>branch</strong> is not a stored thing. It is the derived view of one child and everything below it, and it is what users collapse, move, or archive as a unit. It has no relation to a Git branch.</li>
+<li><code>origin</code> records how the child came to exist: <code>spawned</code> by the user from a node, <code>delegated</code> by an agent to a sub-agent, or created from an <code>artifact</code> inside a node (an image, a path, a link). Origin is descriptive and does not change tree behavior.</li>
+<li><code>references</code> edges are optional, non-tree context links (§9). They never affect tree structure.</li>
 </ul>
+<p>Every spawn-as-new-node gesture, whether from node chrome or from an artifact inside a node, asks for a <strong>target</strong>:</p>
+<ol>
+<li><strong>Child of the source node</strong> (default).</li>
+<li><strong>Pick a tree or node:</strong> attach as a child of any chosen node. Choosing a tree attaches to its root.</li>
+<li><strong>Start a new tree:</strong> create the node with no parent.</li>
+</ol>
+<p>Commands: <code>spawnChild(sourceNodeId, type, config, target, origin)</code>, <code>startTree(type, config, placement)</code>, <code>reparent(nodeId, newParentId | null)</code> (moves the whole branch; rejects cycles; <code>null</code> makes the node a new root), <code>collapseBranch</code> / <code>expandBranch</code> (hides descendants and shows a count), and <code>archiveBranch</code>.</p>
+<p>Removing a single node never deletes its children: they are promoted to the removed node's parent, or become roots if it had none. Deleting a whole branch is an explicit action. Removing a node removes only SPADE records.</p>
+<p>Sub-agents use the same mechanic. A managed sub-agent identified by Paseo's durable parent identity appears as a collapsed <code>child</code> node with origin <code>delegated</code>. A sub-agent can itself have children of any type, so a branch can start at a sub-agent and continue with images and web pages.</p>
 <p>Edges are provenance and context. They do not schedule, trigger, or stream live data.</p>
+<h3 id="4-7-persistence">4.7 Persistence and project safety</h3>
+<ul>
+<li>SPADE persists to its own application data directory (Electron <code>app.getPath("userData")</code>; on Windows, under <code>%APPDATA%</code>). It never persists into a project folder.</li>
+<li>A single main-process owner serializes all writes. Records are versioned, writes are atomic (write to a temporary file, then rename), and a migration keeps a backup of the previous data.</li>
+<li>SPADE never creates files, directories, marker files, ignore-file entries, or Git state inside a project folder. Its own operations on project folders are read-only. Reveal-in-Explorer and viewing images are reads. Files that agents create inside a folder belong to the agent's work, not to SPADE's state.</li>
+<li>Deleting a project, folder, group, or node removes only SPADE records and never deletes user files.</li>
+<li>Images and artifacts are referenced by path. When SPADE must hold its own copy (for example a pasted image), it stores it in an asset store inside application data and references it by asset ID.</li>
+<li>Paths are stored as selected and compared in a normalized, case-insensitive form. Windows drive letters, UNC paths, and long paths must be handled.</li>
+<li>The renderer receives no direct filesystem access; it issues typed commands through a sandboxed preload (see the architecture page).</li>
+</ul>
 <h2 id="5-entity-architecture">5. Entity architecture</h2>
 <h3 id="5-1-avoid-a-universal-crud-contract">5.1 Avoid a universal CRUD contract</h3>
 <p>The tentative <code>spawn / read / write / partial_read / render</code> contract is too generic:</p>
@@ -387,11 +375,11 @@
 <p>These operations apply to every entity:</p>
 <ol>
 <li><code>createNode(type, config, placement)</code></li>
-<li><code>spawnConnectedNode(sourceNodeId, type, config, relation)</code></li>
-<li><code>connectNodes(fromNodeId, toNodeId, relation)</code></li>
+<li><code>spawnChild(sourceNodeId, type, config, target, origin)</code> and <code>startTree(type, config, placement)</code> (§4.6)</li>
+<li><code>connectNodes(fromNodeId, toNodeId, "references")</code></li>
 <li><code>moveNode(nodeId, position)</code></li>
 <li><code>resizeNode(nodeId, size)</code></li>
-<li><code>setNodeWorkspace(nodeId, workspaceId | null)</code></li>
+<li><code>reparent(nodeId, newParentId | null)</code> and <code>setNodeWorkspace(nodeId, workspaceId | null)</code></li>
 <li><code>collapseNode(nodeId)</code> / <code>expandNode(nodeId)</code></li>
 <li><code>archiveNode(nodeId)</code> / <code>removeNode(nodeId)</code></li>
 <li><code>focusNode(nodeId)</code> / <code>fitNodes(nodeIds)</code></li>
@@ -409,46 +397,34 @@
 </thead>
 <tbody>
 <tr>
-<td>Terminal</td>
+<td>Agent</td>
+<td>Paseo session</td>
+<td>prompt, interrupt, resume, archive, answer permission, spawn child</td>
+<td>status, objective, selected messages, latest result</td>
+</tr>
+<tr>
+<td>Image</td>
+<td>Filesystem (or SPADE asset store)</td>
+<td>reveal in Explorer, reload, copy path, spawn child</td>
+<td>path, dimensions, optional caption</td>
+</tr>
+<tr>
+<td>Web page</td>
+<td>Electron guest</td>
+<td>navigate, back/forward, reload, open externally, extract selected page data</td>
+<td>URL, title, explicit page extract</td>
+</tr>
+<tr>
+<td>Terminal, later</td>
 <td>Paseo PTY</td>
 <td>create, send input, resize, capture, stop</td>
 <td>cwd, command, state, bounded output tail</td>
 </tr>
 <tr>
-<td>Agent</td>
-<td>Paseo session</td>
-<td>prompt, interrupt, resume, archive</td>
-<td>status, objective, selected messages, latest result</td>
-</tr>
-<tr>
-<td>Diff</td>
-<td>Workspace Git resource</td>
-<td>refresh, stage/unstage if added, commit, push, open PR, open file</td>
-<td>base/head, totals, selected changed files</td>
-</tr>
-<tr>
-<td>Browser</td>
-<td>Electron guest</td>
-<td>navigate, back/forward, reload, open external, extract selected page data</td>
-<td>URL, title, explicit page extract</td>
-</tr>
-<tr>
-<td>File editor</td>
+<td>File editor, later</td>
 <td>Filesystem + LSP</td>
-<td>read range, save, format, definition, references, open in IDE</td>
+<td>read range, save, definition, references, open in IDE</td>
 <td>path, revision, selected range/summary</td>
-</tr>
-<tr>
-<td>Whiteboard</td>
-<td>SPADE/tldraw document</td>
-<td>create shapes, update, export image/SVG, clear selection</td>
-<td>document summary, selected text/shapes/export</td>
-</tr>
-<tr>
-<td>Board, later</td>
-<td>SPADE board document</td>
-<td>create/update/move cards, assign links</td>
-<td>visible cards, selected card detail</td>
 </tr>
 </tbody>
 </table>
@@ -469,7 +445,7 @@
 <li>Node identity and persistence</li>
 <li>Generic node chrome</li>
 <li>Canvas position/size/collapse</li>
-<li>Workspace membership</li>
+<li>Project, group, and workspace membership</li>
 <li>Connections</li>
 <li>Minimap representation</li>
 <li>Common menus and navigation</li>
@@ -479,15 +455,15 @@
 <p>Canvas surfaces share one container contract rather than independently reimplementing movement, framing, and navigation controls.</p>
 <h3 id="container-hierarchy">Container hierarchy</h3>
 <ul>
-<li><strong>Group container:</strong> the reusable auto-sizing spatial container for related canvas members, including nested projects or work-item content.</li>
-<li><strong>Project container:</strong> a Group-container specialization that owns project identity, host/root metadata, project activity, and project actions. It must reuse Group geometry and interaction behavior.</li>
+<li><strong>Group container:</strong> the reusable auto-sizing spatial container for related canvas members, including nested projects and nodes.</li>
+<li><strong>Project container:</strong> a Group-container specialization that owns project identity, folders, and project actions. It must reuse Group geometry and interaction behavior.</li>
 <li><strong>Node wrapper:</strong> the common outer container around an entity renderer.</li>
 </ul>
-<p>Group containment communicates spatial organization. Semantic membership remains explicit through project and work-item identifiers; moving a container does not rewrite those identities.</p>
+<p>Group containment communicates spatial organization. Membership remains explicit (§4.5); moving a container does not rewrite identities.</p>
 <h3 id="container-owned-behavior">Container-owned behavior</h3>
 <ul>
 <li>Title, icon and short description</li>
-<li>Logical work-item color and workspace identity/role badge where relevant</li>
+<li>Group color and workspace label where relevant</li>
 <li>Runtime status and reconnect/error state</li>
 <li>Dedicated drag handle</li>
 <li>Canvas zoom-in/out remains available when the pointer is over container chrome or any non-interactive container surface</li>
@@ -507,7 +483,7 @@
 <h3 id="renderer-owned-behavior">Renderer-owned behavior</h3>
 <p>The entity renderer owns only the node body and entity-specific toolbar/actions.</p>
 <h3 id="interaction-rule">Interaction rule</h3>
-<p>Dragging starts only from node chrome. Editor selection, terminal input, browser interaction, scrolling, whiteboard gestures and links must not drag the node or pan the outer canvas. Canvas zoom-in/out remains available when the pointer is over Project, Group, work-item, or Node container surfaces, including node chrome. Containers with children preserve targetable gaps between those children; these navigation gutters route pan and zoom to the outer canvas even in dense layouts. A child renderer may consume wheel or pinch input only inside its interactive content; surrounding chrome, gutters, and non-interactive container space never become a canvas-navigation dead zone.</p>
+<p>Dragging starts only from node chrome. Editor selection, terminal input, browser interaction, scrolling, whiteboard gestures and links must not drag the node or pan the outer canvas. Canvas zoom-in/out remains available when the pointer is over Project, Group, or Node container surfaces, including node chrome. Containers with children preserve targetable gaps between those children; these navigation gutters route pan and zoom to the outer canvas even in dense layouts. A child renderer may consume wheel or pinch input only inside its interactive content; surrounding chrome, gutters, and non-interactive container space never become a canvas-navigation dead zone.</p>
 <p>Heavy interactive renderers should support:</p>
 <ul>
 <li>Inactive preview mode</li>
@@ -517,14 +493,54 @@
 <li>Disposal/unmount without losing the durable resource</li>
 </ul>
 <h2 id="7-required-initial-entities">7. Required initial entities</h2>
+<p>The first usable version has three entities: agent conversation, image, and web page. Everything else is deferred (§7.4).</p>
 <h3 id="7-1-agent-conversation">7.1 Agent conversation</h3>
 <ul>
 <li>Uses Paseo normalized events rather than scraping terminal ANSI.</li>
 <li>Renders Markdown, code, Mermaid, tool calls, file reads, edits, shell commands, permission prompts and results.</li>
-<li>Tool calls and file reads use expandable panes similar to Paseo.</li>
+<li>Tool calls and file reads use expandable panes.</li>
 <li>Supports prompts, interrupt/resume, model/mode display and attention state.</li>
-<li>Can spawn connected nodes from conversation content or generic node chrome.</li>
-<li>Can attach selected connected nodes as context.</li>
+<li>Spawn: the caller selects the project folder (working directory), provider, model, mode, and prompt. The mode default comes from a user setting; unattended runs depend on it.</li>
+<li>Can spawn child nodes from any message, artifact, or the generic node chrome, using the tree mechanic (§4.6).</li>
+<li>Can attach selected connected nodes as bounded context (§9).</li>
+</ul>
+<h4 id="rich-conversation-artifacts">Rich conversation artifacts</h4>
+<p>The conversation recognizes artifacts in agent and user messages and in tool output, and offers typed actions on each. Every action runs through a main-process command; the renderer never touches the filesystem or the shell.</p>
+<table>
+<thead>
+<tr>
+<th>Artifact</th>
+<th>Detected as</th>
+<th>Actions</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>File path</td>
+<td>Absolute Windows path, or path relative to a project folder, optionally with <code>:line</code></td>
+<td>Reveal in Explorer (selects the file), copy path; if it is an image, Open as Image node</td>
+</tr>
+<tr>
+<td>Folder path</td>
+<td>Same detection, existing directory</td>
+<td>Open in Explorer, copy path</td>
+</tr>
+<tr>
+<td>Image</td>
+<td>Image path, or image content produced by a tool or message</td>
+<td>Inline thumbnail with bounded height, enlarge, Spawn as Image node, Reveal in Explorer</td>
+</tr>
+<tr>
+<td>URL</td>
+<td>http/https link</td>
+<td>Spawn as Web page node, open in the default browser, copy</td>
+</tr>
+</tbody>
+</table>
+<ul>
+<li>Every <code>Spawn as…</code> action uses the target choice from §4.6: child of this conversation node (default), pick a tree or node, or start a new tree. The new node records origin <code>artifact</code> with the artifact locator.</li>
+<li>Paths are checked for existence lazily; missing paths render disabled rather than failing.</li>
+<li><strong>Invariant:</strong> files are only revealed, never launched. Only <code>showItemInFolder</code> is used for files; <code>openPath</code> is used only for directories, so a path in a message can never execute a program.</li>
 </ul>
 <h4 id="conversation-expansion-preferences">Conversation expansion preferences</h4>
 <p>Conversation panels use configurable default expansion by event/content type, with global defaults and an optional per-conversation override.</p>
@@ -544,108 +560,56 @@ const defaultConversationExpansion = {
   read: false,
 };
 </code></pre>
-<p>The same preference controls initial expansion only; users can always toggle individual panels without changing the default.</p>
+<p>The preference controls initial expansion only; users can always toggle individual panels without changing the default.</p>
 <h4 id="subagents">Subagents</h4>
 <ul>
-<li>Managed subagents appear as collapsed connected conversation nodes with <code>delegated</code> edges.</li>
-<li>Expanding follows or centers the linked node.</li>
-<li>The parent/subagent structure is a view over normal canvas nodes and edges, not a second graph model.</li>
-<li>Provider-native subagents collapse into their parent agent node as a subagent list. Each entry can open its conversation on demand as a <code>delegated</code> node; they are not placed on the canvas by default.</li>
+<li>Managed sub-agents appear as collapsed <code>child</code> nodes with origin <code>delegated</code> and are placed by the tree layout (§8).</li>
+<li>Expanding a sub-agent follows or centers the node.</li>
+<li>The agent/sub-agent structure is a view over normal nodes and edges, not a second graph model.</li>
+<li>Provider-native sub-agents collapse into their parent agent node as a list. Each entry can open its conversation on demand as a <code>delegated</code> child; they are not placed on the canvas by default.</li>
 </ul>
-<h3 id="7-2-terminal">7.2 Terminal</h3>
+<h3 id="7-2-image">7.2 Image</h3>
 <ul>
-<li>Real xterm.js terminal attached to Paseo terminal streaming.</li>
-<li>Workspace-scoped by default.</li>
-<li>Supports create, attach/reconnect, input, resize, capture and stop.</li>
-<li>Exposes only a bounded terminal tail to agent context unless explicitly expanded.</li>
+<li>Displays a local image file (PNG, JPEG, GIF, WebP, SVG) from its path, or from the SPADE asset store.</li>
+<li>Default size follows the image's aspect ratio within the legibility bounds in §8; the user can resize.</li>
+<li>Reloads when the file changes on disk. A missing or unreadable file shows an explicit state and keeps the node and its children.</li>
+<li>Actions: reveal in Explorer, copy path, open full-size, spawn child (tree mechanic).</li>
+<li>Large images are decoded lazily and downscaled for display; memory use is bounded by the performance strategy (§12).</li>
 </ul>
-<h3 id="7-3-diff-changes-explorer">7.3 Diff / Changes explorer</h3>
-<ul>
-<li>Workspace-bound view over Git state; the node does not own the Git state.</li>
-<li>Folder/file tree with aggregated <code>+</code> and <code>-</code> counts.</li>
-<li>File diff preview and navigation into file editor nodes.</li>
-<li>Shows base reference, branch/head, dirty state, current PR and checks.</li>
-<li>Primary workspace actions: commit, push, open PR, open existing PR, merge when appropriate.</li>
-<li>Can spawn browser nodes for related issue/PR/check URLs.</li>
-<li>Multiple diff views may later point to the same workspace; start with one canonical diff node per workspace.</li>
-</ul>
-<h3 id="7-4-browser">7.4 Browser</h3>
-<p>Browser sources:</p>
+<h3 id="7-3-browser">7.3 Web page</h3>
+<p>Web page sources:</p>
 <ol>
-<li>Normal remote pages, including GitHub escape-hatch destinations.</li>
-<li>Local application/dev-server pages.</li>
+<li>Normal remote pages.</li>
+<li>Local application and dev-server pages.</li>
 <li>SPADE/agent-generated artifacts.</li>
 </ol>
-<p>GitHub issues and pull requests use native SPADE entities as their primary presentation. Each retains <code>Open on GitHub</code>; repository and diff surfaces may also open a connected browser for the canonical remote URL.</p>
-<p>Remote pages and generated artifacts are different trust/rendering modes and should not share the same privilege model.</p>
-<h4 id="browser-rendering-architecture-to-prototype">Browser rendering architecture to prototype</h4>
+<p>Remote pages and generated artifacts are different trust/rendering modes and must not share a privilege model.</p>
+<h4 id="browser-rendering-architecture">Browser rendering architecture</h4>
 <ul>
-<li>A normal iframe cannot render many GitHub/remote pages because of <code>X-Frame-Options</code> and CSP.</li>
-<li>Electron <code>WebContentsView</code> is a native window child with window-relative bounds and cannot naturally participate in arbitrary React Flow transforms, clipping and stacking.</li>
-<li>Paseo currently uses Electron guest <code>&lt;webview&gt;</code> elements. SPADE should prototype a guest webview inside a transformed React Flow node before choosing it.</li>
-<li>Electron officially warns that <code>&lt;webview&gt;</code> has stability risks around rendering, navigation, and event routing and recommends alternatives where possible. Its use here is therefore a product-specific experiment, not a settled default.</li>
-<li>If guest webviews prove unreliable, fallback is a selected/expanded browser overlay or separate window synchronized to the chosen node—not one native view per arbitrary transformed node.</li>
+<li>A normal iframe cannot render many remote pages because of <code>X-Frame-Options</code> and CSP.</li>
+<li>Electron <code>WebContentsView</code> is a native child view with window-relative bounds and cannot participate in React Flow transforms, clipping and stacking. Do not use one per node.</li>
+<li>The P2 prototype selected the guest <code>&lt;webview&gt;</code>: it stayed live through pan, zoom, resize, clipping, stacking, reparenting, focus, keyboard, wheel, navigation, popup interception, remount and persistent sessions, including 20 simultaneous guests on native Windows. Electron still officially warns about <code>&lt;webview&gt;</code> stability; treat it as a monitored risk.</li>
+<li>If guest stability later fails, fall back to one selected/expanded native overlay or a separate window, with its limitations stated.</li>
 </ul>
-<p>The browser prototype must test zoom, pan, clipping, stacking, keyboard focus, scrolling, navigation, popups, downloads, session/profile handling, node reparenting and resource disposal.</p>
-<h3 id="7-5-file-editor">7.5 File editor</h3>
-<ul>
-<li>Monaco editor with syntax highlighting.</li>
-<li>Workspace-relative filesystem identity.</li>
-<li>Save and revision/conflict handling.</li>
-<li>LSP go-to-definition and find-references through a workspace LSP service.</li>
-<li>Markdown preview mode with Mermaid.</li>
-<li><code>Open in IDE</code> action including path, line and column.</li>
-<li>VS Code via <code>code -g path:line:column</code> is the first supported external IDE path; keep command templates configurable later.</li>
-</ul>
-<h3 id="7-6-whiteboard-deferred">7.6 Whiteboard, deferred</h3>
-<p>Do not include a whiteboard in the first issue-workflow prototype. If observed workflows demonstrate a need:</p>
-<ul>
-<li>Embed tldraw as an entity inside a React Flow node.</li>
-<li>Keep its camera and gestures local while active.</li>
-<li>Persist the tldraw document, not the live editor instance.</li>
-<li>Allow project or work-item scope; bind it to a workspace only when useful.</li>
-<li>Give agents a textual/shape summary or explicit export instead of automatically attaching the complete scene.</li>
-</ul>
-<h3 id="7-7-task-board-later">7.7 Task board, later</h3>
-<p>A Trello-style board is a SPADE-owned structured entity:</p>
-<ul>
-<li>Columns and cards</li>
-<li>Card descriptions/status</li>
-<li>Links to issue, agent, workspace, diff and PR nodes</li>
-<li>Agent-readable summary and selected card detail</li>
-<li>Typed actions for card creation/update/move</li>
-</ul>
-<p>Do not implement it as arbitrary whiteboard shapes if agents need reliable structured reads/writes.</p>
-<h2 id="8-workspace-and-git-workflow">8. Workspace and Git workflow</h2>
-<h3 id="8-1-recommended-creation-flow">8.1 Recommended creation flow</h3>
-<p>P3 selects this workflow-agnostic contract:</p>
+<p>Popups are denied and navigate the same guest. Guest sessions use a persistent partition. Long-duration, crash-recovery, and download behavior are untested and must be verified by the implementation.</p>
+<h3 id="7-4-deferred-entities">7.4 Deferred entities</h3>
+<p>Terminal, file editor (Monaco with LSP), diff/changes, whiteboard, task board, and GitHub issue/pull-request entities are not part of the first usable version. Their earlier designs remain in this page's Git history and in the merged prototypes. Add them through the entity registry when real use shows a need.</p>
+<h2 id="8-workspace-and-git-workflow">8. Default layout and placement</h2>
+<p>Layout is a first-class requirement. A user should be able to spawn agents, sub-agents, images, and pages and read everything without rearranging first. Users will move nodes; automatic layout only decides where <em>new</em> nodes start.</p>
+<h3 id="layout-rules">Rules</h3>
 <ol>
-<li>User selects a Project or WorkItem in the activity sidebar and SPADE jumps to its container. A missing Project is opened from an explicit host and root folder.</li>
-<li>User opens a native GitHub Issue entity, or creates an ad-hoc objective.</li>
-<li>A typed command creates a WorkItem with explicit task, source, and status.</li>
-<li>A separate typed command creates or attaches a workspace and spawns or attaches a root agent into that exact WorkItem ID with caller-selected cwd, provider, model, and prompt. A spawned agent runs either in the local checkout or in a new worktree; the caller chooses.</li>
-<li>SPADE persists returned opaque agent/workspace identities and the root binding before fallible authoritative refresh.</li>
-<li>Managed descendants join the same WorkItem only through explicit durable parent identity; additional workspaces remain opaque facts.</li>
-<li>The WorkItem hull and activity-sidebar row project semantic membership without requiring manual canvas grouping.</li>
+<li><strong>Legible default sizes.</strong> Each entity declares a default size that is readable at 100% zoom. Initial values, to be tuned during the build: agent conversation 640×720; collapsed agent 320×96; web page 960×640; image scaled to its aspect ratio with its longest side 560 (minimum shortest side 240); containers size to their members.</li>
+<li><strong>Reserved space.</strong> A placed node reserves its presented size plus spacing. Initial spacing: 96 between siblings and 160 between a parent and its children; trees are separated by at least 240.</li>
+<li><strong>Collapsed nodes reserve their expanded footprint.</strong> Expanding a node or branch must never overlap a neighbor.</li>
+<li><strong>Never overlap.</strong> No newly placed node may overlap any existing node, group hull, or container. When the natural slot is taken, the nearest free slot in the growth direction is used.</li>
+<li><strong>Trees grow rightward.</strong> A child is placed to the right of its parent. Siblings stack vertically in creation order. Placement is subtree-aware: space is reserved for the extent of earlier siblings' subtrees so later siblings never land on them.</li>
+<li><strong>New roots</strong> go in the first free slot below the existing content of the target container, left-aligned.</li>
+<li><strong>User position is authoritative.</strong> Automatic layout never moves a node the user has placed or moved. A later explicit <code>Tidy branch</code> command may re-lay out one branch on request; it is not required for v1.</li>
+<li><strong>Containers fit and keep gutters.</strong> Groups and projects auto-fit their members with padding and preserve the navigation gutters of §6.</li>
+<li><strong>Viewport on spawn.</strong> After a user-initiated spawn, the canvas centers the new node at a readable zoom; it does not fit-all. Nodes created by agents (sub-agents) never take over the viewport.</li>
 </ol>
-<p>This contract does not require SPADE to understand <code>paseo-issue-to-pr</code> or any implementation/review/fix stages. The P3 run exercised root creation but did not present descendants: the adapter identified itself with a non-semver <code>appVersion</code>, and Paseo 0.4 hides agents from providers other than claude/codex/opencode from such clients, and every agent in the run used the <code>pi</code> provider. The adapter now sends a semver <code>appVersion</code> (Paseo client 0.14.0), and live Claude root-plus-child validations on 0.9.2 and 0.14.0 reconciled the exact parent. The first full Claude re-run on 0.14.0 stalled at the root's first tool request because Paseo started it in an asking permission mode and SPADE has no permission surface. The spawn command now carries a caller-selected mode, which the P3 shell defaults to <code>bypassPermissions</code>; with it, two full re-runs reached descendants without prompts. Paseo 0.14 also hides agent-created <em>background</em> workspaces, and the agents in them, from lists and update subscriptions unless the client opts in, so the adapter now requests background resources explicitly.</p>
-<h3 id="8-2-paseo-workflow-skill-behavior">8.2 Paseo workflow skill behavior</h3>
-<p>The unchanged bounded workflow produced one managed root, four managed descendants, and five opaque workspaces. Every descendant exposed the root's explicit durable parent ID, and every agent referenced one exact workspace. SPADE must preserve those facts without deriving roles or stages from titles, branches, paths, prompts, skill names, or ordering.</p>
-<p>P3 did not establish a complete tree in the integrated UI: exact-root refresh returned <code>Agent not found</code> because the daemon's provider-visibility gate hid the <code>pi</code> agents from SPADE's session, provider-native discovery was unavailable, and four descendant workspaces required the existing generic attach action for presentation. Claude re-runs on Paseo 0.14.0 then presented the tree: the integrated shell reconciled the root, two managed descendants with exact delegated edges, and three opaque workspaces with no errors (see §8.1). Paseo 0.14 also exposes provider-native subagents for loaded, unarchived agents; P3 now presents them with exact delegated edges, validated live with a Claude sub-agent. Subagents of closed or archived agents cannot be read without resuming the agent, so P3 retains them as stale. SPADE requires provider-native child identities from Paseo; it does not add skill-specific stage metadata as a prerequisite for grouping.</p>
-<h3 id="8-3-diff-semantics">8.3 Diff semantics</h3>
-<p>At creation, retain:</p>
-<ul>
-<li>Selected base ref</li>
-<li>Resolved base revision, if available</li>
-<li>Workspace checkout identity</li>
-<li>Current head branch/ref</li>
-</ul>
-<p>The Changes node should clearly state what comparison it is showing. A prototype must decide whether the default comparison tracks the moving base branch, the creation-time base revision, or Git merge-base semantics. Do not hide this in the branch name.</p>
-<h3 id="8-4-logical-grouping-and-workspace-presentation">8.4 Logical grouping and workspace presentation</h3>
-<p>The colored WorkItem container represents the <strong>logical work item</strong>, not each operational workspace. It specializes shared Group hull geometry with status, explicit semantic membership, source/task context, and activity-sidebar presence.</p>
-<p>A Project container automatically fits its WorkItems and project-scoped nodes. A WorkItem automatically fits nodes carrying its <code>workItemId</code>. Ordinary user-created Groups remain visual hulls: their movement and containment do not rewrite Project or WorkItem identity.</p>
-<p>Automatic placement never overlaps nodes: every placed node reserves its presented size plus spacing, and WorkItem and Group hulls reserve their fitted extents. P3 preserved five opaque workspace identities without semantic lanes, but its fixed slot grid was smaller than native entity sizes and placed one workspace beneath the PullRequest node. That was a placement defect, not evidence for adding workflow-stage types; P3 placement now reserves each node's presented size plus spacing.</p>
-<p>Workspace identity remains visible through node badges, a workspace inspector, and optional nested accents. Selecting a workspace badge can highlight every node using that checkout and expose branch, cwd, base ref, dirty state, role, and lifecycle.</p>
+<h3 id="layout-implementation">Implementation constraint</h3>
+<p>Placement is one pure, deterministic function over the existing rectangles, the parent, and the new node's size. It lives in shared code and is tested directly. Entity renderers never compute positions.</p>
 <h2 id="9-context-passed-to-agents">9. Context passed to agents</h2>
 <p>Connections do not automatically inject unlimited content. SPADE builds an explicit, bounded context projection.</p>
 <pre><code class="language-ts">type AgentContextReference = {
@@ -653,7 +617,7 @@ const defaultConversationExpansion = {
   node_id: string;
   node_name: string;
   short_description?: string;
-  relation: &quot;spawned&quot; | &quot;delegated&quot; | &quot;references&quot; | &quot;derived&quot;;
+  relation: "child" | "references";
   workspace?: {
     id: string;
     cwd: string;
@@ -689,10 +653,9 @@ const defaultConversationExpansion = {
 <li>Syntax-highlighted code</li>
 <li>Mermaid</li>
 <li>Tables, callouts and structured lists</li>
-<li>File references</li>
 <li>Tool-call/read/edit/shell panes</li>
 <li>Diff blocks</li>
-<li>Links that can open or spawn browser/file nodes</li>
+<li>File, folder, image, and link references with the actions in §7.1</li>
 </ul>
 <h3 id="custom-html-javascript-blocks">Custom HTML/JavaScript blocks</h3>
 <p>Agents may return complete custom HTML/JavaScript answer blocks. Render them in an <strong>unsandboxed iframe or separate document runtime</strong> so scripts execute and CSS/runtime lifecycle does not collide accidentally with the React application. The iframe boundary is for composition and resetability, not a v1 security boundary.</p>
@@ -733,25 +696,25 @@ const defaultConversationExpansion = {
 <li>Allow canvas zoom-in/out over every container's chrome and non-interactive surface</li>
 <li>Preserve navigation gutters between contained elements for outer-canvas pan and zoom</li>
 <li>Expose <code>Fit</code> and <code>Full height</code> controls on every Project container, Group container, and Node wrapper</li>
-<li>Jump immediately to a project or work item from the activity sidebar</li>
+<li>Jump immediately to a project or group from the sidebar</li>
 <li>Center/focus a node</li>
 <li>Follow an edge to its source/target</li>
 <li>Back/forward focus history</li>
 <li>Search nodes by title/type/project/workspace/status</li>
 <li>Keyboard navigation between related nodes</li>
 <li>Breadcrumb or current-focus indicator</li>
-<li>Minimap overview with work-item colors, project containers, higher-level groups, and node-type icons</li>
+<li>Minimap overview with group colors, project containers, higher-level groups, and node-type icons</li>
 </ul>
 <h3 id="minimap-and-level-of-detail">Minimap and level of detail</h3>
 <p>React Flow's minimap is SVG-only and should show simplified node representations.</p>
 <p>At overview zoom:</p>
 <ul>
 <li>Hide heavy node bodies.</li>
-<li>Show title, type, status, work-item color, and compact workspace role when relevant.</li>
+<li>Show title, type, status, group color, and compact workspace label when relevant.</li>
 <li>Keep group boundaries and meaningful edges visible.</li>
 <li>Allow minimap click/drag to center quickly.</li>
 </ul>
-<p>The exact zoom thresholds must be tuned in a prototype; do not hard-code product semantics around an arbitrary initial value.</p>
+<p>The exact zoom thresholds must be tuned during the build; do not hard-code product semantics around an arbitrary initial value.</p>
 <h3 id="performance-strategy">Performance strategy</h3>
 <ul>
 <li>Lazy-mount Monaco, tldraw, xterm and browser renderers.</li>
@@ -779,43 +742,27 @@ const defaultConversationExpansion = {
   -&gt; unmodified Paseo daemon
 </code></pre>
 <p>Do not spread direct protocol calls through entity renderers.</p>
+<h3 id="recoverable-adapter-behavior">Recoverable adapter behavior</h3>
+<p>The merged P3 prototype already solved the generic parts of this boundary against Paseo 0.14.0. The production adapter is built by copying and generalizing it, dropping everything GitHub-, issue-, pull-request-, and checkout-specific. Behavior to keep:</p>
+<ul>
+<li>One daemon connection with explicit readiness and reconnect.</li>
+<li>Identify the client with a semver <code>appVersion</code>; a non-semver value hides non-legacy providers from the session.</li>
+<li>Request background workspaces; Paseo 0.14 requires this opt-in.</li>
+<li>Exact agent reads, spawn with caller-selected cwd/provider/model/mode/prompt, prompt, interrupt, archive.</li>
+<li>Durable provider-native sub-agent identity and parent relations, mapped to <code>child</code> edges.</li>
+<li>Normalized, bounded timelines that tolerate changed epochs/ranges after a daemon restart.</li>
+<li>Pending permissions presented on the agent node and answered through a generic command.</li>
+<li>Persisting opaque agent and workspace identities before any fallible refresh, so restarts never duplicate nodes.</li>
+</ul>
 <h3 id="known-technical-risk">Known technical risk</h3>
-<p>The public Paseo SDK facade (0.14.0) covers agents, workspaces, providers and config, but the P3 prototype required one confined internal <code>DaemonClient</code> boundary to share a connection with checkout RPCs. The full runs also exposed a client-version gate on provider visibility (fixed by sending a semver <code>appVersion</code>), an opt-in gate on background workspaces in 0.14 (fixed by requesting them), unavailable provider-native discovery, and changing bounded timeline epochs/ranges after daemon restart. SPADE keeps these dependencies isolated and requires the Paseo capabilities it uses: connection/readiness, exact agent reads, provider-native subagent identity, normalized timelines, selected-workspace checkout, and typed PR status.</p>
+<p>The public Paseo SDK facade (0.14.0) covers agents, workspaces, providers and config, but P3 needed one confined internal <code>DaemonClient</code> boundary to share a connection. Provider-native discovery is unavailable on some providers; provider-native sub-agents are read only from loaded, unarchived agents, so complete-tree coverage after archival is unproven. A full Claude run stalled on 0.14 and was not diagnosed. SPADE keeps these dependencies isolated.</p>
 <h3 id="plugin-boundary">Plugin boundary</h3>
 <p>Paseo's plugin system may be useful for daemon-side SPADE RPCs later, but a complete React Flow shell does not fit naturally as a Paseo sidebar plugin. SPADE remains a separate frontend.</p>
-<h2 id="14-github-scope">14. GitHub scope</h2>
-<h3 id="initial-github-functionality">Initial GitHub functionality</h3>
-<p>GitHub Issues and PullRequests are native SPADE entities. Their provider adapter reads structured issue/PR state, checks, reviews/comments, exact external identity, and canonical URLs through the user's authenticated <code>gh</code> session. Each native entity retains <code>Open on GitHub</code>.</p>
-<p>Keep these reads separate from selected-workspace Git/forge mutations:</p>
-<ul>
-<li>Paseo owns workspace status, diff, commit, push, pull-request creation, and pull-request status operations.</li>
-<li>SPADE owns typed commands, serialized ledger mutation, exact GitHub-to-node reconciliation, presentation, and provenance edges.</li>
-<li>The renderer receives neither credentials nor arbitrary GitHub, filesystem, terminal, or daemon access.</li>
-</ul>
-<p>This initial direction does not require a dedicated SPADE GitHub App.</p>
-<h3 id="later-github-app-functionality">Later GitHub App functionality</h3>
-<p>Add a GitHub App when SPADE needs:</p>
-<ul>
-<li>Organization/repository installation</li>
-<li>Webhooks and background reactions</li>
-<li>Checks API annotations</li>
-<li>Server-side issue/PR automation</li>
-<li>Multi-user hosted authorization</li>
-</ul>
-<p>Use Octokit rather than hand-written REST/GraphQL clients.</p>
-<h2 id="15-full-ide">15. Full IDE</h2>
-<p>Do not embed a full IDE initially.</p>
-<p>Provide a generic <code>Open in IDE</code> action for:</p>
-<ul>
-<li>Workspace root</li>
-<li>File</li>
-<li>File at line/column</li>
-</ul>
-<p>Initial implementation target:</p>
-<ul>
-<li>VS Code desktop with Remote-WSL-compatible paths.</li>
-</ul>
-<p>Later configuration can register command templates for Cursor, Zed, WebStorm, OpenVSCode Server, or other editors.</p>
+<h2 id="14-github-scope">14. GitHub and Git scope</h2>
+<p>None in v1. SPADE has no GitHub adapter, no <code>gh</code> dependency, no issue or pull-request entities, and no diff, commit, push, or merge surfaces. Agents may use Git freely inside their working directory; SPADE neither requires nor models it.</p>
+<p>The prior GitHub entities, adapter, reconciliation, and checkout operations exist only in the merged P3 prototype for reference. If they return, they return as ordinary entities registered through §5, not as a built-in workflow.</p>
+<h2 id="15-full-ide">15. Full IDE and file explorer</h2>
+<p>Do not embed a full IDE. In v1, SPADE provides <strong>Reveal in Explorer</strong> for files and folders (§7.1) using the Windows file explorer. An <code>Open in IDE</code> action is deferred; when added it targets VS Code on Windows paths (<code>code -g path:line:column</code>) with configurable command templates for other editors.</p>
 <h2 id="16-desktop-shell-and-browser-rendering">16. Desktop shell and browser rendering</h2>
 <h3 id="why-webcontentsview-does-not-behave-like-a-react-flow-node">Why <code>WebContentsView</code> does not behave like a React Flow node</h3>
 <p>React Flow pans and zooms its renderer DOM with a CSS transform matrix. Electron <code>WebContentsView</code> is not a DOM child: it is a native/main-process child view attached to the application window and controlled through rectangular window-relative <code>{ x, y, width, height }</code> bounds.</p>
@@ -847,8 +794,7 @@ const defaultConversationExpansion = {
 <li>Electron officially warns that <code>&lt;webview&gt;</code> has stability risks in rendering, navigation, and event routing</li>
 </ul>
 <h3 id="current-recommendation">Current recommendation</h3>
-<p>Keep Electron as the baseline and prototype <code>&lt;webview&gt;</code> inside one transformed React Flow node. Tauri does not solve the defining problem, so do not switch shells before this result. If <code>&lt;webview&gt;</code> fails, compare bounds-synchronized selected-node overlays in Electron and Tauri only if Tauri's footprint/system-webview trade-off is otherwise valuable.</p>
-<p>The exact browser-node implementation remains blocked on this prototype.</p>
+<p>Electron remains the shell and the Web page node uses the guest <code>&lt;webview&gt;</code> selected by P2 (§7.3). Tauri solves none of the defining composition problems and is not planned. P2 passkey authentication succeeded on native Windows, which is the only supported platform.</p>
 <h2 id="17-licensing">17. Licensing</h2>
 <p>Licensing is out of scope for now. The priority is a SPADE that works, so Paseo and tldraw license terms do not gate prototypes, integration, or architecture decisions.</p>
 <h2 id="18-paseo-versus-emdash">18. Paseo versus Emdash</h2>
@@ -906,123 +852,92 @@ const defaultConversationExpansion = {
 </tbody>
 </table>
 <p>They are adjacent products solving parallel-agent/worktree UX. Calling Paseo a derivative would require root-history and source-similarity analysis; feature similarity is insufficient.</p>
-<h2 id="19-prototypes">19. Prototypes</h2>
-<h3 id="p1-project-navigation-and-minimal-complete-issue-workflow">P1 — Project navigation and minimal complete issue workflow</h3>
-<p>Build the smallest React Flow desktop prototype that exercises the selected global-canvas direction rather than real agent execution. Use deterministic mock adapters and one shared data model.</p>
-<p>Provide:</p>
-<ul>
-<li>One global canvas with auto-sized Project containers.</li>
-<li>An activity overview/jump sidebar with an <code>Open project…</code> action, activity summary, collapsible projects, and collapsible work items.</li>
-<li>An empty-canvas <code>Open project…</code> overlay when no projects exist.</li>
-<li>Host and root-folder selection during project creation.</li>
-<li>User-created Group containers that can spatially organize related Project containers.</li>
-<li><code>Fit</code> and <code>Full height</code> controls on Project containers, Group containers, and Node wrappers.</li>
-</ul>
-<p>Inside the global view, run this complete mocked issue workflow:</p>
-<ol>
-<li>Open or create a project from a selected host and root folder.</li>
-<li>Open a GitHub issue browser node.</li>
-<li>Select <code>Implement</code> to create a logical work item.</li>
-<li>Spawn an integrator agent and workspace.</li>
-<li>Simulate two review-round workspaces and two fixer workspaces, matching the current <code>paseo-issue-to-pr</code> shape.</li>
-<li>Spawn collapsed delegated subagent nodes.</li>
-<li>Update one diff node with folder/file <code>+</code>/<code>-</code> statistics.</li>
-<li>Transition the work item through active → review → done and reflect it in the activity sidebar.</li>
-<li>Create a PR browser node and collapse retired operational stages.</li>
-</ol>
-<p>Validate:</p>
-<ul>
-<li>Shared Group geometry with Project-specific metadata/actions</li>
-<li>Automatic Project/work-item bounds and <code>projectId</code>/<code>workItemId</code> inheritance</li>
-<li>Workspace role/branch/cwd badges without workspace-colored clutter</li>
-<li>Save/reload of global layout, spatial groups, edges, focus, and membership</li>
-<li>Activity counts and instant project/work-item jumps</li>
-<li>Minimap, focus history, <code>Fit</code>, and <code>Full height</code></li>
-<li>Configurable conversation expansion defaults</li>
-</ul>
-<p>Pass criteria:</p>
-<ul>
-<li>Completing the workflow requires no manual movement into semantic groups.</li>
-<li>All five simulated operational workspaces remain discoverable under one logical issue.</li>
-<li>A sidebar project/work-item action jumps to the correct global-canvas container without changing canvas mode.</li>
-<li>Project containers reuse Group behavior and automatically refit after member movement.</li>
-<li>Spatially grouping projects does not change project or work-item identity.</li>
-<li>The empty state and sidebar project actions both complete host/root selection.</li>
-<li>Any node can spawn a connected node and inherited membership is predictable.</li>
-</ul>
-<h3 id="p2-electron-browser-and-custom-answer-composition">P2 — Electron browser and custom-answer composition</h3>
-<p>Embed in React Flow:</p>
-<ul>
-<li>One Electron <code>&lt;webview&gt;</code> showing GitHub</li>
-<li>One bounds-synchronized <code>WebContentsView</code> overlay as a comparison, only if inexpensive</li>
-<li>Markdown + Mermaid</li>
-<li>One unsandboxed HTML/JavaScript answer with form input and plan annotations</li>
-</ul>
-<p>Validate:</p>
-<ul>
-<li>CSS pan/zoom/resize/clipping/stacking for <code>&lt;webview&gt;</code></li>
-<li>Native overlay synchronization and known visual limitations</li>
-<li>Focus, keyboard, wheel, popup, navigation, session, and node-reparent behavior</li>
-<li>Custom answer mount/reload/dispose lifecycle</li>
-<li><code>window.spade.submit</code> and <code>window.spade.annotate</code> round-trip into a mock conversation</li>
-<li>Drag only from node chrome</li>
-</ul>
-<p>Pass criteria:</p>
-<ul>
-<li>Select the browser composition model or prove that browsers must expand into an overlay/window.</li>
-<li>Determine whether Electron <code>&lt;webview&gt;</code> is stable enough despite its official warning.</li>
-<li>Do not build a Tauri version unless Electron fails or application footprint becomes a controlling product requirement; Tauri's native webview has the same bounds model.</li>
-<li>Rich HTML can collect user feedback and create a deterministic follow-up message.</li>
-</ul>
-<h3 id="p3-real-paseo-issue-to-pr-bridge">P3 — Real Paseo issue-to-PR bridge</h3>
-<p>The bounded real run used the native Issue surface and generic WorkItem/root-agent commands to launch the unchanged <code>paseo-issue-to-pr</code> prompt. It created open fixture PR #7 and rendered a native PullRequest entity without adding stage metadata or changing the skill.</p>
-<p>Proven facts:</p>
-<ul>
-<li>Five managed agent IDs, five opaque workspace IDs, all explicit managed parent/workspace mappings, SPADE node/resource/edge IDs, and GitHub identities survived SPADE and Paseo restarts without duplicates.</li>
-<li>Native Issue/PullRequest surfaces exposed task source, PR state, head/base/revision, checks, reviews/comments, provenance, and <code>Open on GitHub</code>.</li>
-<li>One confined Paseo adapter/internal-client boundary and separate GitHub read/reconciliation boundary were sufficient for the exercised operations.</li>
-</ul>
-<p>Unresolved findings:</p>
-<ul>
-<li>Integrated exact-agent refresh failed because the adapter identified itself with a non-semver <code>appVersion</code>, and Paseo 0.4 hides agents from providers other than claude/codex/opencode from such clients, so four managed descendant agent nodes and delegated edges were not presented. The adapter now sends a semver <code>appVersion</code> (client 0.14.0) and requests background workspaces; Claude re-runs on 0.14.0 presented the root, two managed descendants, their delegated edges, and three workspaces.</li>
-<li>Pending permissions are presented on the agent node and answered through a generic command; unattended runs still depend on the spawn mode (shell default <code>bypassPermissions</code>) and on the workflow passing a mode to the agents it launches itself.</li>
-<li>Provider-native subagents are read only from loaded, unarchived agents; rows under closed or archived parents are retained as stale, so complete-tree coverage after archival is not proved.</li>
-<li>Paseo restart preserved agent/workspace identity but changed bounded timeline epochs/ranges and transient lifecycle state.</li>
-<li>One workspace remained in the ledger but was visually covered by the PullRequest node; §8.4 now requires non-overlapping placement, which P3 applies to newly placed nodes.</li>
-<li>Fixture PR #7 has valid build/render evidence, but workflow/scope acceptance is unresolved because a published artifact-removal finding remains unfixed.</li>
-</ul>
-<p>These results select workflow-agnostic explicit identity and native GitHub entities. They do not establish SPADE knowledge of <code>paseo-issue-to-pr</code> stages.</p>
-<h3 id="p4-editor-lsp-and-external-ide-handoff">P4 — Editor/LSP and external IDE handoff</h3>
-<p>Validate two initial languages in a real worktree:</p>
-<ul>
-<li>Monaco open/save</li>
-<li>Go to definition</li>
-<li>Find references</li>
-<li>Opening result in another file node</li>
-<li>Markdown preview with Mermaid</li>
-<li>External VS Code open at file/line/column</li>
-<li>WSL path handling</li>
-</ul>
-<h2 id="20-proposed-implementation-sequence">20. Proposed implementation sequence</h2>
-<ol>
-<li>P1 global-canvas project management and minimal complete issue-workflow prototype.</li>
-<li>Harden the shared Group container, Project specialization, activity sidebar, project creation, and container view controls selected by P1.</li>
-<li>P2 Electron browser/custom-answer composition prototype.</li>
-<li>Decide browser implementation; consider Tauri only if Electron fails or footprint becomes decisive.</li>
-<li>P3 real Paseo integration prototype with multiple operational workspaces under one work item.</li>
-<li>Finalize entity registry and ADE-aware workflow metadata contracts from observed requirements.</li>
-<li>P4 editor/LSP prototype.</li>
-<li>Build the first cohesive real issue-to-PR vertical slice.</li>
-<li>Add task board after node context/action semantics stabilize.</li>
-<li>Reconsider tldraw only when real workflows demonstrate a whiteboard need.</li>
-<li>Revisit hosted deployment, GitHub App and execution isolation later.</li>
-</ol>
+<h2 id="19-prototypes">19. Prototype outcomes and recoverable code</h2>
+<p>The prototypes answered their questions. They remain in the repository as reference and are merged to <code>main</code>. Do not extend them and do not import from them; copy and generalize into <code>src/</code>.</p>
+<table>
+<thead>
+<tr>
+<th>Prototype</th>
+<th>Outcome</th>
+<th>What carries forward</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>P1: global canvas and project navigation (mock)</td>
+<td>One global canvas with auto-sized project containers, a sidebar jump surface, and shared Group geometry works.</td>
+<td>Group/Project container model, sidebar, <code>Fit</code> / <code>Full height</code>, focus history. WorkItem, status, and issue-workflow parts are dropped.</td>
+</tr>
+<tr>
+<td>P2: Electron browser and custom answer</td>
+<td>Guest <code>&lt;webview&gt;</code> selected; one <code>WebContentsView</code> per node rejected; rich HTML bridge works (<code>window.spade.submit</code> / <code>annotate</code>).</td>
+<td><code>prototypes/electron-browser-custom-answer/</code>: <code>BrowserNode.tsx</code>, <code>guestWebview.ts</code>, <code>RichAnswerNode.tsx</code>, <code>PrototypeNodeFrame.tsx</code>, <code>MermaidDiagram.tsx</code>, main-process popup/partition policy. Its README holds the evidence.</td>
+</tr>
+<tr>
+<td>P3: real Paseo issue-to-PR bridge (Paseo 0.14.0)</td>
+<td>Opaque agent/workspace identity survives restarts; one confined adapter was sufficient. The issue-to-PR workflow is abandoned as a product direction.</td>
+<td><code>prototypes/paseo-issue-to-pr-bridge/</code>: <code>main/SpadePaseoAdapter.ts</code>, <code>shared/paseoReconciliation.ts</code>, <code>main/ledgerStore.ts</code>, <code>main/paseoComposition.ts</code>, the generic command-service and IPC patterns. GitHub adapters, reconciliation, PullRequest/Issue entities, checkout operations, and the stage assumptions are not carried forward.</td>
+</tr>
+<tr>
+<td>P4: editor/LSP and IDE handoff</td>
+<td>Never started and no longer scheduled.</td>
+<td>None. Revisit with the deferred file editor.</td>
+</tr>
+</tbody>
+</table>
+<p>Unresolved P3 findings that still bear on the agent brick: a full Claude run stalled on Paseo 0.14, sub-agent coverage after parent archival is unproven, and timeline epochs/ranges change after a daemon restart.</p>
+<h2 id="20-proposed-implementation-sequence">20. Implementation sequence</h2>
+<p>The first usable version is bricks B1 to B6, built in this order. Each brick is its own issue and pull request, ends with a working application, and follows the repository's verification rules. Build in <code>src/</code> on the existing entity registry and canvas commands; update <code>docs/foundation.html</code> and <code>docs/architecture.html</code> as each brick lands.</p>
+<table>
+<thead>
+<tr>
+<th>Brick</th>
+<th>Scope</th>
+<th>Done when</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+<td>B1 Persistence and projects</td>
+<td>App-data store (§4.7); Project and ProjectFolder records; <code>Open project…</code> with native folder picker; <code>Add folder…</code>; Project container; sidebar with jump; empty-state overlay. Remove the mock WorkItem concept from the shared model.</td>
+<td>Open a folder, add two more folders, quit, relaunch, and find the same canvas. No file was created in any project folder.</td>
+</tr>
+<tr>
+<td>B2 Grouping</td>
+<td>Group container, explicit membership by drop/menu, nesting including projects, auto-fit, <code>Fit</code> and <code>Full height</code>, navigation gutters, minimap.</td>
+<td>Group two projects, move the group, remove one project from it; identities and positions persist across relaunch.</td>
+</tr>
+<tr>
+<td>B3 Tree mechanic and layout</td>
+<td><code>child</code> edges, <code>spawnChild</code> / <code>startTree</code> / <code>reparent</code> / collapse / archive branch, target picker (child of source, pick tree or node, new tree), removal promotes children, and the §8 placement function with its tests. Verified with the existing mock note node.</td>
+<td>Spawn 20 nodes across several trees; none overlap, each is readable at 100% zoom, and a user-moved node is never repositioned.</td>
+</tr>
+<tr>
+<td>B4 Viewer nodes</td>
+<td>Image node and Web page node from §7.2 and §7.3, using the tree mechanic. Open an image or URL as a node from the canvas.</td>
+<td>Open an image and a page; both persist and reload; the page survives pan, zoom, and resize.</td>
+</tr>
+<tr>
+<td>B5 Agents and sub-agents</td>
+<td>Generalized Paseo adapter (§13), spawn from a project folder, conversation renderer, permissions, delegated sub-agent children, restart reconciliation without duplicates.</td>
+<td>Run an agent that delegates to a sub-agent in one of the project's folders; both appear as a tree; quitting and relaunching SPADE and restarting Paseo reproduces the same nodes.</td>
+</tr>
+<tr>
+<td>B6 Rich conversation</td>
+<td>Artifact detection and actions from §7.1: Reveal in Explorer, inline images, Spawn as node with the tree target choice, Markdown, Mermaid, and custom HTML.</td>
+<td>An agent message with a path, an image, and a URL offers every action; spawned images attach to the chosen tree or start a new one.</td>
+</tr>
+</tbody>
+</table>
+<p>Everything else is deferred until these are in use. Add the task board, terminal, file editor, or other entities only after the tree and context semantics have stabilized in real use.</p>
 <h2 id="21-open-decisions">21. Open decisions</h2>
 <ol>
-<li>Does Electron <code>&lt;webview&gt;</code> survive transformed-node interaction tests, or must browser content use a selected overlay/window?</li>
-<li>Is a base diff pinned to creation revision or tracked through merge-base with a moving base branch?</li>
-<li>Which connected nodes are included automatically as agent context versus requiring explicit selection?</li>
-<li>What is the acceptable active-node budget for terminal/editor/browser renderers?</li>
+<li>Final default sizes and spacing in §8; they are initial values to tune against real content in B3.</li>
+<li>Which connected nodes are included automatically as agent context versus requiring explicit selection (§9).</li>
+<li>Acceptable active-node budget for webview and conversation renderers on a large canvas.</li>
+<li>Whether to watch image files for changes, or reload only on focus or request, given many images on a canvas.</li>
+<li>Long-duration <code>&lt;webview&gt;</code> stability, crash recovery, and downloads.</li>
+<li>Remote Paseo hosts and non-Windows platforms. Both are out of scope for v1.</li>
 </ol>
 <h2 id="22-principal-risks">22. Principal risks</h2>
 <table>
@@ -1035,24 +950,29 @@ const defaultConversationExpansion = {
 </thead>
 <tbody>
 <tr>
-<td>Browser cannot behave like a normal transformed React Flow node</td>
+<td>SPADE alters or pollutes a user's project folders</td>
 <td>High</td>
-<td>P2 before architecture commitment; guest webview vs selected overlay</td>
+<td>App-owned persistence, read-only operations on project folders, files revealed but never launched (§4.7, §7.1)</td>
 </tr>
 <tr>
-<td>Project/workspace/work-item concepts produce manual grouping work</td>
+<td>New nodes are illegible or overlap, forcing manual cleanup</td>
 <td>High</td>
-<td>P1 compares navigation models and requires automatic inheritance/hulls</td>
+<td>Legible defaults and a pure, tested placement function; user positions never overridden (§8)</td>
 </tr>
 <tr>
-<td>Branch treated as workspace identity</td>
+<td>Tree behavior diverges between entity types</td>
 <td>High</td>
-<td>Persist opaque workspace identity, checkout path and base/head metadata separately</td>
+<td>One generic mechanic in shared code; entities never implement tree logic (§4.6)</td>
 </tr>
 <tr>
-<td>Paseo internal protocol churn</td>
+<td>Webview cannot sustain a large canvas or long sessions</td>
 <td>High</td>
-<td>Single adapter; upstream public SDK additions</td>
+<td>Lazy mount, bounded active guests, explicit fallback to a selected overlay (§7.3)</td>
+</tr>
+<tr>
+<td>Paseo internal protocol churn or provider gaps</td>
+<td>High</td>
+<td>Single adapter; upstream public SDK additions; recoverable P3 behavior list (§13)</td>
 </tr>
 <tr>
 <td>Heavy renderers overwhelm large canvas</td>
@@ -1060,14 +980,19 @@ const defaultConversationExpansion = {
 <td>Activation, LOD, lazy mount, bounded active resources</td>
 </tr>
 <tr>
-<td>Unsandboxed HTML/JavaScript can mutate app state, interfere with UI, or access exposed desktop capabilities</td>
-<td>Accepted for prototype</td>
-<td>Keep artifact runtime replaceable and resettable; add isolation only when product hardening begins</td>
-</tr>
-<tr>
-<td>Resource leaks after node removal/restart</td>
+<td>Resource leaks after node removal or restart</td>
 <td>High</td>
 <td>Explicit attach/dispose/reconcile lifecycle per entity</td>
+</tr>
+<tr>
+<td>Windows path edge cases (drive letters, UNC, long paths, case)</td>
+<td>Medium</td>
+<td>Normalized path handling in one shared module; tests for each form</td>
+</tr>
+<tr>
+<td>Unsandboxed HTML/JavaScript can mutate app state or access exposed desktop capabilities</td>
+<td>Accepted for prototype</td>
+<td>Keep artifact runtime replaceable and resettable; add isolation when product hardening begins</td>
 </tr>
 <tr>
 <td>Context connections silently overload prompts</td>
@@ -1077,12 +1002,7 @@ const defaultConversationExpansion = {
 <tr>
 <td>Generic entity abstraction hides real semantics</td>
 <td>Medium</td>
-<td>Typed actions and projections; stabilize through prototypes</td>
-</tr>
-<tr>
-<td>tldraw nested interaction limitations</td>
-<td>Deferred</td>
-<td>Do not integrate until workflow evidence justifies it</td>
+<td>Typed actions and projections; stabilize through real use</td>
 </tr>
 </tbody>
 </table>
