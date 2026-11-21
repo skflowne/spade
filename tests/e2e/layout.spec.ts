@@ -24,27 +24,30 @@ const entities = createBuiltinEntityRegistry()
 const NOTE = { width: 320, height: 200 }
 const AGENT = { width: 640, height: 720 }
 
-type Spec = { id: string; at: Point; type?: string; parent?: string } & Partial<CanvasNode>
+type Spec = { id: string; at: Point; type?: string; parent?: string } & Pick<
+  Partial<CanvasNode>,
+  'collapsed' | 'branchCollapsed' | 'archived' | 'size'
+>
 
 function canvasOf(...specs: Spec[]): Canvas {
-  const nodes: CanvasNode[] = specs.map(({ id, at: position, type, parent: _parent, ...overrides }) => ({
+  const nodes: CanvasNode[] = specs.map(({ id, at: position, type, collapsed, branchCollapsed, archived, size }) => ({
     version: DOMAIN_RECORD_VERSION,
     id,
     entityType: type ?? 'note',
     entityVersion: 1,
     title: id,
     position,
-    collapsed: false,
-    branchCollapsed: false,
-    archived: false,
+    ...(size ? { size } : {}),
+    collapsed: collapsed ?? false,
+    branchCollapsed: branchCollapsed ?? false,
+    archived: archived ?? false,
     projectId: 'project',
     groupId: null,
     workspaceId: null,
     config: {},
     resourceRef: null,
     createdAt: at,
-    updatedAt: at,
-    ...overrides
+    updatedAt: at
   }))
   const edges: CanvasEdge[] = specs
     .filter((spec) => spec.parent)
