@@ -384,6 +384,7 @@ test('zooming out to the preview level unmounts the guest and zooming back in re
   const guest = await guestAt(app, `${origin}/a`)
   await inGuest(app, guest.id, `document.getElementById('to-b').click()`)
   await guestAt(app, `${origin}/b`)
+  await expect(nodeHeader(page, title).getByText('Page B')).toBeVisible()
 
   const toolbar = page.getByRole('toolbar', { name: 'Canvas' })
   while ((await renderedViewport(page)).zoom >= PREVIEW_ZOOM_THRESHOLD) {
@@ -391,7 +392,12 @@ test('zooming out to the preview level unmounts the guest and zooming back in re
   }
   await expect(nodeBody(page, title)).toHaveAttribute('data-detail', 'preview')
   await expect.poll(async () => (await guests(app)).length).toBe(0)
-  await expect(canvasNode(page, title).getByTestId('webpage-placeholder')).toContainText(`${origin}/b`)
+  // The preview names the page and its address, and offers nothing to operate.
+  const placeholder = canvasNode(page, title).getByTestId('webpage-placeholder')
+  await expect(placeholder).toContainText('Page B')
+  await expect(placeholder).toContainText(`${origin}/b`)
+  await expect(nodeBody(page, title).getByRole('button')).toHaveCount(0)
+  await expect(nodeBody(page, title).getByRole('textbox')).toHaveCount(0)
 
   while ((await renderedViewport(page)).zoom < PREVIEW_ZOOM_THRESHOLD) {
     await toolbar.getByRole('button', { name: 'Zoom in' }).click()
@@ -401,6 +407,51 @@ test('zooming out to the preview level unmounts the guest and zooming back in re
   expect(restored.id).not.toBe(guest.id)
   await expect(canvasNode(page, title).getByTestId('webpage-placeholder')).toHaveCount(0)
   await expect(canvasNode(page, title).getByText(/could not be shown/)).toHaveCount(0)
+  await app.close()
+})
+
+test('the page zoom follows the canvas zoom once it settles, not on every frame', async () => {
+  const { app, page } = await launchWithProject()
+  await createWebPageFromToolbar(page, `${origin}/a`)
+  const title = hostTitle()
+  const guest = await guestAt(app, `${origin}/a`)
+  await expect.poll(async () => (await guests(app))[0]?.title).toBe('Page A')
+  const flowWidth = async (): Promise<number> => {
+    const zoom = (await renderedViewport(page)).zoom
+    return (await canvasNode(page, title).locator('.webpage__surface').boundingBox())!.width / zoom
+  }
+  const layoutWidth = await flowWidth()
+  await expect.poll(() => inGuest<number>(app, guest.id, 'innerWidth')).toBeCloseTo(layoutWidth, -1)
+
+  // Records the page zoom calls that reach the guest from now on.
+  await app.evaluate(({ webContents }, id) => {
+    const contents = webContents.fromId(id)!
+    const calls: number[] = []
+    ;(globalThis as Record<string, unknown>).__spadeZoomCalls = calls
+    const setZoomFactor = contents.setZoomFactor.bind(contents)
+    contents.setZoomFactor = (factor: number) => {
+      calls.push(factor)
+      setZoomFactor(factor)
+    }
+  }, guest.id)
+  const zoomCalls = (): Promise<number[]> => app.evaluate(() => (globalThis as Record<string, unknown>).__spadeZoomCalls as number[])
+
+  // Twenty wheel steps over empty canvas, one per frame: twenty canvas zooms.
+  const box = (await page.getByTestId('canvas').boundingBox())!
+  const before = await renderedViewport(page)
+  await page.mouse.move(box.x + 20, box.y + box.height - 20)
+  for (let step = 0; step < 20; step += 1) {
+    await page.mouse.wheel(0, 15)
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)))
+  }
+  const after = await renderedViewport(page)
+  expect(after.zoom).toBeLessThan(before.zoom * 0.8)
+  expect(after.zoom).toBeGreaterThanOrEqual(PREVIEW_ZOOM_THRESHOLD)
+
+  // Once the zoom settles the page has its 100% layout again, after only a few zoom calls.
+  await expect.poll(async () => (await zoomCalls()).at(-1)).toBeCloseTo(after.zoom, 5)
+  await expect.poll(() => inGuest<number>(app, guest.id, 'innerWidth')).toBeCloseTo(layoutWidth, -1)
+  expect((await zoomCalls()).length).toBeLessThanOrEqual(4)
   await app.close()
 })
 

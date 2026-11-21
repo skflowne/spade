@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { crc32, deflateSync } from 'node:zlib'
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test'
+import { PREVIEW_ZOOM_THRESHOLD } from '../../src/renderer/src/canvas/model/levelOfDetail'
 import type { ImageInfo } from '../../src/shared/ipc'
 import {
   canvasNode,
@@ -14,6 +15,7 @@ import {
   openProjectFromSidebar,
   pickNext,
   readCanvas,
+  renderedViewport,
   scratchDirectory,
   type Spade
 } from './ui-harness'
@@ -284,6 +286,35 @@ test('an image on a network path outside the project loads only when the user as
   await expect.poll(async () => (await describeCalls(app)).length).toBe(before + 1)
   expect((await describeCalls(app)).filter((call) => call.explicit)).toHaveLength(1)
   expect(await shownSize(page, 'remote.png')).toEqual({ url: image.url, width: 64, height: 32 })
+  await app.close()
+})
+
+test('at the preview level an image node keeps its image and offers no controls', async () => {
+  const project = await scratchDirectory(scratch, 'project')
+  await writeFile(join(project, 'wide.png'), png(320, 160, [30, 90, 200]))
+  const { app, page } = await launchWithProject(await scratchDirectory(scratch, 'user-data'), project)
+  for (const [title, x] of [['wide.png', 0], ['gone.png', 700]] as const) {
+    const created = await execute(page, {
+      type: 'startTree',
+      node: { entityType: 'image', config: { source: { kind: 'path', path: title } }, title, position: { x, y: 0 } }
+    })
+    expect(created.ok).toBe(true)
+  }
+  await expectShown(page, 'wide.png', 320, 160)
+  await expect(canvasNode(page, 'gone.png').getByTestId('image-problem')).toContainText('File not found')
+  await nodeBody(page, 'wide.png').click()
+  await expect(nodeBody(page, 'wide.png').getByRole('toolbar', { name: 'Image' })).toBeVisible()
+
+  const toolbar = page.getByRole('toolbar', { name: 'Canvas' })
+  while ((await renderedViewport(page)).zoom >= PREVIEW_ZOOM_THRESHOLD) {
+    await toolbar.getByRole('button', { name: 'Zoom out' }).click()
+  }
+  for (const title of ['wide.png', 'gone.png']) {
+    await expect(nodeBody(page, title)).toHaveAttribute('data-detail', 'preview')
+    await expect(nodeBody(page, title).getByRole('button')).toHaveCount(0)
+  }
+  await expect(canvasNode(page, 'wide.png').getByTestId('image-view')).toBeVisible()
+  expect(await shownSize(page, 'wide.png')).toMatchObject({ width: 320, height: 160 })
   await app.close()
 })
 

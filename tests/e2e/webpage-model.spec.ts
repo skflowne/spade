@@ -8,6 +8,7 @@ import {
 } from '../../src/renderer/src/entities/webpage/guestBudget'
 import { LocatorPersistence } from '../../src/renderer/src/entities/webpage/locatorPersistence'
 import type { Timer } from '../../src/renderer/src/entities/webpage/timer'
+import { ZoomSettler } from '../../src/renderer/src/entities/webpage/zoomSettling'
 import { normalizeWebAddress, sameWebAddress } from '../../src/renderer/src/entities/webpage/webAddress'
 
 test.describe('web page addresses', () => {
@@ -281,5 +282,61 @@ test.describe('durable page locator', () => {
     locator.followed('https://example.com/redirected')
     timer.elapse()
     expect(writes).toEqual(['https://example.com/redirected'])
+  })
+})
+
+test.describe('settled page zoom', () => {
+  function setup(initial = 1): { settler: ZoomSettler; timer: ManualTimer; applied: number[] } {
+    const timer = new ManualTimer()
+    const applied: number[] = []
+    const settler = new ZoomSettler({ initial, timer, apply: (zoom) => applied.push(zoom) })
+    return { settler, timer, applied }
+  }
+
+  test('applies small zoom changes once the zoom stops changing', () => {
+    const { settler, timer, applied } = setup()
+    settler.update(0.97)
+    settler.update(0.94)
+    settler.update(0.9)
+    expect(applied).toEqual([])
+    expect(timer.pending).toBe(1)
+    timer.elapse()
+    expect(applied).toEqual([0.9])
+  })
+
+  test('applies a large step at once, then settles on the final zoom', () => {
+    const { settler, timer, applied } = setup()
+    settler.update(0.7)
+    expect(applied).toEqual([0.7])
+    settler.update(0.68)
+    expect(applied).toEqual([0.7])
+    timer.elapse()
+    expect(applied).toEqual([0.7, 0.68])
+  })
+
+  test('measures the step from the last applied zoom, zooming in or out', () => {
+    const { settler, applied } = setup(0.5)
+    settler.update(0.55)
+    settler.update(0.6)
+    settler.update(0.66)
+    expect(applied).toEqual([0.66])
+    settler.update(0.5)
+    expect(applied).toEqual([0.66, 0.5])
+  })
+
+  test('applies nothing when the zoom comes back to the applied one', () => {
+    const { settler, timer, applied } = setup()
+    settler.update(0.9)
+    settler.update(1)
+    timer.elapse()
+    expect(applied).toEqual([])
+  })
+
+  test('applies nothing after it is disposed', () => {
+    const { settler, timer, applied } = setup()
+    settler.update(0.9)
+    settler.dispose()
+    timer.elapse()
+    expect(applied).toEqual([])
   })
 })

@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
-import { useStore } from '@xyflow/react'
 import { WEB_PAGE_PARTITION, type WebPageConfig } from '@shared/builtinEntities'
 import { useCanvasActions } from '../../canvas/CanvasContext'
 import type { EntityBodyProps, NodeStatus } from '../types'
@@ -7,6 +6,7 @@ import { useGuestSlot } from './guestSlots'
 import { LocatorPersistence } from './locatorPersistence'
 import { registerReload } from './reloadRequests'
 import { normalizeWebAddress, sameWebAddress } from './webAddress'
+import { useSettledZoom } from './zoomSettling'
 import {
   ABORTED_LOAD,
   guestUrl,
@@ -84,11 +84,11 @@ type WantedAddress = { url: string; follow: boolean }
 
 export function WebPageBody({ node, config, project, active, detail, host }: EntityBodyProps<WebPageConfig>): React.JSX.Element {
   const canvas = useCanvasActions()
-  const zoom = useStore((state) => state.transform[2])
   const root = useRef<HTMLDivElement>(null)
   const slot = useGuestSlot(project.id, node.id)
   const full = detail === 'full'
   const live = full && slot.live
+  const zoom = useSettledZoom(live)
 
   const [guest, setGuest] = useState<WebviewElement | null>(null)
   // The guest's methods can be called; long before `dom-ready`, which a page that never answers never fires.
@@ -182,7 +182,8 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
   useEffect(() => {
     if (!locator.recordChanged(config.url)) return
     latest.current.url = config.url
-    setPage((current) => ({ ...current, url: config.url }))
+    // The title belonged to the page the node is leaving.
+    setPage((current) => ({ ...current, url: config.url, title: null }))
     go({ url: config.url, follow: true })
     // Only a record change moves the guest; the guest's own navigation must not re-run this.
   }, [config.url, locator])
@@ -445,7 +446,7 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
           </>
         ) : (
           <div className="webpage__placeholder" data-testid="webpage-placeholder">
-            <span className="webpage__placeholder-host">{hostOf(page.url)}</span>
+            <span className="webpage__placeholder-title">{page.title ?? hostOf(page.url)}</span>
             <span className="mono webpage__placeholder-url">{page.url}</span>
             {full ? <span className="webpage__placeholder-hint">Click to load the page.</span> : null}
           </div>
