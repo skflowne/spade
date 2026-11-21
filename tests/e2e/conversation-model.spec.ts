@@ -4,7 +4,7 @@ import type { Artifact } from '../../src/shared/artifacts'
 import { agentEntity } from '../../src/shared/builtinEntities'
 import type { ConversationExpansionPreferences } from '../../src/shared/domain'
 import type { PathInfo } from '../../src/shared/ipc'
-import { presentArtifact } from '../../src/renderer/src/entities/agent/artifactActions'
+import { decodeImageDataUrl, presentArtifact } from '../../src/renderer/src/entities/agent/artifactActions'
 import { effectiveExpansion, paneKindOf, withOverride } from '../../src/renderer/src/entities/agent/expansion'
 import { splitMessage } from '../../src/renderer/src/entities/agent/messageSegments'
 import { agentStatusOf, lastAssistantExcerpt } from '../../src/renderer/src/entities/agent/status'
@@ -288,6 +288,21 @@ test.describe('artifact actions', () => {
       quiet: false,
       actions: ['spawn-webpage', 'open-browser', 'copy-url']
     })
+  })
+
+  test('an inline image decodes from base64 and from percent-encoded UTF-8 text', () => {
+    const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff])
+    expect(decodeImageDataUrl(`data:image/png;base64,${Buffer.from(png).toString('base64')}`)).toEqual({ mimeType: 'image/png', bytes: png })
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"><text>✓ é</text></svg>'
+    const utf8 = new Uint8Array(Buffer.from(svg, 'utf8'))
+    expect(decodeImageDataUrl(`data:image/svg+xml,${encodeURIComponent(svg)}`)).toEqual({ mimeType: 'image/svg+xml', bytes: utf8 })
+    expect(decodeImageDataUrl(`data:image/svg+xml;charset=utf-8,${svg}`)).toEqual({ mimeType: 'image/svg+xml', bytes: utf8 })
+  })
+
+  test('an inline image that cannot be decoded is reported, not thrown', () => {
+    expect(decodeImageDataUrl('data:image/png;base64,@@not base64@@')).toBeNull()
+    expect(decodeImageDataUrl('data:image/svg+xml,%E0%A4%A')).toBeNull()
+    expect(decodeImageDataUrl('data:text/plain,hello')).toBeNull()
   })
 })
 

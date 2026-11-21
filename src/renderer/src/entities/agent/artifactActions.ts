@@ -52,6 +52,20 @@ export function presentArtifact(artifact: Artifact, info: PathInfo | undefined):
   }
 }
 
+// The bytes of an inline `data:image/…` URL, base64 or percent-encoded text (e.g. an SVG); null when the URL
+// is not an image or cannot be decoded.
+export function decodeImageDataUrl(url: string): { mimeType: string; bytes: Uint8Array } | null {
+  const match = /^data:(image\/[\w.+-]+)((?:;[^,;]*)*),(.*)$/is.exec(url)
+  if (!match) return null
+  const [, mimeType, parameters, payload] = match
+  try {
+    if (/;base64$/i.test(parameters)) return { mimeType, bytes: Uint8Array.from(atob(payload), (character) => character.charCodeAt(0)) }
+    return { mimeType, bytes: new TextEncoder().encode(decodeURIComponent(payload)) }
+  } catch {
+    return null
+  }
+}
+
 export function isRelativePath(path: string): boolean {
   return !/^(\/|\\\\|[A-Za-z]:[\\/]|file:)/i.test(path)
 }

@@ -4,7 +4,7 @@ import { DEFAULT_CONVERSATION_EXPANSION } from '@shared/domain'
 import { useCanvasActions } from '../../canvas/CanvasContext'
 import { focusNodeHeader } from '../../canvas/nodeFocus'
 import type { AnnotateHandler, SubmitHandler } from '../../rich'
-import { useAgentRuntime, useAppState, useSpadeStore } from '../../store/hooks'
+import { useAgentRuntime, useAppState } from '../../store/hooks'
 import type { EntityBodyProps } from '../types'
 import { AnnotationStore } from './annotations'
 import { ArtifactLayer } from './ArtifactLayer'
@@ -42,7 +42,6 @@ function AgentPreview({ node }: EntityBodyProps<AgentConfig>): React.JSX.Element
 function AgentConversation({ node, config, project, host }: EntityBodyProps<AgentConfig>): React.JSX.Element {
   const runtime = useAgentRuntime(node.id)
   const app = useAppState()
-  const store = useSpadeStore()
   const timeline = useTimeline(node.id, runtime?.resourceState ?? null)
   const global = app?.settings.conversationExpansion ?? DEFAULT_CONVERSATION_EXPANSION
   const override = useOverride(config.expansion)
@@ -51,7 +50,7 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
   const [annotations] = useState(() => new AnnotationStore())
   const latest = useRef({ blocked, nodeId: node.id })
   latest.current = { blocked, nodeId: node.id }
-  const notify = useCallback((message: string) => store.notify(message), [store])
+  const notify = useCallback((message: string) => host.notify(message), [host])
 
   const prompt = useCallback(async (text: string, contextNodeIds?: string[]): Promise<string | null> => {
     const result = await window.spadeHost.agents
@@ -128,7 +127,7 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
   const items = timeline.state?.items ?? []
 
   return (
-    <ArtifactLayer projectId={project.id} nodeId={node.id} host={host} notify={notify}>
+    <ArtifactLayer projectId={project.id} nodeId={node.id} host={host}>
       <ConversationContext.Provider value={services}>
         <div className="agent-body">
           <div className="agent-toolbar">

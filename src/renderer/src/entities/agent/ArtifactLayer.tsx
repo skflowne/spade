@@ -7,7 +7,7 @@ import type { PathInfo, Result } from '@shared/ipc'
 import type { ArtifactHandler, ImageResolver } from '../../rich'
 import { Dialog } from '../../ui/Dialog'
 import type { EntityHost } from '../types'
-import { ARTIFACT_ACTION_LABELS, presentArtifact, type ArtifactActionId } from './artifactActions'
+import { ARTIFACT_ACTION_LABELS, decodeImageDataUrl, presentArtifact, type ArtifactActionId } from './artifactActions'
 import { Popover } from './Popover'
 
 // Rich conversation artifacts (plan §7.1): one actions popover for every path, image, and link in the
@@ -39,11 +39,10 @@ type ArtifactLayerProps = {
   projectId: string
   nodeId: string
   host: EntityHost
-  notify(message: string): void
   children: ReactNode
 }
 
-export function ArtifactLayer({ projectId, nodeId, host, notify, children }: ArtifactLayerProps): React.JSX.Element {
+export function ArtifactLayer({ projectId, nodeId, host, children }: ArtifactLayerProps): React.JSX.Element {
   const inspections = useRef(new Map<string, Promise<PathInfo>>())
   const results = useRef(new Map<string, PathInfo>())
   const images = useRef(new Map<string, Promise<string | null>>())
@@ -123,7 +122,7 @@ export function ArtifactLayer({ projectId, nodeId, host, notify, children }: Art
           onClose={() => setOpen(null)}
           onEnlarge={(url, label) => setLightbox({ url, label })}
           onSpawn={spawn}
-          notify={notify}
+          notify={host.notify}
         />
       ) : null}
       {lightbox
@@ -314,15 +313,15 @@ async function spawnInlineImage(
   onSpawn: ArtifactPopoverProps['onSpawn'],
   notify: (message: string) => void
 ): Promise<void> {
-  const match = /^data:(image\/[\w.+-]+)(;base64)?,(.*)$/is.exec(url)
-  if (!match) {
+  const image = decodeImageDataUrl(url)
+  if (!image) {
     notify('This image cannot be opened as a node.')
     return
   }
-  const [, mimeType, base64, payload] = match
-  const text = base64 ? atob(payload) : decodeURIComponent(payload)
-  const bytes = Uint8Array.from(text, (character) => character.charCodeAt(0))
-  const result = await window.spadeHost.files.importImage({ data: bytes.buffer, mimeType })
+  const { mimeType, bytes } = image
+  const result = await window.spadeHost.files
+    .importImage({ data: bytes.slice().buffer, mimeType })
+    .catch((reason: unknown) => ({ ok: false as const, error: { code: 'failed', message: reason instanceof Error ? reason.message : String(reason) } }))
   if (!result.ok) {
     notify(`Could not store the image: ${result.error.message}`)
     return
