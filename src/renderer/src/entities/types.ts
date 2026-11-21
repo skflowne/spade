@@ -5,7 +5,9 @@ import type { CanvasNode, ChildOrigin, Project, SourceArtifact } from '@shared/d
 // The contract between SPADE's generic node wrapper and an entity's renderer (plan §5.5, §6).
 // The wrapper owns chrome, dragging, sizing, menus, and activation; the renderer owns only the body.
 
-// Level of detail. Always 'full' until level-of-detail rendering exists (plan §12).
+// Level of detail (plan §12). 'preview' below the canvas's readable zoom, where body text cannot be read: the
+// body should show a cheap overview of itself (no heavy content, no live resources). The wrapper shows the
+// title, type and status at a legible size meanwhile. The level changes only when the zoom crosses the threshold.
 export type EntityDetail = 'full' | 'preview'
 
 export type NodeStatusTone = 'neutral' | 'info' | 'success' | 'warning' | 'danger'

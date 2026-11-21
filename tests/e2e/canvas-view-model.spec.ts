@@ -95,6 +95,32 @@ test.describe('canvas view', () => {
       { id: 'child-references-other', source: 'child', target: 'other', relation: 'references' }
     ])
   })
+
+  test('keeps a visible child of an archived parent reachable, flagged, and without an edge to the hidden parent', () => {
+    const canvas = canvasOf(
+      [node('root'), node('gone', { archived: true }), node('orphan'), node('grandchild')],
+      [edge('root', 'gone'), edge('gone', 'orphan'), edge('orphan', 'grandchild')]
+    )
+
+    const view = canvasView(canvas, entities)
+    const byId = new Map(view.nodes.map((entry) => [entry.id, entry]))
+    expect([...byId.keys()]).toEqual(['root', 'orphan', 'grandchild'])
+    expect(byId.get('orphan')!.parentArchived).toBe(true)
+    expect(byId.get('grandchild')!.parentArchived).toBe(false)
+    expect(byId.get('root')!.parentArchived).toBe(false)
+    expect(view.edges.map((entry) => entry.id)).toEqual(['orphan-child-grandchild'])
+  })
+
+  test('counts the references a node shares in either direction', () => {
+    const canvas = canvasOf(
+      [node('a'), node('b'), node('c')],
+      [edge('a', 'b', 'references'), edge('c', 'a', 'references'), edge('a', 'c')]
+    )
+    const byId = new Map(canvasView(canvas, entities).nodes.map((entry) => [entry.id, entry]))
+    expect(byId.get('a')!.referenceCount).toBe(2)
+    expect(byId.get('b')!.referenceCount).toBe(1)
+    expect(byId.get('c')!.referenceCount).toBe(1)
+  })
 })
 
 test.describe('branch moves', () => {

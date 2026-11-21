@@ -1,7 +1,7 @@
 import type { AgentRuntime } from '@shared/agents'
 import type { CanvasCommand, CanvasCommandResponse } from '@shared/commands'
-import type { Canvas } from '@shared/domain'
-import type { AppState, Failure, SpadeHostBridge } from '@shared/ipc'
+import type { AppSettings, Canvas } from '@shared/domain'
+import type { AppState, Failure, Result, SpadeHostBridge } from '@shared/ipc'
 
 // The renderer's view of SPADE's records. The main process is authoritative: everything here is a copy
 // refreshed by the bridge's pushes, and nothing is written back except through bridge calls.
@@ -9,9 +9,17 @@ import type { AppState, Failure, SpadeHostBridge } from '@shared/ipc'
 export type Notice = {
   id: string
   message: string
-  // A problem SPADE worked around at startup, or an action that failed.
-  kind: 'problem' | 'failure'
+  // A problem SPADE worked around at startup, an action that failed, or a short-lived confirmation.
+  kind: 'problem' | 'failure' | 'info'
+  // An info notice may offer one follow-up, e.g. Undo; running it dismisses the notice.
+  action?: { label: string; run(): void }
 }
+
+// How long an info notice stays before it dismisses itself.
+export const INFO_NOTICE_MS = 8_000
+
+// Renderer-only choices that last until the app quits.
+export type SessionPreferences = { minimap: boolean }
 
 export type StoreState = {
   app: AppState | null
@@ -22,12 +30,20 @@ export type StoreState = {
   // Agent runtimes by node id, across every project.
   runtimes: ReadonlyMap<string, AgentRuntime>
   notices: readonly Notice[]
+  session: SessionPreferences
 }
 
 const describe = (error: unknown): string => (error instanceof Error ? error.message : String(error))
 
 export class SpadeStore {
-  private state: StoreState = { app: null, startupError: null, canvases: new Map(), runtimes: new Map(), notices: [] }
+  private state: StoreState = {
+    app: null,
+    startupError: null,
+    canvases: new Map(),
+    runtimes: new Map(),
+    notices: [],
+    session: { minimap: true }
+  }
   private readonly listeners = new Set<() => void>()
   private readonly loadingCanvases = new Set<string>()
   // Projects whose canvas was pushed while a read was in flight; the push is newer than the read.
@@ -124,9 +140,35 @@ export class SpadeStore {
     this.update({ notices: [...this.state.notices, { id: `failure-${this.noticeCounter}`, message, kind: 'failure' }] })
   }
 
+  // A transient confirmation. Returns its id.
+  inform(message: string, action?: Notice['action']): string {
+    this.noticeCounter += 1
+    const id = `info-${this.noticeCounter}`
+    this.update({ notices: [...this.state.notices, { id, message, kind: 'info', ...(action ? { action } : {}) }] })
+    setTimeout(() => this.dismissNotice(id), INFO_NOTICE_MS)
+    return id
+  }
+
   dismissNotice(id: string): void {
     if (id.startsWith('problem:')) this.dismissedProblems.add(id)
     this.update({ notices: this.state.notices.filter((notice) => notice.id !== id) })
+  }
+
+  // --- Settings and session ---
+
+  async updateSettings(patch: Partial<AppSettings>): Promise<boolean> {
+    let response: Result
+    try {
+      response = await this.host.app.updateSettings(patch)
+    } catch (error) {
+      response = { ok: false, error: { code: 'internal', message: describe(error) } }
+    }
+    if (!response.ok) this.fail('Could not save the settings', response)
+    return response.ok
+  }
+
+  setSession(patch: Partial<SessionPreferences>): void {
+    this.update({ session: { ...this.state.session, ...patch } })
   }
 
   // --- Internals ---
@@ -142,7 +184,7 @@ export class SpadeStore {
         kind: 'problem' as const
       }))
       .filter((notice) => !this.dismissedProblems.has(notice.id))
-    const failures = this.state.notices.filter((notice) => notice.kind === 'failure')
+    const failures = this.state.notices.filter((notice) => notice.kind !== 'problem')
     this.update({ app, canvases, runtimes, notices: [...problems, ...failures] })
 
     if (app.selectedProjectId !== null) void this.loadCanvas(app.selectedProjectId)

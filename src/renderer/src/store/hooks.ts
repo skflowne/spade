@@ -2,7 +2,7 @@ import { createContext, useContext, useSyncExternalStore } from 'react'
 import type { AgentRuntime } from '@shared/agents'
 import type { Canvas, Project } from '@shared/domain'
 import type { AppState } from '@shared/ipc'
-import type { Notice, SpadeStore, StoreState } from './store'
+import type { Notice, SessionPreferences, SpadeStore, StoreState } from './store'
 
 export const StoreContext = createContext<SpadeStore | null>(null)
 
@@ -55,4 +55,8 @@ function countRuntimes(state: StoreState, projectId: string, activities: readonl
 
 export function useNotices(): readonly Notice[] {
   return useStoreState((state) => state.notices)
+}
+
+export function useSession(): SessionPreferences {
+  return useStoreState((state) => state.session)
 }
