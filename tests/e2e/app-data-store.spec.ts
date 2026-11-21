@@ -15,6 +15,7 @@ import {
 } from '../../src/main/persistence'
 import {
   CANVAS_ACTIVITY_LIMIT,
+  CANVAS_DISMISSED_RESOURCE_LIMIT,
   DEFAULT_APP_SETTINGS,
   DOMAIN_RECORD_VERSION,
   createEmptyCanvas,
@@ -116,7 +117,8 @@ function populatedCanvas(projectId: string): Canvas {
         summary: 'Spawned Note',
         nodeIds: ['child']
       }
-    ]
+    ],
+    dismissedResources: [{ provider: 'paseo', kind: 'agent', id: 'agent-removed' }]
   }
 }
 
@@ -357,7 +359,10 @@ test('malformed records are refused before anything is written', async () => {
       { ...valid, viewport: { x: 0, y: 0, zoom: 0 } },
       { ...valid, version: 1 },
       { ...valid, activity: Array.from({ length: CANVAS_ACTIVITY_LIMIT + 1 }, () => valid.activity[0]) },
-      { ...valid, activity: [{ ...valid.activity[0], actor: { kind: 'robot' } }] }
+      { ...valid, activity: [{ ...valid.activity[0], actor: { kind: 'robot' } }] },
+      { ...valid, dismissedResources: undefined },
+      { ...valid, dismissedResources: [{ provider: 'paseo', kind: 'agent' }] },
+      { ...valid, dismissedResources: Array.from({ length: CANVAS_DISMISSED_RESOURCE_LIMIT + 1 }, () => valid.dismissedResources[0]) }
     ]
     for (const malformed of malformedCanvases) {
       await expect(store.saveCanvas(malformed as Canvas)).rejects.toBeInstanceOf(InvalidRecordError)

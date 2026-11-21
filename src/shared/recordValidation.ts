@@ -1,5 +1,6 @@
 import {
   CANVAS_ACTIVITY_LIMIT,
+  CANVAS_DISMISSED_RESOURCE_LIMIT,
   DOMAIN_RECORD_VERSION,
   type Actor,
   type AgentDefaults,
@@ -282,7 +283,16 @@ function assertChildForest(edges: CanvasEdge[], path: string): void {
 }
 
 export function parseCanvas(value: unknown, path = 'canvas'): Canvas {
-  const canvas = shape(value, path, ['version', 'projectId', 'nodes', 'edges', 'workspaces', 'viewport', 'activity'])
+  const canvas = shape(value, path, [
+    'version',
+    'projectId',
+    'nodes',
+    'edges',
+    'workspaces',
+    'viewport',
+    'activity',
+    'dismissedResources'
+  ])
   recordVersion(canvas.version, `${path}.version`)
   const projectId = nonEmptyString(canvas.projectId, `${path}.projectId`)
   const nodes = array(canvas.nodes, `${path}.nodes`).map((node, index) => parseCanvasNode(node, `${path}.nodes[${index}]`))
@@ -294,6 +304,11 @@ export function parseCanvas(value: unknown, path = 'canvas'): Canvas {
   const activity = array(canvas.activity, `${path}.activity`)
   if (activity.length > CANVAS_ACTIVITY_LIMIT) fail(`${path}.activity`, `exceeds ${CANVAS_ACTIVITY_LIMIT} entries`)
   activity.forEach((entry, index) => parseCanvasActivity(entry, `${path}.activity[${index}]`))
+  const dismissed = array(canvas.dismissedResources, `${path}.dismissedResources`)
+  if (dismissed.length > CANVAS_DISMISSED_RESOURCE_LIMIT) {
+    fail(`${path}.dismissedResources`, `exceeds ${CANVAS_DISMISSED_RESOURCE_LIMIT} entries`)
+  }
+  dismissed.forEach((ref, index) => parseResourceRef(ref, `${path}.dismissedResources[${index}]`))
 
   const nodeIds = uniqueIds(nodes, `${path}.nodes`)
   const workspaceIds = uniqueIds(workspaces, `${path}.workspaces`)

@@ -759,6 +759,42 @@ test('removing an agent node never touches Paseo and a removed delegated child i
   })
 })
 
+test('a removed delegated child stays removed across a restart, and opening a provider sub-agent again brings it back', async () => {
+  await withFixture(async ({ project, open }) => {
+    const paseo = new FakePaseo()
+    const session = await open(paseo)
+    const rootNodeId = await spawnRoot(session, project)
+    paseo.agents.set('child', snapshot('child', { parentAgentId: 'spawned-1' }))
+    paseo.subagents.set('spawned-1', { observable: true, subagents: [subagent('toolu_1')] })
+    paseo.updated('child', true)
+    await session.service.whenIdle()
+    const child = onlyNode(await canvasOf(session, project), 'child')
+    const opened = await session.service.openProviderSubagent(rootNodeId, 'toolu_1', user)
+
+    await session.gateway.execute(project.id, { type: 'removeNode', nodeId: child.id }, user)
+    await session.gateway.execute(project.id, { type: 'removeNode', nodeId: opened.nodeId }, user)
+    await session.service.whenIdle()
+    await session.stop()
+
+    // A fresh service over the same records, with Paseo reporting the same agents.
+    const restarted = await open(new FakePaseo([...paseo.agents.values()]))
+    restarted.paseo.subagents.set('spawned-1', { observable: true, subagents: [subagent('toolu_1')] })
+    restarted.paseo.updated('child')
+    restarted.paseo.updated('spawned-1')
+    await restarted.service.whenIdle()
+    let canvas = await canvasOf(restarted, project)
+    expect(nodesFor(canvas, 'agent', 'child')).toHaveLength(0)
+    expect(nodesFor(canvas, 'provider-subagent', 'spawned-1/toolu_1')).toHaveLength(0)
+    expect(canvas.nodes.map((node) => node.id)).toEqual([rootNodeId])
+
+    // The user asking for the sub-agent explicitly is not reconciliation: its node comes back.
+    const reopened = await restarted.service.openProviderSubagent(rootNodeId, 'toolu_1', user)
+    canvas = await canvasOf(restarted, project)
+    expect(onlyNode(canvas, 'spawned-1/toolu_1', 'provider-subagent').id).toBe(reopened.nodeId)
+    expect(canvas.dismissedResources).toEqual([{ provider: 'paseo', kind: 'agent', id: 'child' }])
+  })
+})
+
 test('providers are listed for the project root and cached briefly', async () => {
   await withFixture(async ({ projectDirectory, open }) => {
     const paseo = new FakePaseo()

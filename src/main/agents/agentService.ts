@@ -22,7 +22,7 @@ import type {
 } from '../../shared/agents'
 import { AGENT_ENTITY, agentEntity, type AgentConfig } from '../../shared/builtinEntities'
 import { CanvasCommandError } from '../../shared/commands'
-import type { Actor, Canvas, CanvasNode, Project } from '../../shared/domain'
+import type { Actor, Canvas, CanvasNode, Project, ResourceRef } from '../../shared/domain'
 import type { EntityRegistry } from '../../shared/entities'
 import { isSamePath } from '../../shared/paths'
 import {
@@ -108,7 +108,7 @@ export function createAgentService(options: AgentServiceOptions): SpadeAgentServ
 //
 // Reconciliation never removes a node and only ever adds managed child agents (by Paseo's durable parent
 // identity) under their parent's node. A child whose parent has no node is not placed anywhere, and a
-// child whose node the user removed is not added again while this service runs.
+// child whose node was removed is not added again: the canvas records it in `dismissedResources`.
 class PaseoAgentService implements SpadeAgentService {
   readonly entityAdapter: MainEntityAdapter
   private readonly gateway: WorkspaceGateway
@@ -134,7 +134,6 @@ class PaseoAgentService implements SpadeAgentService {
   private readonly inFlight = new Map<string, ReturnType<typeof setTimeout>>()
   private pendingSpawns = 0
   private readonly deferredAdoptions = new Map<string, PaseoAgentSnapshot>()
-  private readonly dismissed = new Set<string>()
 
   private pending = emptyPending()
   private readonly presentationDirty = new Set<string>()
@@ -442,11 +441,8 @@ class PaseoAgentService implements SpadeAgentService {
     this.canvases.set(projectId, event.canvas)
     this.rebuildIndex()
 
-    const removal = event.command.type === 'removeNode' || event.command.type === 'removeBranch'
-    for (const [nodeId, entry] of before) {
-      if (this.nodes.has(nodeId)) continue
-      this.dropRuntime(nodeId)
-      if (removal && entry.target.kind === 'agent') this.dismissed.add(entry.target.agentId)
+    for (const nodeId of before.keys()) {
+      if (!this.nodes.has(nodeId)) this.dropRuntime(nodeId)
     }
 
     // Nodes reconciliation adds are looked after by the reconciliation that added them.
@@ -646,7 +642,7 @@ class PaseoAgentService implements SpadeAgentService {
   // that has the parent and not the child. Returns whether a node now exists for it.
   private async adopt(snapshot: PaseoAgentSnapshot): Promise<boolean> {
     const parentAgentId = snapshot.parentAgentId
-    if (!parentAgentId || this.dismissed.has(snapshot.id)) return false
+    if (!parentAgentId) return false
     if (this.inFlight.has(snapshot.id)) return true
     // A spawn still waiting for Paseo may be this very agent; decide once every pending spawn is known.
     if (this.pendingSpawns > 0) {
@@ -659,14 +655,17 @@ class PaseoAgentService implements SpadeAgentService {
       if (entry.target.kind === 'agent' && !parents.has(entry.projectId)) parents.set(entry.projectId, entry)
     }
     let placed = false
+    const ref = agentResourceRef(snapshot.id)
     for (const [projectId, parent] of parents) {
       if (this.hasAgentNode(snapshot.id, projectId)) {
         placed = true
         continue
       }
+      if (this.isDismissed(projectId, ref)) continue
       const title = paseoTitle(snapshot.title)
       try {
-        await this.gateway.execute(
+        // The reducer also skips a dismissed resource, should it be dismissed by the time this runs.
+        const outcome = await this.gateway.execute(
           projectId,
           {
             type: 'spawnChild',
@@ -677,13 +676,13 @@ class PaseoAgentService implements SpadeAgentService {
               config: { provider: snapshot.provider, model: snapshot.model, mode: snapshot.mode, prompt: null },
               ...(title ? { title } : {}),
               collapsed: true,
-              resourceRef: agentResourceRef(snapshot.id),
+              resourceRef: ref,
               ifResourceAbsent: true
             }
           },
           SYSTEM
         )
-        placed = true
+        if (outcome.nodeId !== undefined) placed = true
       } catch (error) {
         // The parent node went away meanwhile: nothing to attach to.
         if (!(error instanceof CanvasCommandError && error.code === 'unknown-node')) throw error
@@ -713,6 +712,15 @@ class PaseoAgentService implements SpadeAgentService {
     }
     for (const entry of this.nodes.values()) this.updateRuntime(entry)
     this.syncTimelineWatch()
+  }
+
+  private isDismissed(projectId: string, ref: ResourceRef): boolean {
+    return (
+      this.canvases
+        .get(projectId)
+        ?.dismissedResources.some((entry) => entry.provider === ref.provider && entry.kind === ref.kind && entry.id === ref.id) ??
+      false
+    )
   }
 
   private hasAgentNode(agentId: string, projectId?: string): boolean {

@@ -255,6 +255,101 @@ test.describe('creation', () => {
   })
 })
 
+test.describe('dismissed resources', () => {
+  const ref = (id: string) => ({ provider: 'paseo', kind: 'agent', id })
+  const delegated = (sourceNodeId: string, id: string): CanvasCommand => ({
+    type: 'spawnChild',
+    sourceNodeId,
+    node: agentSeed({ resourceRef: ref(id), ifResourceAbsent: true }),
+    origin: 'delegated'
+  })
+
+  test('a new canvas has no dismissed resources', () => {
+    expect(createEmptyCanvas('project').dismissedResources).toEqual([])
+  })
+
+  test('removing nodes records the resource of every removed node that has one, without its revision', () => {
+    const session = new Session()
+    const root = session.root()
+    const lone = session.child(root, agentSeed({ resourceRef: { ...ref('p-lone'), revision: 'r7' } }))
+    const branch = session.child(root, agentSeed({ resourceRef: ref('p-branch') }))
+    session.child(branch, note())
+    session.child(branch, agentSeed({ resourceRef: ref('p-leaf') }))
+
+    session.run({ type: 'removeNode', nodeId: lone })
+    expect(session.canvas.dismissedResources).toEqual([ref('p-lone')])
+
+    session.run({ type: 'removeBranch', nodeId: branch })
+    expect(session.canvas.dismissedResources).toEqual([ref('p-lone'), ref('p-branch'), ref('p-leaf')])
+
+    // A node without a resource leaves the list alone.
+    session.run({ type: 'removeNode', nodeId: root })
+    expect(session.canvas.dismissedResources).toEqual([ref('p-lone'), ref('p-branch'), ref('p-leaf')])
+  })
+
+  test('a resource dismissed again moves to the newest end instead of repeating', () => {
+    const session = new Session()
+    const root = session.root()
+    const first = session.child(root, agentSeed({ resourceRef: ref('p-1') }))
+    const second = session.child(root, agentSeed({ resourceRef: ref('p-2') }))
+    session.run({ type: 'removeNode', nodeId: first })
+    session.run({ type: 'removeNode', nodeId: second })
+    const again = session.child(root, agentSeed({ resourceRef: ref('p-1') }))
+    session.run({ type: 'removeNode', nodeId: again })
+    expect(session.canvas.dismissedResources).toEqual([ref('p-2'), ref('p-1')])
+  })
+
+  test('the dismissed list keeps only the newest 500 resources', () => {
+    const older = Array.from({ length: 500 }, (_, index) => ref(`old-${index}`))
+    const session = new Session({ ...createEmptyCanvas('project'), dismissedResources: older })
+    const root = session.root()
+    const node = session.child(root, agentSeed({ resourceRef: ref('newest') }))
+    session.run({ type: 'removeNode', nodeId: node })
+    expect(session.canvas.dismissedResources).toHaveLength(500)
+    expect(session.canvas.dismissedResources[0]).toEqual(ref('old-1'))
+    expect(session.canvas.dismissedResources.at(-1)).toEqual(ref('newest'))
+  })
+
+  test('SPADE does not add back a node for a dismissed resource, and reports that nothing was created', () => {
+    const session = new Session()
+    const root = session.root()
+    const child = session.run(delegated(root, 'p-1'), { actor: system }).nodeId!
+    session.run({ type: 'removeNode', nodeId: child })
+    const before = session.canvas
+
+    const outcome = session.run(delegated(root, 'p-1'), { actor: system })
+
+    expect(outcome).toEqual({ created: false })
+    expect(session.canvas).toBe(before)
+  })
+
+  test('a user or an agent creating a node for a dismissed resource brings it back and clears the dismissal', () => {
+    for (const actor of [user, agent]) {
+      const session = new Session()
+      const root = session.root()
+      const child = session.run(delegated(root, 'p-1'), { actor: system }).nodeId!
+      session.run({ type: 'removeNode', nodeId: child })
+
+      const outcome = session.run(delegated(root, 'p-1'), { actor })
+
+      expect(outcome.created, actor.kind).toBe(true)
+      expect(session.node(outcome.nodeId!).resourceRef).toEqual(ref('p-1'))
+      expect(session.canvas.dismissedResources, actor.kind).toEqual([])
+      // Once back, SPADE's own matching finds the node again.
+      expect(session.run(delegated(root, 'p-1'), { actor: system })).toEqual({ nodeId: outcome.nodeId, created: false })
+    }
+  })
+
+  test('a node that still shows the resource wins over a dismissal', () => {
+    const session = new Session()
+    const root = session.root()
+    const first = session.child(root, agentSeed({ resourceRef: ref('p-1') }))
+    const second = session.child(root, agentSeed({ resourceRef: ref('p-1') }))
+    session.run({ type: 'removeNode', nodeId: first })
+    expect(session.run(delegated(root, 'p-1'), { actor: system })).toEqual({ nodeId: second, created: false })
+  })
+})
+
 test.describe('structure', () => {
   test('connectNodes adds a references edge and rejects self-references and duplicates', () => {
     const session = new Session()
