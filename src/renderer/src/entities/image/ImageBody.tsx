@@ -10,15 +10,19 @@ import './image.css'
 type Problem = { code: string; message: string }
 
 const MISSING = 'image-missing'
+// A network path outside the project root: the main process touches it only for an explicit request.
+const NETWORK = 'network-path'
 
 // Why the image cannot be opened at full size, or null when it can.
 function fullSizeUnavailable(image: ImageInfo | null, problem: Problem | null, isFile: boolean): string | null {
   if (problem?.code === MISSING) return isFile ? 'file not found' : 'image not found'
+  if (problem?.code === NETWORK) return 'image not loaded'
   if (problem) return 'image cannot be shown'
   return image ? null : 'image not loaded'
 }
 
 function statusOf(image: ImageInfo | null, problem: Problem | null): NodeStatus | null {
+  if (problem?.code === NETWORK) return { label: 'Not loaded', tone: 'neutral', description: 'A network image loads only when you ask.' }
   if (problem) {
     return problem.code === MISSING
       ? { label: 'Missing', tone: 'warning', description: problem.message }
@@ -41,12 +45,15 @@ export function ImageBody({ node, config, project, active, detail, host }: Entit
   const latestSource = useRef(source)
   latestSource.current = source
 
-  // Only the newest description wins; a change event can overtake an activation's request.
-  const describe = useCallback(async () => {
+  // Only the newest description wins; a change event can overtake an activation's request. `explicit`: the
+  // user clicked to load this very image, which may reach another machine.
+  const describe = useCallback(async (explicit = false) => {
     const request = ++sequence.current
     let next: { image: ImageInfo } | { problem: Problem }
     try {
-      const result = await window.spadeHost.files.describeImage(project.id, latestSource.current)
+      const result = explicit
+        ? await window.spadeHost.files.describeImage(project.id, latestSource.current, { explicit: true })
+        : await window.spadeHost.files.describeImage(project.id, latestSource.current)
       next = result.ok ? { image: result.image } : { problem: result.error }
     } catch (error) {
       next = { problem: { code: 'image-unreadable', message: error instanceof Error ? error.message : String(error) } }
@@ -118,7 +125,18 @@ export function ImageBody({ node, config, project, active, detail, host }: Entit
             onError={() => setProblem({ code: 'image-unreadable', message: 'The file could not be decoded as an image.' })}
           />
         ) : null}
-        {problem ? (
+        {problem?.code === NETWORK ? (
+          <div className="image-node__problem" role="status" data-testid="image-network">
+            <p className="image-node__problem-title image-node__problem-title--neutral">Network image — not loaded</p>
+            <p className="mono image-node__problem-path">{location}</p>
+            <p className="image-node__problem-reason">This file is on another machine. SPADE opens it only when you ask.</p>
+            {detail === 'full' ? (
+              <button type="button" className="cr-button" onClick={() => void describe(true)}>
+                Load
+              </button>
+            ) : null}
+          </div>
+        ) : problem ? (
           <div className="image-node__problem" role="status" data-testid="image-problem">
             <p className="image-node__problem-title">
               {problem.code === MISSING ? (path ? 'File not found' : 'Image not found') : 'This image cannot be shown'}
