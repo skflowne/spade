@@ -120,6 +120,18 @@ export async function expectNoNotice(page: Page): Promise<void> {
   await expect(page.getByRole('region', { name: 'Notices' }).getByRole('alert')).toHaveCount(0)
 }
 
+// The element lies wholly outside the shown minimap, so the minimap cannot take the pointer from its edges.
+export async function expectClearOfMinimap(page: Page, element: Locator): Promise<void> {
+  const minimap = (await page.getByRole('img', { name: 'Minimap' }).boundingBox())!
+  const box = (await element.boundingBox())!
+  const overlaps =
+    box.x < minimap.x + minimap.width &&
+    minimap.x < box.x + box.width &&
+    box.y < minimap.y + minimap.height &&
+    minimap.y < box.y + box.height
+  expect(overlaps, `${JSON.stringify(box)} overlaps the minimap at ${JSON.stringify(minimap)}`).toBe(false)
+}
+
 // Fits every node and waits for React Flow to apply the new viewport.
 export async function fitAll(page: Page): Promise<void> {
   await page.getByRole('toolbar', { name: 'Canvas' }).getByRole('button', { name: 'Fit all' }).click()

@@ -11,6 +11,7 @@ import {
   type Edge,
   type EdgeChange,
   type EdgeTypes,
+  type FitViewOptions,
   type NodeChange,
   type NodeTypes,
   type OnNodeDrag
@@ -19,7 +20,7 @@ import type { CanvasCommand } from '@shared/commands'
 import type { Canvas, CanvasNode, Point, Project, Rect, Size, Viewport } from '@shared/domain'
 import { entities } from '../entities'
 import type { SpawnRequest } from '../entities/types'
-import { useCanvas, useSpadeStore } from '../store/hooks'
+import { useCanvas, useSession, useSpadeStore } from '../store/hooks'
 import { usePrompts } from '../ui/prompts'
 import {
   AgentChangeContext,
@@ -43,13 +44,15 @@ import { overviewTitleScale } from './model/levelOfDetail'
 import { relatedTarget } from './model/relatedNodes'
 import { canvasShortcut } from './model/shortcuts'
 import { focusNodeHeader, isOnNodeHeader } from './nodeFocus'
+import { MINIMAP_BAND } from './overview/CanvasMiniMap'
 import { MoveDialog } from './spawn/MoveDialog'
 import { SpawnDialog, type SpawnDialogMode } from './spawn/SpawnDialog'
 import { Toolbar } from './Toolbar'
 import { branchMoves, canvasView, type CanvasView, type EdgeView, type NodeView } from './viewModel'
-import { focusViewport, type FocusMode } from './viewportMath'
+import { FOCUS_MARGIN, focusViewport, type FocusMode } from './viewportMath'
 
 const ZOOM_LIMITS = { minZoom: 0.1, maxZoom: 2 }
+const FIT_PADDING = 0.08
 const VIEWPORT_SAVE_DELAY_MS = 400
 const nodeTypes: NodeTypes = { entity: EntityNode }
 const edgeTypes: EdgeTypes = { [REFERENCE_EDGE_TYPE]: ReferenceEdge }
@@ -204,6 +207,16 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
     )
   }, [])
 
+  // Fitting frames the nodes in the canvas area the minimap leaves free.
+  const { minimap } = useSession()
+  const fitViewOptions = useMemo<FitViewOptions>(
+    () => ({
+      padding: { x: FIT_PADDING, top: FIT_PADDING, bottom: minimap ? `${MINIMAP_BAND + FOCUS_MARGIN}px` : FIT_PADDING },
+      maxZoom: 1
+    }),
+    [minimap]
+  )
+
   const pendingFocus = useRef<{ nodeId: string; mode: FocusMode } | null>(null)
   const focusRect = useCallback(
     (rect: Rect, mode: FocusMode = 'readable') => {
@@ -309,7 +322,7 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
       },
       focusRect,
       fitAll() {
-        void flow.fitView({ padding: 0.08, maxZoom: 1, minZoom: ZOOM_LIMITS.minZoom })
+        void flow.fitView({ ...fitViewOptions, minZoom: ZOOM_LIMITS.minZoom })
       },
       goBack: () => stepHistory(-1),
       goForward: () => stepHistory(1),
@@ -363,7 +376,7 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
       }
     }
     // commitMoves and clearPending only touch refs and stable setters.
-  }, [execute, focusRect, navigate, stepHistory, flow, setSpawn, store, prompts])
+  }, [execute, focusRect, navigate, stepHistory, flow, fitViewOptions, setSpawn, store, prompts])
 
   const finishSpawn = (nodeId: string | null): void => {
     const current = spawnRef.current
@@ -473,7 +486,7 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
                         }}
                         defaultViewport={initialViewport ?? undefined}
                         fitView={initialViewport === null && canvas.nodes.length > 0}
-                        fitViewOptions={{ padding: 0.08, maxZoom: 1 }}
+                        fitViewOptions={fitViewOptions}
                         minZoom={ZOOM_LIMITS.minZoom}
                         maxZoom={ZOOM_LIMITS.maxZoom}
                         nodesConnectable={false}
