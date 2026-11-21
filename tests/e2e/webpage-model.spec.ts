@@ -6,7 +6,8 @@ import {
   releaseGuest,
   type GuestBudget
 } from '../../src/renderer/src/entities/webpage/guestBudget'
-import { LocatorPersistence, type LocatorTimer } from '../../src/renderer/src/entities/webpage/locatorPersistence'
+import { LocatorPersistence } from '../../src/renderer/src/entities/webpage/locatorPersistence'
+import type { Timer } from '../../src/renderer/src/entities/webpage/timer'
 import { normalizeWebAddress, sameWebAddress } from '../../src/renderer/src/entities/webpage/webAddress'
 
 test.describe('web page addresses', () => {
@@ -129,29 +130,29 @@ test.describe('live guest budget', () => {
   })
 })
 
-test.describe('durable page locator', () => {
-  class ManualTimer implements LocatorTimer {
-    private queue: Array<{ callback: () => void; cancelled: boolean }> = []
+class ManualTimer implements Timer {
+  private queue: Array<{ callback: () => void; cancelled: boolean }> = []
 
-    schedule(callback: () => void): () => void {
-      const entry = { callback, cancelled: false }
-      this.queue.push(entry)
-      return () => {
-        entry.cancelled = true
-      }
-    }
-
-    get pending(): number {
-      return this.queue.filter((entry) => !entry.cancelled).length
-    }
-
-    elapse(): void {
-      const due = this.queue
-      this.queue = []
-      for (const entry of due) if (!entry.cancelled) entry.callback()
+  schedule(callback: () => void): () => void {
+    const entry = { callback, cancelled: false }
+    this.queue.push(entry)
+    return () => {
+      entry.cancelled = true
     }
   }
 
+  get pending(): number {
+    return this.queue.filter((entry) => !entry.cancelled).length
+  }
+
+  elapse(): void {
+    const due = this.queue
+    this.queue = []
+    for (const entry of due) if (!entry.cancelled) entry.callback()
+  }
+}
+
+test.describe('durable page locator', () => {
   function setup(saved = 'https://example.com/a'): { locator: LocatorPersistence; timer: ManualTimer; writes: string[] } {
     const timer = new ManualTimer()
     const writes: string[] = []
@@ -221,5 +222,38 @@ test.describe('durable page locator', () => {
     locator.navigated('https://example.com/elsewhere')
     timer.elapse()
     expect(writes).toEqual([])
+  })
+
+  test('treats an address from another writer as external even when it equals an earlier own write', () => {
+    const { locator, timer, writes } = setup()
+    locator.navigated('https://example.com/b')
+    timer.elapse()
+    locator.navigated('https://example.com/c')
+    timer.elapse()
+    expect(writes).toEqual(['https://example.com/b', 'https://example.com/c'])
+    // Each echo is consumed once.
+    expect(locator.recordChanged('https://example.com/b')).toBe(false)
+    expect(locator.recordChanged('https://example.com/c')).toBe(false)
+    expect(locator.recordChanged('https://example.com/b')).toBe(true)
+  })
+
+  test('an echo that overtakes the echoes of earlier writes consumes them too', () => {
+    const { locator, timer } = setup()
+    locator.navigated('https://example.com/b')
+    timer.elapse()
+    locator.navigated('https://example.com/c')
+    timer.elapse()
+    // The record moved B then C, but only C was observed.
+    expect(locator.recordChanged('https://example.com/c')).toBe(false)
+    expect(locator.recordChanged('https://example.com/b')).toBe(true)
+  })
+
+  test('an address from another writer is external again after its own echo of the same address', () => {
+    const { locator, timer } = setup()
+    locator.navigated('https://example.com/b')
+    timer.elapse()
+    expect(locator.recordChanged('https://example.com/b')).toBe(false)
+    expect(locator.recordChanged('https://example.com/elsewhere')).toBe(true)
+    expect(locator.recordChanged('https://example.com/b')).toBe(true)
   })
 })
