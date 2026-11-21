@@ -1,11 +1,6 @@
 /* The agent conversation entity. Every color, radius, font, and spacing value comes from the Control Room
    tokens; layout dimensions are the only literal sizes. */
 
-/* An agent waiting for the user is visible from anywhere on the canvas, collapsed or not. */
-.spade-node:has(.agent-status[data-attention='true']) {
-  border-color: var(--warning);
-}
-
 .agent-status {
   display: inline-flex;
   gap: var(--cr-space-2);

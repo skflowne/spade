@@ -377,11 +377,25 @@ test('permissions, prompts with shared context, interrupting, and provider sub-a
     )
     const status = canvasNode(page, 'Agent').getByTestId('agent-status')
     await expect(status).toContainText('needs attention')
+    // The wrapper marks the node as waiting for the user, collapsed or not.
+    await expect(canvasNode(page, 'Agent')).toHaveClass(/spade-node--attention/)
     await execute(page, { type: 'collapseNode', nodeId })
     await expect(status).toContainText('1 request')
+    await expect(canvasNode(page, 'Agent')).toHaveClass(/spade-node--attention/)
     await execute(page, { type: 'expandNode', nodeId })
 
     const body = await activate(page, 'Agent')
+    // Waiting for attention never hides that the node is the active one.
+    const borderOf = (locator: Locator): Promise<string> => locator.evaluate((element) => getComputedStyle(element).borderTopColor)
+    const accent = await page.evaluate(() => {
+      const probe = document.createElement('div')
+      probe.style.borderTopColor = 'var(--accent)'
+      document.body.append(probe)
+      const color = getComputedStyle(probe).borderTopColor
+      probe.remove()
+      return color
+    })
+    await expect.poll(() => borderOf(canvasNode(page, 'Agent'))).toBe(accent)
     const request = body.getByRole('article', { name: 'Permission request: Run npm install' })
     await expect(request).toContainText('npm install')
     await request.getByRole('button', { name: 'Allow' }).click()
