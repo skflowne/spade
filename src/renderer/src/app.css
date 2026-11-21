@@ -1102,6 +1102,46 @@ legend {
   color: var(--faint);
 }
 
+.note {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+}
+
+.note .note-body {
+  flex: 1;
+  min-height: 0;
+}
+
+.note-conflict {
+  display: grid;
+  gap: var(--cr-space-3);
+  padding: var(--cr-space-4) var(--cr-space-6);
+  border-bottom: 1px solid color-mix(in srgb, var(--warning) 40%, var(--line));
+  background: color-mix(in srgb, var(--warning) 8%, var(--panel));
+  font-size: var(--cr-text-sm);
+}
+
+.note-conflict__message {
+  color: var(--warning);
+  font-weight: 650;
+}
+
+.note-conflict__theirs {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--muted);
+  white-space: pre-wrap;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.note-conflict__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: var(--cr-space-3);
+}
+
 .entity-summary {
   display: grid;
   gap: var(--cr-space-5);

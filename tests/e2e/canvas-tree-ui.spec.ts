@@ -12,6 +12,8 @@ import {
   execute,
   expectNoNotice,
   fitAll,
+  heldCanvasCommands,
+  holdCanvasCommands,
   launch,
   nodeBody,
   nodeHeader,
@@ -19,6 +21,7 @@ import {
   nodeMenu,
   openProjectFromSidebar,
   readCanvas,
+  releaseCanvasCommands,
   renderedViewport,
   scratchDirectory,
   type Spade
@@ -331,6 +334,69 @@ test('zooms the canvas over chrome and inactive bodies, and gives an activated b
     await expect(body).toHaveAttribute('data-active', 'true')
     await nodeHeader(page, 'Scratch').click({ position: { x: 60, y: 10 } })
     await expect(body).toHaveAttribute('data-active', 'false')
+  } finally {
+    await spade.app.close()
+  }
+})
+
+test('keeps a note in step with changes made elsewhere: never writes what was only read, and asks before replacing edits', async () => {
+  test.setTimeout(60_000)
+  const spade = await launchWithProject()
+  const { page, app } = spade
+  try {
+    const nodeId = await seedNote(page, 'Shared')
+    await page.getByRole('button', { name: 'Zoom to 100%' }).click()
+    const body = nodeBody(page, 'Shared')
+    const text = body.getByRole('textbox', { name: 'Note text' })
+    const bodyOnRecord = async (): Promise<unknown> =>
+      ((await readCanvas(page)).nodes.find((node) => node.id === nodeId)!.config as { body: string }).body
+    const change = (value: string): ReturnType<typeof execute> =>
+      execute(page, { type: 'updateNode', nodeId, patch: { config: { body: value } } })
+
+    // The user opens the note to read it; meanwhile an agent rewrites it. The open note follows.
+    await body.click()
+    await expect(body).toHaveAttribute('data-active', 'true')
+    await change('Rewritten by an agent')
+    await expect(text).toHaveValue('Rewritten by an agent')
+    const writes = (await readCanvas(page)).activity.length
+    await page.keyboard.press('Escape')
+    await expect(body).toHaveAttribute('data-active', 'false')
+    await page.waitForTimeout(900)
+    expect(await bodyOnRecord()).toBe('Rewritten by an agent')
+    expect((await readCanvas(page)).activity).toHaveLength(writes)
+
+    // The user edits; another change arrives before the edit is stored. Neither side is silently lost.
+    await holdCanvasCommands(app, { type: 'updateNode', nodeId, patch: { config: { body: 'Mine' } } })
+    await body.click()
+    await text.fill('Mine')
+    await expect.poll(() => heldCanvasCommands(app)).toBe(1)
+    await change('Theirs')
+    const conflict = body.getByRole('alert')
+    await expect(conflict).toContainText('This note changed elsewhere')
+    await expect(conflict).toContainText('Theirs')
+    await expect(text).toHaveValue('Mine')
+    await page.keyboard.press('Escape')
+    await expect(body).toHaveAttribute('data-active', 'false')
+    await releaseCanvasCommands(app)
+    // The held save was already on its way and lands; the choice stays open.
+    await expect.poll(bodyOnRecord).toBe('Mine')
+    await expect(conflict).toBeVisible()
+
+    await body.click()
+    await conflict.getByRole('button', { name: 'Take theirs' }).click()
+    await expect(conflict).toHaveCount(0)
+    await expect(text).toHaveValue('Theirs')
+    await expect.poll(bodyOnRecord).toBe('Theirs')
+
+    await holdCanvasCommands(app, { type: 'updateNode', nodeId, patch: { config: { body: 'Mine again' } } })
+    await text.fill('Mine again')
+    await expect.poll(() => heldCanvasCommands(app)).toBe(1)
+    await change('Theirs again')
+    await conflict.getByRole('button', { name: 'Keep mine' }).click()
+    await releaseCanvasCommands(app)
+    await expect.poll(bodyOnRecord).toBe('Mine again')
+    await expect(text).toHaveValue('Mine again')
+    await expectNoNotice(page)
   } finally {
     await spade.app.close()
   }
