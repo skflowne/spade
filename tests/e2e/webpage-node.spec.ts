@@ -349,6 +349,7 @@ test('zooming out to the preview level unmounts the guest and zooming back in re
   const restored = await guestAt(app, `${origin}/b`)
   expect(restored.id).not.toBe(guest.id)
   await expect(canvasNode(page, title).getByTestId('webpage-placeholder')).toHaveCount(0)
+  await expect(canvasNode(page, title).getByText(/could not be shown/)).toHaveCount(0)
   await app.close()
 })
 
