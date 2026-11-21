@@ -54,7 +54,8 @@ export const noteEntity: EntityDefinition<NoteConfig> = {
     const config = record(value, 'Note')
     if (typeof config.body !== 'string') throw new Error('body must be a string')
     return { body: config.body }
-  }
+  },
+  describeForAgent: (config) => (config.body.trim() ? { excerpt: config.body } : {})
 }
 
 export const agentEntity: EntityDefinition<AgentConfig> = {
@@ -71,7 +72,9 @@ export const agentEntity: EntityDefinition<AgentConfig> = {
       mode: optionalText(config.mode, 'mode'),
       prompt: optionalText(config.prompt, 'prompt')
     }
-  }
+  },
+  // The locator comes from the node's Paseo resourceRef.
+  describeForAgent: (config) => (config.prompt === null ? {} : { excerpt: config.prompt })
 }
 
 export const imageEntity: EntityDefinition<ImageConfig> = {
@@ -94,7 +97,14 @@ export const imageEntity: EntityDefinition<ImageConfig> = {
               throw new Error('source.kind must be "path" or "asset"')
             })()
     return caption === null ? { source: parsedSource } : { source: parsedSource, caption }
-  }
+  },
+  describeForAgent: (config) => ({
+    locator:
+      config.source.kind === 'path'
+        ? { kind: 'path', value: config.source.path }
+        : { kind: 'asset', value: config.source.assetId },
+    ...(config.caption === undefined ? {} : { excerpt: config.caption })
+  })
 }
 
 export const webPageEntity: EntityDefinition<WebPageConfig> = {
@@ -108,7 +118,8 @@ export const webPageEntity: EntityDefinition<WebPageConfig> = {
     const url = text(config.url, 'url')
     if (!/^https?:\/\//i.test(url)) throw new Error('url must be an http or https URL')
     return { url }
-  }
+  },
+  describeForAgent: (config) => ({ locator: { kind: 'url', value: config.url } })
 }
 
 export function createBuiltinEntityRegistry(): EntityRegistry {
