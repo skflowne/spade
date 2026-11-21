@@ -1,0 +1,6 @@
+export { createElectronFileServiceHost, IMAGE_PROTOCOL_CUSTOM_SCHEME, registerFileServiceSchemes } from './electronHost'
+export { FileServiceError, type FileServiceErrorCode } from './errors'
+export { createFileService, type FileServiceOptions } from './fileService'
+export type { FileServiceHost } from './host'
+export { buildImageUrl, IMAGE_PROTOCOL_SCHEME, parseImageUrl, type ImageLocation } from './imageProtocol'
+export { fitImageNodeSize } from './imageSizing'
