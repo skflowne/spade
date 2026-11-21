@@ -12,10 +12,15 @@ export type PaseoConnection = {
 export type AgentModeInfo = { id: string; label: string; description?: string }
 export type AgentModelInfo = { id: string; label: string; isDefault?: boolean }
 
+// Paseo's provider discovery state; `loading` until the daemon has probed the provider for a cwd.
+export type AgentProviderStatus = 'ready' | 'loading' | 'error' | 'unavailable'
+
 export type AgentProviderInfo = {
   id: string
   label: string
+  // True only when the provider is enabled and `ready`.
   available: boolean
+  status: AgentProviderStatus
   error: string | null
   models: AgentModelInfo[]
   modes: AgentModeInfo[]
@@ -31,9 +36,11 @@ export type AgentPermissionRequest = {
   name: string
   title: string | null
   description: string | null
-  // Bounded, display-only rendering of the request input.
+  // Bounded (AGENT_PERMISSION_DETAIL_LIMIT), display-only rendering of what is being approved.
   detail: string | null
 }
+
+export const AGENT_PERMISSION_DETAIL_LIMIT = 4_000
 
 export type PermissionBehavior = 'allow' | 'deny'
 
@@ -41,7 +48,10 @@ export type PermissionBehavior = 'allow' | 'deny'
 export type ProviderSubagentInfo = {
   id: string
   parentSubagentId: string | null
+  // The sub-agent's type or name as the provider reports it.
   title: string | null
+  // The task the parent delegated.
+  description: string | null
   status: string
   updatedAt: string
 }
@@ -91,11 +101,19 @@ type ConversationItemBase = {
 
 export type ConversationItem = ConversationItemBase &
   (
-    | { kind: 'user-message'; text: string; images: ConversationImage[] }
+    | {
+        kind: 'user-message'
+        text: string
+        images: ConversationImage[]
+        // The agent that sent this input (a parent's prompt, a child's finish notice); null for the user.
+        sender: { agentId: string; title: string | null } | null
+      }
     | { kind: 'assistant-message'; text: string; images: ConversationImage[] }
     | { kind: 'thinking'; text: string }
     | {
         kind: 'tool-call'
+        // The provider's call id; a provider-native sub-agent launched by this call may share it.
+        callId: string
         toolKind: ToolCallKind
         name: string
         status: ToolCallStatus
@@ -104,7 +122,10 @@ export type ConversationItem = ConversationItemBase &
         // Bounded text of input and output; never a full unbounded payload.
         input: string | null
         output: string | null
-        // Unified diff text for edits, when the provider reports one.
+        // Bounded failure text when the call failed.
+        error: string | null
+        // Unified diff text for edits: the provider's own, or derived from the replaced and new text,
+        // in which case hunk line numbers count from the start of the replaced snippet.
         diff: string | null
         // File the call read or edited, when known.
         path: string | null
@@ -121,6 +142,8 @@ export const AGENT_TIMELINE_PAGE_LIMIT = 60
 // Per text field of a conversation item (message text is exempt up to MESSAGE_TEXT_LIMIT).
 export const CONVERSATION_FIELD_LIMIT = 20_000
 export const CONVERSATION_MESSAGE_TEXT_LIMIT = 200_000
+// Inline (data: URL) images larger than this are omitted with a visible marker in the item's output.
+export const CONVERSATION_IMAGE_DATA_LIMIT = 2_000_000
 
 export type AgentTimelineQuery = {
   // Absent: the newest page. Otherwise the `olderCursor` of a previous page.
