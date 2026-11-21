@@ -1,8 +1,11 @@
-import { resolve } from 'node:path'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join, resolve } from 'node:path'
 import { _electron as electron, expect, test } from '@playwright/test'
 
 test('starts the desktop shell with a canvas', async () => {
-  const application = await electron.launch({ args: [resolve('.')] })
+  const userData = await mkdtemp(join(tmpdir(), 'spade-startup-'))
+  const application = await electron.launch({ args: [resolve('.'), `--user-data-dir=${userData}`] })
 
   try {
     const window = await application.firstWindow()
@@ -15,5 +18,6 @@ test('starts the desktop shell with a canvas', async () => {
     await expect(canvas.locator('.react-flow__renderer')).toBeVisible()
   } finally {
     await application.close()
+    await rm(userData, { recursive: true, force: true })
   }
 })

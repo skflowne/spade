@@ -85,6 +85,8 @@ export type CanvasCommandErrorCode =
   | 'invalid-command'
   | 'cycle'
   | 'entity-create-failed'
+  // The project's stored canvas cannot be read safely (for example, a newer SPADE wrote it).
+  | 'canvas-unavailable'
 
 export class CanvasCommandError extends Error {
   constructor(
