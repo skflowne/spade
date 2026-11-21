@@ -194,10 +194,11 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
     }
   }, [guest, locator, syncHistory, canvas])
 
-  // Chromium keeps page zoom per host, so a navigation to another host starts at 100% again.
+  // Chromium keeps page zoom per host, so a navigation to another host starts at 100% again. A zoom into
+  // preview unmounts the guest in the same commit, while `guest` still holds the detached element.
   useEffect(() => {
-    if (guest && ready) guest.setZoomFactor(Math.max(zoom, MIN_PAGE_ZOOM))
-  }, [guest, ready, zoom, page.url])
+    if (live && guest && ready) guest.setZoomFactor(Math.max(zoom, MIN_PAGE_ZOOM))
+  }, [live, guest, ready, zoom, page.url])
 
   // Activation hands keyboard focus to the page; deactivation returns it to the canvas.
   useEffect(() => {

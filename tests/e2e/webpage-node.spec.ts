@@ -4,8 +4,10 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test, type ElectronApplication, type Page } from '@playwright/test'
+import { PREVIEW_ZOOM_THRESHOLD } from '../../src/renderer/src/canvas/model/levelOfDetail'
 import {
   canvasNode,
+  expectClearOfMinimap,
   fitAll,
   launch,
   nodeBody,
@@ -205,10 +207,11 @@ test('the guest stays live through pan, zoom, resize, and selection', async () =
   await toolbar.getByRole('button', { name: 'Zoom in' }).click()
   await toolbar.getByRole('button', { name: 'Zoom in' }).click()
 
-  // Select the node, then resize it from its corner handle.
+  // Fit all leaves the node clear of the minimap; select it, then resize it from its bottom-right grip.
   await fitAll(page)
-  await nodeHeader(page, title).click()
   const node = canvasNode(page, title)
+  await expectClearOfMinimap(page, node)
+  await nodeHeader(page, title).click()
   const nodeBox = (await node.boundingBox())!
   const grip = (await page.locator('.react-flow__resize-control.handle.bottom.right').boundingBox())!
   await page.mouse.move(grip.x + grip.width / 2, grip.y + grip.height / 2)
@@ -260,19 +263,20 @@ test('a canvas keeps at most twelve live pages, and activating a paused page bri
   test.setTimeout(90_000)
   const { app, page } = await launchWithProject()
   const projectId = (await readCanvas(page)).projectId
-  // A 5×3 grid, so all thirteen fit in view at once.
+  // A 5×3 grid of small pages, so all thirteen fit in view at once at a zoom that shows full bodies.
   for (let index = 0; index < 13; index += 1) {
     const created = await page.evaluate(
       async ([target, url, title, x, y]) => {
         const host = (window as unknown as { spadeHost: import('../../src/shared/ipc').SpadeHostBridge }).spadeHost
-        const node = { entityType: 'webpage', config: { url }, title, position: { x, y } }
+        const node = { entityType: 'webpage', config: { url }, title, position: { x, y }, size: { width: 300, height: 240 } }
         return host.canvas.execute(target, { type: 'startTree', node })
       },
-      [projectId, `${origin}/b?page=${index}`, `Page ${index}`, (index % 5) * 1000, Math.floor(index / 5) * 700] as const
+      [projectId, `${origin}/b?page=${index}`, `Page ${index}`, (index % 5) * 340, Math.floor(index / 5) * 300] as const
     )
     expect(created.ok).toBe(true)
   }
   await fitAll(page)
+  expect((await renderedViewport(page)).zoom).toBeGreaterThanOrEqual(PREVIEW_ZOOM_THRESHOLD)
   await expect.poll(async () => (await guests(app)).length).toBe(12)
   await expect(page.getByTestId('webpage-placeholder')).toHaveCount(1)
 
@@ -319,6 +323,32 @@ test('collapsing unmounts the guest and expanding restores the page', async () =
   await nodeMenu(page, title, 'Expand node')
   const restored = await guestAt(app, `${origin}/b`)
   expect(restored.id).not.toBe(guest.id)
+  await app.close()
+})
+
+test('zooming out to the preview level unmounts the guest and zooming back in restores the page', async () => {
+  const { app, page } = await launchWithProject()
+  await createWebPageFromToolbar(page, `${origin}/a`)
+  const title = hostTitle()
+  const guest = await guestAt(app, `${origin}/a`)
+  await inGuest(app, guest.id, `document.getElementById('to-b').click()`)
+  await guestAt(app, `${origin}/b`)
+
+  const toolbar = page.getByRole('toolbar', { name: 'Canvas' })
+  while ((await renderedViewport(page)).zoom >= PREVIEW_ZOOM_THRESHOLD) {
+    await toolbar.getByRole('button', { name: 'Zoom out' }).click()
+  }
+  await expect(nodeBody(page, title)).toHaveAttribute('data-detail', 'preview')
+  await expect.poll(async () => (await guests(app)).length).toBe(0)
+  await expect(canvasNode(page, title).getByTestId('webpage-placeholder')).toContainText(`${origin}/b`)
+
+  while ((await renderedViewport(page)).zoom < PREVIEW_ZOOM_THRESHOLD) {
+    await toolbar.getByRole('button', { name: 'Zoom in' }).click()
+  }
+  await expect(nodeBody(page, title)).toHaveAttribute('data-detail', 'full')
+  const restored = await guestAt(app, `${origin}/b`)
+  expect(restored.id).not.toBe(guest.id)
+  await expect(canvasNode(page, title).getByTestId('webpage-placeholder')).toHaveCount(0)
   await app.close()
 })
 

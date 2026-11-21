@@ -4,6 +4,11 @@ import { useSession, useStoreState } from '../../store/hooks'
 import type { EntityFlowNode } from '../EntityNode'
 
 const MINIMAP_SIZE = { width: 220, height: 150 }
+const MINIMAP_MARGIN = 15
+
+// The strip along the canvas's bottom edge that the shown minimap covers, in screen pixels. Fitting keeps nodes
+// above it, or the minimap would take the pointer from their bottom edge and resize grips.
+export const MINIMAP_BAND = MINIMAP_SIZE.height + MINIMAP_MARGIN
 
 // The overview (plan §12): simplified node rectangles colored by entity type, agents tinted by their activity.
 // Clicking or dragging moves the viewport there without recording a focus move.
@@ -25,7 +30,7 @@ export function CanvasMiniMap(): React.JSX.Element | null {
   return (
     <MiniMap<EntityFlowNode>
       className="canvas-minimap"
-      style={MINIMAP_SIZE}
+      style={{ ...MINIMAP_SIZE, margin: MINIMAP_MARGIN }}
       position="bottom-right"
       ariaLabel="Minimap"
       pannable
