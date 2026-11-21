@@ -20,6 +20,9 @@ export class LocatorPersistence {
   // changes in order, so an echo also stands for the earlier ones it overtook, and a later change to the same
   // address is another writer's.
   private readonly unechoed: string[] = []
+  // Another writer moved the record and the guest has not settled on it yet: commits from the page it is
+  // leaving must not be written over the record.
+  private following = false
   private cancel: (() => void) | null = null
   private readonly timer: Timer
 
@@ -28,8 +31,13 @@ export class LocatorPersistence {
     this.timer = options.timer ?? realTimer
   }
 
+  get isFollowing(): boolean {
+    return this.following
+  }
+
   // The guest committed a main-frame navigation.
   navigated(url: string): void {
+    if (this.following) return
     this.cancel?.()
     this.cancel = null
     if (sameWebAddress(url, this.saved)) {
@@ -40,8 +48,8 @@ export class LocatorPersistence {
     this.cancel = this.timer.schedule(() => this.flush(), this.options.delayMs)
   }
 
-  // The record's URL changed. True when another writer changed it (the guest should follow); false when it
-  // is this locator's own write coming back.
+  // The record's URL changed. True when another writer changed it: the guest should follow, and `followed`
+  // must be called once it has (or never will). False when it is this locator's own write coming back.
   recordChanged(url: string): boolean {
     const echo = this.unechoed.findIndex((written) => sameWebAddress(url, written))
     if (echo !== -1) {
@@ -55,7 +63,16 @@ export class LocatorPersistence {
     this.cancel?.()
     this.cancel = null
     this.pending = null
+    this.following = true
     return true
+  }
+
+  // The guest stopped following the record: `url` is the address it settled on (after redirects), or null
+  // when the load was abandoned or no guest was there to follow.
+  followed(url: string | null): void {
+    if (!this.following) return
+    this.following = false
+    if (url !== null) this.navigated(url)
   }
 
   flush(): void {

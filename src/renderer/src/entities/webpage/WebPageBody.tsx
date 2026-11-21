@@ -9,6 +9,9 @@ import { onReloadRequested } from './reloadRequests'
 import { normalizeWebAddress, sameWebAddress } from './webAddress'
 import {
   ABORTED_LOAD,
+  guestUrl,
+  isCallable,
+  whenCallable,
   type WebviewConsoleEvent,
   type WebviewElement,
   type WebviewFailedLoadEvent,
@@ -21,6 +24,8 @@ const LOCATOR_SAVE_DELAY_MS = 750
 const STATUS_TITLE_LENGTH = 28
 // Chromium refuses page zoom below 25%.
 const MIN_PAGE_ZOOM = 0.25
+
+const pageZoom = (zoom: number): number => Math.max(zoom, MIN_PAGE_ZOOM)
 
 type PageState = {
   // The guest's current URL, or the durable one while no guest is mounted.
@@ -63,6 +68,10 @@ function statusOf(page: PageState, live: boolean): NodeStatus | null {
 
 const ignore = (): void => undefined
 
+// An address waiting for the mounted guest to become callable. `follow`: it comes from another writer, so the
+// locator ignores the guest's navigations until the guest has settled on it.
+type WantedAddress = { url: string; follow: boolean }
+
 export function WebPageBody({ node, config, project, active, detail, host }: EntityBodyProps<WebPageConfig>): React.JSX.Element {
   const canvas = useCanvasActions()
   const zoom = useStore((state) => state.transform[2])
@@ -72,6 +81,9 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
   const live = full && slot.live
 
   const [guest, setGuest] = useState<WebviewElement | null>(null)
+  // The guest's methods can be called; long before `dom-ready`, which a page that never answers never fires.
+  const [callable, setCallable] = useState(false)
+  // The first document is ready; until then the surface says the page is loading.
   const [ready, setReady] = useState(false)
   const [page, setPage] = useState<PageState>(() => ({
     url: config.url,
@@ -83,13 +95,23 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
   }))
   const [draft, setDraft] = useState<string | null>(null)
   const [draftInvalid, setDraftInvalid] = useState(false)
-  // `guest` and `ready` still describe an unmounted guest for one commit, when its element is already detached
-  // and every webview method throws; `live` is current in that commit.
-  const attached = live && ready ? guest : null
+  // `guest` and `callable` still describe an unmounted guest for one commit, when its element is already
+  // detached and every webview method throws; `live` is current in that commit.
+  const attached = live && callable ? guest : null
+  // The mounted element, current even within a commit, for calls made outside render.
+  const element = useRef<WebviewElement | null>(null)
+  const wanted = useRef<WantedAddress | null>(null)
+  // Only the newest followed load may end the locator's following.
+  const followLoads = useRef(0)
+  const onElement = useCallback((next: WebviewElement | null) => {
+    element.current = next
+    setGuest(next)
+  }, [])
 
-  const latest = useRef({ host, active, url: config.url })
+  const latest = useRef({ host, active, url: config.url, zoom })
   latest.current.host = host
   latest.current.active = active
+  latest.current.zoom = zoom
 
   const [locator] = useState(
     () =>
@@ -101,12 +123,54 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
   )
   useEffect(() => () => locator.flush(), [locator])
 
+  const load = useCallback(
+    (target: WebviewElement, { url, follow }: WantedAddress) => {
+      if (!follow) {
+        target.loadURL(url).catch(ignore)
+        return
+      }
+      const followLoad = ++followLoads.current
+      const settle = (settled: string | null): void => {
+        if (followLoad === followLoads.current) locator.followed(settled)
+      }
+      if (sameWebAddress(guestUrl(target) ?? '', url)) settle(null)
+      else target.loadURL(url).then(() => settle(guestUrl(target)), () => settle(null))
+    },
+    [locator]
+  )
+
+  // Moves the guest to `url` as soon as it can take calls. Without a mounted guest, the next one starts there.
+  const go = useCallback(
+    (address: WantedAddress) => {
+      const target = element.current
+      if (target && isCallable(target)) {
+        load(target, address)
+      } else if (target) {
+        // An address from the user replaces one being followed.
+        if (wanted.current?.follow && !address.follow) locator.followed(null)
+        wanted.current = address
+      } else {
+        latest.current.url = address.url
+        setPage((current) => ({ ...current, url: address.url }))
+        if (address.follow) locator.followed(null)
+      }
+    },
+    [load, locator]
+  )
+
+  useEffect(() => {
+    if (!attached || !wanted.current) return
+    const address = wanted.current
+    wanted.current = null
+    load(attached, address)
+  }, [attached, load])
+
   // Another writer (an agent, another window) moved the page: the guest follows.
   useEffect(() => {
     if (!locator.recordChanged(config.url)) return
     latest.current.url = config.url
     setPage((current) => ({ ...current, url: config.url }))
-    if (attached && !sameWebAddress(attached.getURL(), config.url)) attached.loadURL(config.url).catch(ignore)
+    go({ url: config.url, follow: true })
     // Only a record change moves the guest; the guest's own navigation must not re-run this.
   }, [config.url, locator])
 
@@ -135,34 +199,49 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
   useEffect(() => {
     if (live) return
     setGuest(null)
+    setCallable(false)
     setReady(false)
     setPage((current) => ({ ...current, loading: false, canGoBack: false, canGoForward: false, failure: null }))
   }, [live])
 
-  const syncHistory = useCallback((element: WebviewElement) => {
+  const syncHistory = useCallback((target: WebviewElement) => {
+    if (!isCallable(target)) return
     // Read now, while the event's guest is attached, not in the updater, which may run after it unmounts.
-    const history = { canGoBack: element.canGoBack(), canGoForward: element.canGoForward() }
+    const history = { canGoBack: target.canGoBack(), canGoForward: target.canGoForward() }
     setPage((current) => ({ ...current, ...history }))
   }, [])
 
   useEffect(() => {
     if (!guest) return
-    const element = guest
+    const target = guest
     const escapeSignal = `spade-escape:${crypto.randomUUID()}`
 
+    const stopWaiting = whenCallable(target, () => {
+      setCallable(true)
+      // Loading may have started before these listeners were added.
+      const loading = target.isLoading()
+      setPage((current) => ({ ...current, loading }))
+      syncHistory(target)
+    })
     const navigated = (url: string): void => {
-      latest.current.url = url
+      // A commit from the page the guest is leaving is not where the node is going.
+      if (!locator.isFollowing) latest.current.url = url
       locator.navigated(url)
       setPage((current) => ({ ...current, url }))
-      syncHistory(element)
+      syncHistory(target)
     }
     const listeners: Record<string, (event: Event) => void> = {
       'did-start-loading': () => setPage((current) => ({ ...current, loading: true, failure: null })),
       'did-stop-loading': () => {
         setPage((current) => ({ ...current, loading: false }))
-        syncHistory(element)
+        syncHistory(target)
       },
-      'did-navigate': (event) => navigated((event as WebviewNavigationEvent).url),
+      'did-navigate': (event) => {
+        // Chromium resets page zoom when a document commits (it keeps zoom per host), including the first one,
+        // which may commit after the zoom was set on the freshly callable guest.
+        if (isCallable(target)) target.setZoomFactor(pageZoom(latest.current.zoom))
+        navigated((event as WebviewNavigationEvent).url)
+      },
       'did-navigate-in-page': (event) => {
         const navigation = event as WebviewNavigationEvent
         if (navigation.isMainFrame) navigated(navigation.url)
@@ -179,31 +258,34 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
       'page-title-updated': (event) => setPage((current) => ({ ...current, title: (event as WebviewTitleEvent).title })),
       'dom-ready': () => {
         setReady(true)
-        syncHistory(element)
+        syncHistory(target)
         // Keys pressed inside the guest never reach this document, so Escape (plan §6: return control to the
         // canvas) is relayed from the page as a console message. The guest has no preload to do it otherwise.
-        element
+        target
           .executeJavaScript(
             `addEventListener('keydown', (event) => { if (event.key === 'Escape') console.debug(${JSON.stringify(escapeSignal)}) }, true)`
           )
           .catch(ignore)
-        if (latest.current.active) element.focus()
+        if (latest.current.active) target.focus()
       },
       'console-message': (event) => {
         if ((event as WebviewConsoleEvent).message === escapeSignal && latest.current.active) canvas.setActiveNode(null)
       }
     }
-    for (const [name, listener] of Object.entries(listeners)) element.addEventListener(name, listener)
+    for (const [name, listener] of Object.entries(listeners)) target.addEventListener(name, listener)
     return () => {
-      for (const [name, listener] of Object.entries(listeners)) element.removeEventListener(name, listener)
+      stopWaiting()
+      for (const [name, listener] of Object.entries(listeners)) target.removeEventListener(name, listener)
+      // This guest will not settle on anything any more; the next one starts at the latest address.
+      if (wanted.current?.follow || locator.isFollowing) locator.followed(null)
+      wanted.current = null
     }
   }, [guest, locator, syncHistory, canvas])
 
-  // Chromium keeps page zoom per host, so a navigation to another host starts at 100% again. A zoom into
-  // preview unmounts the guest in the same commit, while `guest` still holds the detached element.
+  // A zoom into preview unmounts the guest in the same commit, while `guest` still holds the detached element.
   useEffect(() => {
-    if (attached) attached.setZoomFactor(Math.max(zoom, MIN_PAGE_ZOOM))
-  }, [attached, zoom, page.url])
+    if (attached) attached.setZoomFactor(pageZoom(zoom))
+  }, [attached, zoom])
 
   // Activation hands keyboard focus to the page; deactivation returns it to the canvas.
   useEffect(() => {
@@ -236,7 +318,7 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
     }
     setDraft(null)
     setDraftInvalid(false)
-    if (attached) attached.loadURL(url).catch(ignore)
+    go({ url, follow: false })
   }
 
   const retry = (): void => {
@@ -246,7 +328,7 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
     else attached.reload()
   }
 
-  const usable = live && ready
+  const usable = attached !== null
   return (
     <div ref={root} className={active ? 'webpage webpage--active' : 'webpage'} data-testid="webpage">
       {full ? (
@@ -265,7 +347,7 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
             aria-label="Back"
             title="Back"
             disabled={!usable || !page.canGoBack}
-            onClick={() => guest?.goBack()}
+            onClick={() => attached?.goBack()}
           >
             ←
           </button>
@@ -275,12 +357,12 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
             aria-label="Forward"
             title="Forward"
             disabled={!usable || !page.canGoForward}
-            onClick={() => guest?.goForward()}
+            onClick={() => attached?.goForward()}
           >
             →
           </button>
           {page.loading ? (
-            <button type="button" className="cr-icon-button" aria-label="Stop" title="Stop" disabled={!usable} onClick={() => guest?.stop()}>
+            <button type="button" className="cr-icon-button" aria-label="Stop" title="Stop" disabled={!usable} onClick={() => attached?.stop()}>
               ✕
             </button>
           ) : (
@@ -290,7 +372,7 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
               aria-label="Reload"
               title="Reload"
               disabled={!usable}
-              onClick={() => guest?.reload()}
+              onClick={() => attached?.reload()}
             >
               ↻
             </button>
@@ -329,8 +411,8 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
       <div className="webpage__surface">
         {live ? (
           <>
-            <Guest initialUrl={latest.current.url} zoom={zoom} onElement={setGuest} />
-            {ready ? null : (
+            <Guest initialUrl={latest.current.url} zoom={zoom} onElement={onElement} />
+            {ready || (callable && !page.loading) ? null : (
               <div className="webpage__pending" aria-hidden="true">
                 Loading page…
               </div>

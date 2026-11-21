@@ -7,6 +7,7 @@ import { expect, test, type ElectronApplication, type Page } from '@playwright/t
 import { PREVIEW_ZOOM_THRESHOLD } from '../../src/renderer/src/canvas/model/levelOfDetail'
 import {
   canvasNode,
+  execute,
   expectClearOfMinimap,
   fitAll,
   launch,
@@ -41,6 +42,10 @@ const PAGES: Record<string, string> = {
     <script>window.__token = Math.random()</script>`
 }
 
+const SLOW_PAGE_MS = 1500
+// Longer than the renderer's delay before it writes a navigation to the node's record.
+const LOCATOR_SETTLE_MS = 1500
+
 let scratch: string
 let server: Server
 let origin: string
@@ -48,7 +53,14 @@ let origin: string
 test.beforeEach(async () => {
   scratch = await mkdtemp(join(tmpdir(), 'spade-webpage-'))
   server = createServer((request, response) => {
-    const page = PAGES[new URL(request.url ?? '/', 'http://localhost').pathname]
+    const path = new URL(request.url ?? '/', 'http://localhost').pathname
+    // Never answers.
+    if (path === '/hang') return
+    if (path === '/slow') {
+      setTimeout(() => response.writeHead(200, { 'content-type': 'text/html' }).end('<title>Slow</title><h1>Slow</h1>'), SLOW_PAGE_MS)
+      return
+    }
+    const page = PAGES[path]
     if (!page) {
       response.writeHead(404).end('Not found')
       return
@@ -125,6 +137,18 @@ async function webPageUrl(page: Page): Promise<string | undefined> {
 
 function hostTitle(): string {
   return new URL(origin).host
+}
+
+async function webPageId(page: Page): Promise<string> {
+  const node = (await readCanvas(page)).nodes.find((candidate) => candidate.entityType === 'webpage')
+  if (!node) throw new Error('No web page node')
+  return node.id
+}
+
+// Another writer (an agent through the CLI, another window) sets the node's URL.
+async function setUrlElsewhere(page: Page, url: string): Promise<void> {
+  const result = await execute(page, { type: 'updateNode', nodeId: await webPageId(page), patch: { config: { url } } })
+  expect(result.ok).toBe(true)
 }
 
 test('a web page node opens, follows navigation, and reopens where the user left it', async () => {
@@ -395,6 +419,41 @@ test('the inactive page leaves wheel to the canvas; the active page takes wheel 
   await page.keyboard.press('Escape')
   await expect(body).toHaveAttribute('data-active', 'false')
   await expect.poll(() => page.evaluate(() => document.activeElement?.tagName)).not.toBe('WEBVIEW')
+  await app.close()
+})
+
+test('an address set elsewhere while the page is still loading replaces that load for good', async () => {
+  const { app, page } = await launchWithProject()
+  await createWebPageFromToolbar(page, `${origin}/slow`)
+  await expect.poll(async () => (await guests(app)).length).toBe(1)
+
+  await setUrlElsewhere(page, `${origin}/b`)
+  await guestAt(app, `${origin}/b`)
+  // Past the slow page's answer and the delay before a navigation is written: the abandoned page never
+  // comes back, in the guest or in the record.
+  await page.waitForTimeout(SLOW_PAGE_MS + LOCATOR_SETTLE_MS)
+  expect((await guests(app)).map((guest) => guest.url)).toEqual([`${origin}/b`])
+  expect(await webPageUrl(page)).toBe(`${origin}/b`)
+  await app.close()
+})
+
+test('a page that never answers can be stopped, and the address bar replaces it', async () => {
+  const { app, page } = await launchWithProject()
+  await createWebPageFromToolbar(page, `${origin}/hang`)
+  const title = hostTitle()
+  await expect.poll(async () => (await guests(app)).length).toBe(1)
+
+  const body = nodeBody(page, title)
+  await body.click()
+  await expect(body).toHaveAttribute('data-active', 'true')
+  const bar = body.getByRole('toolbar', { name: 'Page navigation' })
+  await bar.getByRole('button', { name: 'Stop' }).click()
+  await expect(bar.getByRole('button', { name: 'Reload' })).toBeEnabled()
+
+  await bar.getByLabel('Address').fill(`${origin}/a`)
+  await bar.getByLabel('Address').press('Enter')
+  await guestAt(app, `${origin}/a`)
+  await expect.poll(() => webPageUrl(page)).toBe(`${origin}/a`)
   await app.close()
 })
 

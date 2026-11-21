@@ -254,6 +254,32 @@ test.describe('durable page locator', () => {
     timer.elapse()
     expect(locator.recordChanged('https://example.com/b')).toBe(false)
     expect(locator.recordChanged('https://example.com/elsewhere')).toBe(true)
+    locator.followed(null)
     expect(locator.recordChanged('https://example.com/b')).toBe(true)
+  })
+
+  test('ignores guest navigations while the guest follows another writer, then writes again', () => {
+    const { locator, timer, writes } = setup()
+    expect(locator.recordChanged('https://example.com/b')).toBe(true)
+    // The page that was loading before the record moved commits late: it must not overwrite B.
+    locator.navigated('https://example.com/a-late')
+    timer.elapse()
+    expect(writes).toEqual([])
+    locator.followed(null)
+    locator.navigated('https://example.com/c')
+    timer.elapse()
+    expect(writes).toEqual(['https://example.com/c'])
+  })
+
+  test('writes the address the guest settles on when it differs from the one it followed', () => {
+    const { locator, timer, writes } = setup()
+    locator.recordChanged('https://example.com/b')
+    locator.followed('https://example.com/b')
+    timer.elapse()
+    expect(writes).toEqual([])
+    locator.recordChanged('https://example.com/redirects')
+    locator.followed('https://example.com/redirected')
+    timer.elapse()
+    expect(writes).toEqual(['https://example.com/redirected'])
   })
 })
