@@ -82,6 +82,13 @@ function isFocusable(canvas: Canvas, nodeId: string): boolean {
   return node !== undefined && !node.archived
 }
 
+// An open dialog or menu owns Escape: it closes the overlay and must not also deactivate the node behind it.
+// A native <dialog> reacts only after this window listener has seen the key, so the key cannot be claimed there.
+function belongsToOverlay(target: EventTarget | null): boolean {
+  if (document.querySelector('dialog[open]')) return true
+  return target instanceof Element && target.closest('dialog, [role="dialog"], [role="alertdialog"], [role="menu"]') !== null
+}
+
 function isEditable(target: EventTarget | null): boolean {
   if (!(target instanceof HTMLElement)) return false
   return target.isContentEditable || target.closest('input, textarea, select, [contenteditable="true"]') !== null
@@ -280,7 +287,7 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
           event.preventDefault()
           setPicking(null)
           current.resolve(null)
-        } else if (latest.current.activeNodeId !== null) {
+        } else if (latest.current.activeNodeId !== null && !belongsToOverlay(event.target)) {
           const nodeId = latest.current.activeNodeId
           setActiveNodeId(null)
           focusNodeHeader(nodeId)

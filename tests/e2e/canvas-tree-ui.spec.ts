@@ -332,6 +332,25 @@ test('zooms the canvas over chrome and inactive bodies, and gives an activated b
 
     await body.click()
     await expect(body).toHaveAttribute('data-active', 'true')
+
+    // Escape that closes a dialog or a menu opened over the active node leaves the node active.
+    await nodeMenu(page, 'Scratch', 'Move to…')
+    const move = page.getByRole('dialog', { name: 'Move Scratch' })
+    await expect(move).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(move).toBeHidden()
+    await expect(body).toHaveAttribute('data-active', 'true')
+    await page.getByRole('toolbar', { name: 'Canvas' }).getByRole('button', { name: 'Keyboard shortcuts' }).click()
+    await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('dialog', { name: 'Keyboard shortcuts' })).toBeHidden()
+    await expect(body).toHaveAttribute('data-active', 'true')
+    await canvasNode(page, 'Scratch').getByRole('button', { name: 'Node actions' }).click()
+    await expect(page.getByRole('menu', { name: 'Actions for Scratch' })).toBeVisible()
+    await page.keyboard.press('Escape')
+    await expect(page.getByRole('menu', { name: 'Actions for Scratch' })).toBeHidden()
+    await expect(body).toHaveAttribute('data-active', 'true')
+
     await nodeHeader(page, 'Scratch').click({ position: { x: 60, y: 10 } })
     await expect(body).toHaveAttribute('data-active', 'false')
   } finally {
