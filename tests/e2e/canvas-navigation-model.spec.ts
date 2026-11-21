@@ -198,6 +198,14 @@ test.describe('activity presentation', () => {
     expect(recentAgentChanges(withNewer, at + RECENT_AGENT_CHANGE_MS + 4 * 60_000).changes.size).toBe(0)
   })
 
+  test('never marks an agent as changed by itself when its own node is the source of its change', () => {
+    const at = Date.parse('2026-11-21T10:05:00.000Z')
+    const spawned = canvasOf(canvas.nodes, [], [
+      entry('6', '2026-11-21T10:05:00.000Z', agentActor('lead'), ['doc', 'lead'], 'Spawned doc under Lead agent')
+    ])
+    expect([...recentAgentChanges(spawned, at).changes.keys()]).toEqual(['doc'])
+  })
+
   test('describes how long ago something happened', () => {
     const now = Date.parse('2026-11-21T12:00:00.000Z')
     expect(relativeTime('2026-11-21T11:59:40.000Z', now)).toBe('just now')

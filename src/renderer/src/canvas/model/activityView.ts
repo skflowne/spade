@@ -72,7 +72,8 @@ export function recentAgentChanges(
     if (entry.actor.kind !== 'agent') continue
     const actor = actorView(canvas, entry.actor, byId)
     for (const nodeId of entry.nodeIds) {
-      if (changes.has(nodeId) || !byId.has(nodeId)) continue
+      // An agent's own node appears in its spawns as their source; that is not a change to it.
+      if (nodeId === entry.actor.nodeId || changes.has(nodeId) || !byId.has(nodeId)) continue
       changes.set(nodeId, { agentNodeId: entry.actor.nodeId, agentLabel: actor.label, at: entry.at, summary: entry.summary })
       const expiry = at + RECENT_AGENT_CHANGE_MS
       expiresAt = expiresAt === null ? expiry : Math.min(expiresAt, expiry)
