@@ -1,4 +1,5 @@
 import type { AgentService, WorkspaceGateway } from '../contracts'
+import { stableErrorCode } from '../errors'
 import { describeNodeForAgent } from '../../shared/agentContext'
 import { AGENT_ENTITY, PASEO_AGENT_KIND, type AgentConfig } from '../../shared/builtinEntities'
 import {
@@ -484,19 +485,11 @@ export function createControlMethods(options: ControlMethodsOptions): ControlMet
   }
 }
 
+// Every failure that carries a stable code (the reducer's, the agent service's, the control methods' own)
+// reaches the CLI with that code; anything else is internal.
 export function toControlError(error: unknown): ControlError {
-  if (error instanceof ControlFailure || error instanceof CanvasCommandError) {
-    return { code: error.code, message: error.message }
-  }
-  // Errors from other module instances or services that follow the same { code, message } convention.
-  if (
-    error instanceof Error &&
-    (error.name === 'CanvasCommandError' || error.name === 'ControlFailure') &&
-    'code' in error &&
-    typeof error.code === 'string'
-  ) {
-    return { code: error.code as ControlErrorCode, message: error.message }
-  }
+  const code = stableErrorCode(error)
+  if (code !== null) return { code: code as ControlErrorCode, message: (error as Error).message }
   return { code: 'internal', message: error instanceof Error ? error.message : String(error) }
 }
 

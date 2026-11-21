@@ -1,5 +1,6 @@
 import type { AgentActivity, AgentContextReference, AgentProviderInfo } from '../../shared/agents'
 import type { CanvasCommand, CanvasCommandErrorCode } from '../../shared/commands'
+import type { AgentServiceErrorCode } from '../agents/errors'
 import type { Actor, CanvasEdgeRelation, Point, Size } from '../../shared/domain'
 
 // Wire protocol between the `spade` CLI and the control server. Pure types and constants: the CLI bundle
@@ -27,6 +28,7 @@ export type ControlDiscovery = {
 
 export type ControlErrorCode =
   | CanvasCommandErrorCode
+  | AgentServiceErrorCode
   | 'internal'
   | 'unauthorized'
   | 'forbidden'

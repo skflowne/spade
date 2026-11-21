@@ -173,6 +173,9 @@ export function noteSeed(title: string, body = `${title} body`): NodeSeed {
 
 export class FakeAgentService implements AgentService {
   readonly prompts: Array<{ nodeId: string; text: string; actor: Actor }> = []
+  // When set, the next calls of that operation reject with it.
+  promptFailure: Error | null = null
+  providersFailure: Error | null = null
   readonly runtimeList: AgentRuntime[] = []
   providers: AgentProviderInfo[] = [
     {
@@ -219,6 +222,7 @@ export class FakeAgentService implements AgentService {
   }
 
   async listProviders(): Promise<AgentProviderInfo[]> {
+    if (this.providersFailure) throw this.providersFailure
     return this.providers
   }
 
@@ -231,6 +235,7 @@ export class FakeAgentService implements AgentService {
   }
 
   async prompt(nodeId: string, input: { text: string }, actor: Actor): Promise<void> {
+    if (this.promptFailure) throw this.promptFailure
     this.prompts.push({ nodeId, text: input.text, actor })
   }
 

@@ -12,6 +12,7 @@ import {
   type ControlServer,
   type ControlServerInfo
 } from '../../src/main/control'
+import { AgentServiceError } from '../../src/main/agents'
 import { MAX_PAGE_LIMIT } from '../../src/main/control/protocol'
 import type { Actor } from '../../src/shared/domain'
 import { agentSeed, FakeAgentService, FakeGateway, noteSeed } from '../control-fakes'
@@ -323,6 +324,23 @@ test.describe('commands', () => {
 
     const missingEdge = await call(info, 'execute', { command: { type: 'disconnectNodes', edgeId: 'ghost-edge' } }, 'agent-lead')
     expect(missingEdge.error?.code).toBe('unknown-edge')
+  })
+
+  test('agent service failures keep their stable codes; anything else is internal', async () => {
+    const { info, agents, lead } = await world()
+    agents.promptFailure = new AgentServiceError('agent-missing', `Paseo no longer has the agent behind node ${lead}.`)
+    expect((await call(info, 'prompt', { nodeId: lead, text: 'status?' }, 'agent-lead')).error).toEqual({
+      code: 'agent-missing',
+      message: `Paseo no longer has the agent behind node ${lead}.`
+    })
+
+    agents.providersFailure = new AgentServiceError('paseo-unavailable', 'Paseo is not connected (connecting).')
+    expect((await call(info, 'providers')).error).toEqual({ code: 'paseo-unavailable', message: 'Paseo is not connected (connecting).' })
+
+    for (const failure of [Object.assign(new Error('open failed'), { code: 'ENOENT' }), new Error('boom'), Object.assign(new Error('x'), { code: 42 })]) {
+      agents.providersFailure = failure
+      expect((await call(info, 'providers')).error?.code).toBe('internal')
+    }
   })
 
   test('agents cannot move the viewport, forge resources, or bypass spawn', async () => {
