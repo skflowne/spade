@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState, type CSSProperties } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react'
 import { useStore } from '@xyflow/react'
 import { WEB_PAGE_PARTITION, type WebPageConfig } from '@shared/builtinEntities'
 import { useCanvasActions } from '../../canvas/CanvasContext'
@@ -16,6 +16,7 @@ import {
   type WebviewElement,
   type WebviewFailedLoadEvent,
   type WebviewNavigationEvent,
+  type WebviewGoneEvent,
   type WebviewTitleEvent
 } from './webviewElement'
 import './webpage.css'
@@ -35,6 +36,8 @@ type PageState = {
   canGoBack: boolean
   canGoForward: boolean
   failure: { description: string; url: string } | null
+  // The guest's renderer process ended; only a fresh guest can show the page again.
+  crashed: { description: string } | null
 }
 
 // Keeps the guest's backing viewport at its on-screen size at fractional canvas zoom and scales it back up
@@ -57,8 +60,15 @@ function hostOf(url: string): string {
   }
 }
 
+function crashDescription(reason: string): string {
+  if (reason === 'oom') return 'The page ran out of memory.'
+  if (reason === 'killed') return 'The page’s process was ended.'
+  return 'The page’s process crashed.'
+}
+
 function statusOf(page: PageState, live: boolean): NodeStatus | null {
   if (!live) return null
+  if (page.crashed) return { label: 'Crashed', tone: 'danger', description: `${page.crashed.description}\n${page.url}` }
   if (page.failure) return { label: 'Failed', tone: 'danger', description: `${page.failure.description}: ${page.failure.url}` }
   if (page.loading) return { label: 'Loading', tone: 'info', description: page.url }
   if (!page.title) return null
@@ -91,8 +101,11 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
     loading: false,
     canGoBack: false,
     canGoForward: false,
-    failure: null
+    failure: null,
+    crashed: null
   }))
+  // Changing it replaces the guest with a fresh one at the latest address.
+  const [guestKey, setGuestKey] = useState(0)
   const [draft, setDraft] = useState<string | null>(null)
   const [draftInvalid, setDraftInvalid] = useState(false)
   // `guest` and `callable` still describe an unmounted guest for one commit, when its element is already
@@ -201,7 +214,7 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
     setGuest(null)
     setCallable(false)
     setReady(false)
-    setPage((current) => ({ ...current, loading: false, canGoBack: false, canGoForward: false, failure: null }))
+    setPage((current) => ({ ...current, loading: false, canGoBack: false, canGoForward: false, failure: null, crashed: null }))
   }, [live])
 
   const syncHistory = useCallback((target: WebviewElement) => {
@@ -231,7 +244,8 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
       syncHistory(target)
     }
     const listeners: Record<string, (event: Event) => void> = {
-      'did-start-loading': () => setPage((current) => ({ ...current, loading: true, failure: null })),
+      // A load on a crashed guest (from the address bar) brings its process back.
+      'did-start-loading': () => setPage((current) => ({ ...current, loading: true, failure: null, crashed: null })),
       'did-stop-loading': () => {
         setPage((current) => ({ ...current, loading: false }))
         syncHistory(target)
@@ -254,6 +268,12 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
           loading: false,
           failure: { description: failure.errorDescription || `Error ${failure.errorCode}`, url: failure.validatedURL }
         }))
+      },
+      'render-process-gone': (event) => {
+        const { reason } = (event as WebviewGoneEvent).details
+        // Keep where the user was: the fresh guest starts there.
+        locator.flush()
+        setPage((current) => ({ ...current, loading: false, failure: null, crashed: { description: crashDescription(reason) } }))
       },
       'page-title-updated': (event) => setPage((current) => ({ ...current, title: (event as WebviewTitleEvent).title })),
       'dom-ready': () => {
@@ -294,7 +314,18 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
     else if (document.activeElement === attached) attached.blur()
   }, [active, attached])
 
-  useEffect(() => (attached ? registerReload(node.id, () => attached.reload()) : undefined), [node.id, attached])
+  const crashed = page.crashed !== null
+  const reload = useMemo(() => {
+    if (!attached) return null
+    if (!crashed) return () => attached.reload()
+    return () => {
+      setCallable(false)
+      setReady(false)
+      setPage((current) => ({ ...current, crashed: null, failure: null, loading: false, canGoBack: false, canGoForward: false }))
+      setGuestKey((key) => key + 1)
+    }
+  }, [attached, crashed])
+  useEffect(() => (reload ? registerReload(node.id, reload) : undefined), [node.id, reload])
 
   const status = statusOf(page, live)
   const statusKey = status ? `${status.label}|${status.tone}|${status.description}` : ''
@@ -366,7 +397,7 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
               aria-label="Reload"
               title="Reload"
               disabled={!usable}
-              onClick={() => attached?.reload()}
+              onClick={() => reload?.()}
             >
               ↻
             </button>
@@ -405,7 +436,7 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
       <div className="webpage__surface">
         {live ? (
           <>
-            <Guest initialUrl={latest.current.url} zoom={zoom} onElement={onElement} />
+            <Guest key={guestKey} initialUrl={latest.current.url} zoom={zoom} onElement={onElement} />
             {ready || (callable && !page.loading) ? null : (
               <div className="webpage__pending" aria-hidden="true">
                 Loading page…
@@ -420,6 +451,16 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
           </div>
         )}
         {live && page.loading ? <div className="webpage__progress" role="progressbar" aria-label="Loading page" /> : null}
+        {live && page.crashed ? (
+          <div className="webpage__failure" role="alert" data-testid="webpage-failure">
+            <p className="webpage__failure-title">This page stopped working</p>
+            <p className="webpage__failure-reason">{page.crashed.description}</p>
+            <p className="mono webpage__failure-url">{page.url}</p>
+            <button type="button" className="cr-button" onClick={() => reload?.()}>
+              Reload
+            </button>
+          </div>
+        ) : null}
         {live && page.failure ? (
           <div className="webpage__failure" role="alert" data-testid="webpage-failure">
             <p className="webpage__failure-title">This page could not be loaded</p>

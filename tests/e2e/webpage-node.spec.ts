@@ -484,6 +484,38 @@ test('a page that never answers can be stopped, and the address bar replaces it'
   await app.close()
 })
 
+async function crash(app: ElectronApplication, guestId: number): Promise<void> {
+  await app.evaluate(({ webContents }, id) => webContents.fromId(id)!.forcefullyCrashRenderer(), guestId)
+}
+
+test('a crashed page shows the failure, and Reload brings back a fresh page where it was', async () => {
+  const { app, page } = await launchWithProject()
+  await createWebPageFromToolbar(page, `${origin}/a`)
+  const title = hostTitle()
+  const guest = await guestAt(app, `${origin}/a`)
+  await inGuest(app, guest.id, `document.getElementById('to-b').click()`)
+  await guestAt(app, `${origin}/b`)
+
+  await crash(app, guest.id)
+  const failure = canvasNode(page, title).getByTestId('webpage-failure')
+  await expect(failure).toContainText('This page stopped working')
+  await expect(nodeHeader(page, title).getByText('Crashed')).toBeVisible()
+  await nodeBody(page, title).click()
+  await failure.getByRole('button', { name: 'Reload' }).click()
+  await expect(failure).toBeHidden()
+  const restored = await guestAt(app, `${origin}/b`)
+  expect(restored.id).not.toBe(guest.id)
+
+  // The node menu's Reload does the same.
+  await crash(app, restored.id)
+  await expect(failure).toBeVisible()
+  await (await menuEntry(page, title, 'Reload')).click()
+  await expect(failure).toBeHidden()
+  const again = await guestAt(app, `${origin}/b`)
+  expect(again.id).not.toBe(restored.id)
+  await app.close()
+})
+
 test('a page that fails to load shows the failure with Retry', async () => {
   const { app, page } = await launchWithProject()
   const closed = createServer()

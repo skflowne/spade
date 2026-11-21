@@ -26,6 +26,8 @@ export type WebviewFailedLoadEvent = Event & {
 }
 export type WebviewTitleEvent = Event & { title: string }
 export type WebviewConsoleEvent = Event & { message: string }
+// Fired on the element when the guest's renderer process crashes or is killed.
+export type WebviewGoneEvent = Event & { details: { reason: string; exitCode: number } }
 
 // Chromium's net::ERR_ABORTED: the navigation was replaced or stopped, not a failure to show.
 export const ABORTED_LOAD = -3
