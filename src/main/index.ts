@@ -15,16 +15,23 @@ let shutdown: 'none' | 'pending' | 'done' = 'none'
 async function start(): Promise<void> {
   // Everything SPADE persists lives under userData, which Chromium's --user-data-dir switch relocates.
   const dataDirectory = join(app.getPath('userData'), 'data')
+  const entities = createBuiltinEntityRegistry()
   const gateway = await SpadeWorkspaceGateway.open({
     store: new AppDataStore({ directory: dataDirectory }),
-    entities: createBuiltinEntityRegistry()
+    entities
   })
-  const services = createServices({ gateway, assets: new AssetStore({ directory: dataDirectory }), dataDirectory })
+  const services = createServices({
+    gateway,
+    assets: new AssetStore({ directory: dataDirectory }),
+    entities,
+    dataDirectory
+  })
   running = { gateway, services }
 
   await services.files.start()
   mainWindow = openWindow(running)
   services.agents.start().catch((error: unknown) => console.error('The agent service failed to start', error))
+  services.control.start().catch((error: unknown) => console.error('The agent control server failed to start', error))
 }
 
 function openWindow({ gateway, services }: Running): BrowserWindow {
@@ -74,7 +81,7 @@ function openWindow({ gateway, services }: Running): BrowserWindow {
 }
 
 async function stop({ gateway, services }: Running): Promise<void> {
-  const stopped = await Promise.allSettled([services.agents.stop(), services.files.stop()])
+  const stopped = await Promise.allSettled([services.control.stop(), services.agents.stop(), services.files.stop()])
   for (const outcome of stopped) {
     if (outcome.status === 'rejected') console.error('A service failed to stop', outcome.reason)
   }

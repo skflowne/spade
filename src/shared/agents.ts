@@ -67,9 +67,10 @@ export type AgentResourceState =
 export type AgentRuntime = {
   projectId: string
   nodeId: string
+  // For a provider-native sub-agent opened as a node: the provider's sub-agent id.
   agentId: string
   resourceState: AgentResourceState
-  // Null when the agent is a provider-native sub-agent opened as a node.
+  // Paseo's durable parent identity; for a provider-native sub-agent, the agent that launched it.
   parentAgentId: string | null
   provider: string
   model: string | null
