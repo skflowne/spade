@@ -1,25 +1,16 @@
-import type { ResourceRef } from './domain'
+import type { Size } from './domain'
 
-export type EntityCreateInput<Config> = {
-  nodeId: string
-  config: Config
-}
-
-export type EntityCreateResult = {
-  resourceRef: ResourceRef | null
-  title?: string
-  shortDescription?: string
-}
-
-export type EntityAdapter<Config> = {
-  create(input: EntityCreateInput<Config>): EntityCreateResult
-}
-
+// Shared, process-neutral part of an entity: identity, legible sizes, and config validation.
+// Resource creation lives in main-process entity adapters; body rendering lives in the renderer.
 export type EntityDefinition<Config = unknown> = {
   type: string
   version: number
   displayName: string
-  adapter: EntityAdapter<Config>
+  // Readable at 100% zoom (plan §8). Placement reserves this footprint even while collapsed.
+  defaultSize: Size
+  collapsedSize: Size
+  // Returns the validated config or throws an Error describing the first problem.
+  parseConfig(value: unknown): Config
 }
 
 export class EntityRegistry {
@@ -42,16 +33,12 @@ export class EntityRegistry {
 
     return definition as EntityDefinition<Config>
   }
-}
 
-export function createDeterministicMockAdapter<Config>(kind: string): EntityAdapter<Config> {
-  return {
-    create: ({ nodeId }) => ({
-      resourceRef: {
-        provider: 'mock',
-        kind,
-        id: nodeId
-      }
-    })
+  has(type: string): boolean {
+    return this.definitions.has(type)
+  }
+
+  list(): EntityDefinition[] {
+    return [...this.definitions.values()]
   }
 }

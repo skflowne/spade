@@ -1,12 +1,8 @@
 import { join } from 'node:path'
 import { app, BrowserWindow } from 'electron'
-import { DOMAIN_RECORD_VERSION, type Project } from '../shared/domain'
-
-const supportedProjectVersion: Project['version'] = DOMAIN_RECORD_VERSION
-
 function createWindow(): void {
   const window = new BrowserWindow({
-    title: `SPADE · domain v${supportedProjectVersion}`,
+    title: 'SPADE',
     width: 1200,
     height: 800,
     minWidth: 720,
