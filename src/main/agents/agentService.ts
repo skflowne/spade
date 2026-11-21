@@ -260,7 +260,8 @@ class PaseoAgentService implements SpadeAgentService {
       provider: snapshot.provider,
       model: snapshot.model ?? config.model,
       mode: snapshot.mode ?? mode,
-      prompt: config.prompt
+      prompt: config.prompt,
+      ...(config.expansion === undefined ? {} : { expansion: config.expansion })
     }
     return {
       resourceRef: agentResourceRef(snapshot.id),
