@@ -2,6 +2,7 @@ import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test, type Locator, type Page } from '@playwright/test'
+import { PREVIEW_ZOOM_THRESHOLD } from '../../src/renderer/src/canvas/model/levelOfDetail'
 import type { AgentRuntime, ConversationItem } from '../../src/shared/agents'
 import { indexTree } from '../../src/shared/tree'
 import {
@@ -11,6 +12,7 @@ import {
   png,
   pushRuntime,
   runtimeFor,
+  scriptFiles,
   setProviders,
   setReply,
   setTimeline,
@@ -27,6 +29,7 @@ import {
   nodeMenu,
   openProjectFromSidebar,
   readCanvas,
+  renderedViewport,
   scratchDirectory,
   selectedProjectId,
   type Spade
@@ -320,6 +323,116 @@ test('a streaming update keeps earlier rich blocks mounted, older pages load on 
   }
 })
 
+test('a failed request for older messages leaves the scroll position alone', async () => {
+  const session = await launchScripted()
+  const { page, app } = session
+  try {
+    const nodeId = await seedAgent(session)
+    const filler = Array.from({ length: 40 }, (_, index) => items.notice(`n${index}`, `Filler notice ${index}`))
+    // No older page is scripted for cursor-1: the request fails.
+    await setTimeline(app, nodeId, { epoch: 'e1', olderCursor: 'cursor-1', items: filler })
+    await pushRuntime(app, runtimeFor(session.projectId, nodeId))
+    const log = conversation(page, 'Agent')
+    await expect(log.getByText('Filler notice 39')).toBeVisible()
+    await activate(page, 'Agent')
+    const scrollToTop = (): Promise<void> =>
+      log.evaluate(
+        (element) =>
+          new Promise<void>((resolve) => {
+            if (element.scrollTop === 0) return resolve()
+            element.addEventListener('scroll', () => resolve(), { once: true })
+            element.scrollTop = 0
+          })
+      )
+    await scrollToTop()
+    await log.getByRole('button', { name: 'Load older messages' }).click()
+    await expect(nodeBody(page, 'Agent').getByTestId('agent-state')).toContainText('Could not load the conversation')
+    await setTimeline(app, nodeId, { epoch: 'e1', olderCursor: 'cursor-1', items: [...filler, items.notice('late', 'Late notice')] })
+    await expect(log.getByText('Late notice')).toBeAttached()
+    expect(await log.evaluate((element) => element.scrollTop)).toBe(0)
+  } finally {
+    await app.close()
+  }
+})
+
+test('collapsing or zooming out keeps the draft, shared context, annotations, history, and scroll position', async () => {
+  const session = await launchScripted()
+  const { page, app } = session
+  try {
+    const nodeId = await seedAgent(session)
+    await execute(page, { type: 'spawnChild', sourceNodeId: nodeId, origin: 'spawned', node: { entityType: 'note', config: { body: '' }, title: 'Spec' } })
+    const filler = Array.from({ length: 30 }, (_, index) => items.notice(`n${index}`, `Filler notice ${index}`))
+    const answer = '```spade-html Review\n<!doctype html><button onclick="window.spade.annotate({ text: \'Check this\' })">Note</button>\n```'
+    await pushRuntime(app, runtimeFor(session.projectId, nodeId))
+    await setTimeline(
+      app,
+      nodeId,
+      { epoch: 'e1', olderCursor: 'cursor-1', items: [...filler, items.assistant('a0', answer), items.assistant('a1', 'Final answer text')] },
+      { 'cursor-1': { epoch: 'e1', olderCursor: null, items: [items.user('old', 'The very first message')] } }
+    )
+    const log = conversation(page, 'Agent')
+    const body = await activate(page, 'Agent')
+    const input = body.getByRole('textbox', { name: 'Message' })
+    await input.fill('Half-written thought')
+    await body.getByRole('button', { name: 'Attach context' }).click()
+    await page.getByRole('dialog', { name: 'Attach context' }).getByRole('checkbox', { name: /Spec/ }).check()
+    await page.keyboard.press('Escape')
+    await page.frameLocator('iframe.rich-html__frame').getByRole('button', { name: 'Note' }).click()
+    await expect(log.getByRole('region', { name: 'Pending annotations' })).toContainText('Check this')
+    await log.getByRole('button', { name: 'Load older messages' }).click()
+    await expect(log.getByText('The very first message')).toBeAttached()
+    await log.evaluate(
+      (element) =>
+        new Promise<void>((resolve) => {
+          element.addEventListener('scroll', () => resolve(), { once: true })
+          element.scrollTop = 150
+        })
+    )
+
+    const remembered = async (): Promise<void> => {
+      await expect(input).toHaveValue('Half-written thought')
+      await expect(body.getByRole('list', { name: 'Shared with the agent' }).getByRole('listitem')).toHaveText([/child\s*Spec/])
+      await expect(log.getByRole('region', { name: 'Pending annotations' })).toContainText('Check this')
+      await expect(log.getByText('The very first message')).toBeAttached()
+      await expect(log.getByRole('button', { name: 'Load older messages' })).toHaveCount(0)
+      await expect.poll(() => log.evaluate((element) => element.scrollTop)).toBe(150)
+    }
+    await execute(page, { type: 'collapseNode', nodeId })
+    await expect(log).toHaveCount(0)
+    await execute(page, { type: 'expandNode', nodeId })
+    await remembered()
+
+    const toolbar = page.getByRole('toolbar', { name: 'Canvas' })
+    const zoom = async (direction: 'out' | 'in'): Promise<void> => {
+      while (direction === 'out' ? (await renderedViewport(page)).zoom >= PREVIEW_ZOOM_THRESHOLD : (await renderedViewport(page)).zoom < PREVIEW_ZOOM_THRESHOLD) {
+        await toolbar.getByRole('button', { name: direction === 'out' ? 'Zoom out' : 'Zoom in' }).click()
+      }
+    }
+    const preview = canvasNode(page, 'Agent').getByTestId('agent-preview')
+    await zoom('out')
+    await expect(preview).toContainText('Final answer text')
+    await zoom('in')
+    await remembered()
+
+    // The newest page now holds only tool calls. The preview keeps the last answer it knows, and crossing the
+    // zoom threshold reads nothing again.
+    await setTimeline(app, nodeId, {
+      epoch: 'e1',
+      olderCursor: 'cursor-3',
+      items: [items.tool('r1', { toolKind: 'read', name: 'Read', summary: 'a.txt' }), items.tool('r2', { toolKind: 'read', name: 'Read', summary: 'b.txt' })]
+    })
+    await expect(log.locator('[data-tool-kind="read"]')).toHaveCount(2)
+    const reads = (await agentCalls(app, 'agents.getTimeline')).length
+    await zoom('out')
+    await expect(preview).toContainText('Final answer text')
+    await zoom('in')
+    await expect(log.locator('[data-tool-kind="read"]')).toHaveCount(2)
+    expect(await agentCalls(app, 'agents.getTimeline')).toHaveLength(reads)
+  } finally {
+    await app.close()
+  }
+})
+
 test('without a reachable agent the conversation explains why and keeps what it has', async () => {
   const session = await launchScripted()
   const { page, app } = session
@@ -377,11 +490,25 @@ test('permissions, prompts with shared context, interrupting, and provider sub-a
     )
     const status = canvasNode(page, 'Agent').getByTestId('agent-status')
     await expect(status).toContainText('needs attention')
+    // The wrapper marks the node as waiting for the user, collapsed or not.
+    await expect(canvasNode(page, 'Agent')).toHaveClass(/spade-node--attention/)
     await execute(page, { type: 'collapseNode', nodeId })
     await expect(status).toContainText('1 request')
+    await expect(canvasNode(page, 'Agent')).toHaveClass(/spade-node--attention/)
     await execute(page, { type: 'expandNode', nodeId })
 
     const body = await activate(page, 'Agent')
+    // Waiting for attention never hides that the node is the active one.
+    const borderOf = (locator: Locator): Promise<string> => locator.evaluate((element) => getComputedStyle(element).borderTopColor)
+    const accent = await page.evaluate(() => {
+      const probe = document.createElement('div')
+      probe.style.borderTopColor = 'var(--accent)'
+      document.body.append(probe)
+      const color = getComputedStyle(probe).borderTopColor
+      probe.remove()
+      return color
+    })
+    await expect.poll(() => borderOf(canvasNode(page, 'Agent'))).toBe(accent)
     const request = body.getByRole('article', { name: 'Permission request: Run npm install' })
     await expect(request).toContainText('npm install')
     await request.getByRole('button', { name: 'Allow' }).click()
@@ -506,6 +633,12 @@ test('an agent message with a path, an image, and a URL offers every action', as
     await popover.getByRole('button', { name: 'Enlarge' }).click()
     const lightbox = page.getByRole('dialog', { name: 'shot.png' })
     await expect(lightbox.getByRole('img')).toHaveAttribute('src', /^spade-image:/)
+    // A click inside the lightbox stays there: it never activates the node behind it.
+    await page.evaluate(() => window.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape' })))
+    await expect(nodeBody(page, 'Agent')).toHaveAttribute('data-active', 'false')
+    await lightbox.getByRole('img').click()
+    await expect(lightbox).toBeVisible()
+    await expect(nodeBody(page, 'Agent')).toHaveAttribute('data-active', 'false')
     await lightbox.getByRole('button', { name: 'Close' }).click()
     await expect(lightbox).toBeHidden()
 
@@ -578,6 +711,122 @@ test('an agent message with a path, an image, and a URL offers every action', as
   }
 })
 
+test('path chips follow the file system and leave network paths alone until the user asks', async () => {
+  const session = await launchScripted()
+  const { page, app, projectId } = session
+  const unc = '\\\\fileserver\\share\\spec.md'
+  try {
+    await scriptFiles(app, {
+      paths: {
+        'src/App.t': { kind: 'missing' },
+        'src/App.tsx': { kind: 'file' },
+        'out/report.txt': { kind: 'missing' },
+        'notes/todo.md': { kind: 'missing' },
+        'flaky/a.txt': 'reject'
+      }
+    })
+    const nodeId = await seedAgent(session)
+    const report = (status: 'running' | 'completed'): ConversationItem =>
+      items.tool('w1', { toolKind: 'edit', name: 'Write', summary: 'out/report.txt', path: 'out/report.txt', status })
+    const conversationWith = (streamed: string, status: 'running' | 'completed'): ConversationItem[] => [
+      items.assistant('a1', `Shared spec: \`${unc}\`. Notes: \`notes/todo.md\`. Flaky: \`flaky/a.txt\`. See [the plan](docs/plan.md).`),
+      report(status),
+      items.assistant('a2', streamed)
+    ]
+    await showAgent(session, nodeId, conversationWith('Open `src/App.t', 'running'))
+    const log = conversation(page, 'Agent')
+    const chip = (text: string): Locator => log.locator('button.rich-artifact').filter({ hasText: new RegExp(`^${escape(text)}$`) })
+    const reportChip = log.locator('[data-tool-kind="edit"] .agent-pane__path button')
+
+    // Visible chips are checked lazily; a network path outside the project is never touched on its own.
+    await expect(chip('src/App.t')).toHaveAttribute('data-path-state', 'missing')
+    await expect(reportChip).toHaveAttribute('data-path-state', 'missing')
+    await expect(chip(unc)).toHaveAttribute('data-path-state', 'unchecked')
+    await expect(chip(unc)).not.toHaveAttribute('aria-disabled', 'true')
+    // Markdown links to paths are checked too.
+    await expect(log.getByRole('button', { name: 'the plan' })).toHaveAttribute('data-path-state', 'missing')
+    // A failed check is not a missing file.
+    await expect(chip('flaky/a.txt')).toHaveAttribute('data-path-state', 'unknown')
+    await expect(chip('flaky/a.txt')).not.toHaveAttribute('aria-disabled', 'true')
+
+    // The streamed message completes the path: the same chip now shows the existing file.
+    await setTimeline(app, nodeId, { epoch: 'e1', olderCursor: null, items: conversationWith('Open `src/App.tsx`', 'running') })
+    await expect(chip('src/App.tsx')).toHaveAttribute('data-path-state', 'file')
+    await expect(chip('src/App.tsx')).not.toHaveAttribute('aria-disabled', 'true')
+
+    // The edit tool created its file: the next timeline change checks the missing path again.
+    await scriptFiles(app, { paths: { 'out/report.txt': { kind: 'file' } } })
+    await setTimeline(app, nodeId, { epoch: 'e1', olderCursor: null, items: conversationWith('Open `src/App.tsx`', 'completed') })
+    await expect(reportChip).toHaveAttribute('data-path-state', 'file')
+
+    // Clicking a path known to be missing checks it again.
+    await scriptFiles(app, { paths: { 'notes/todo.md': { kind: 'file' }, 'flaky/a.txt': { kind: 'file' } } })
+    await activate(page, 'Agent')
+    await chip('notes/todo.md').click({ force: true })
+    let popover = page.getByRole('dialog', { name: 'Path actions' })
+    await expect(popover.getByRole('button')).toHaveText(['Reveal in Explorer', 'Copy path'])
+    await page.keyboard.press('Escape')
+    await chip('flaky/a.txt').click()
+    await expect(popover.getByRole('button')).toHaveText(['Reveal in Explorer', 'Copy path'])
+    await page.keyboard.press('Escape')
+
+    // The network path: not checked until the user asks, from its own popover.
+    await chip(unc).click()
+    popover = page.getByRole('dialog', { name: 'Path actions' })
+    await expect(popover).toContainText('Network path — not checked')
+    await expect(popover.getByRole('button')).toHaveText(['Check this path', 'Reveal in Explorer', 'Copy path'])
+    expect((await agentCalls(app, 'files.inspectPath')).filter(([, path]) => path === unc)).toEqual([])
+    await scriptFiles(app, { paths: { [unc]: { kind: 'file' } } })
+    await popover.getByRole('button', { name: 'Check this path' }).click()
+    await expect(popover.getByRole('button')).toHaveText(['Reveal in Explorer', 'Copy path'])
+    await expect(chip(unc)).toHaveAttribute('data-path-state', 'file')
+    expect((await agentCalls(app, 'files.inspectPath')).filter(([, path]) => path === unc)).toEqual([[projectId, unc, { explicit: true }]])
+    // Passive checks never claim to be explicit.
+    for (const [, path, options] of await agentCalls(app, 'files.inspectPath')) {
+      if (path !== unc) expect(options ?? {}).not.toHaveProperty('explicit', true)
+    }
+  } finally {
+    await app.close()
+  }
+})
+
+test('a network image in an answer loads only when the user asks', async () => {
+  const session = await launchScripted()
+  const { page, app, projectId } = session
+  const pixel = `data:image/png;base64,${png(4, 4).toString('base64')}`
+  const ready = { ok: true as const, image: { url: pixel, width: 4, height: 4, revision: '1' } }
+  try {
+    // A UNC path is recognised in the renderer; a mapped path only by the main process's answer.
+    await scriptFiles(app, {
+      images: { '//fileserver/share/diagram.png': { reply: ready }, 'mapped/diagram.png': { reply: ready, explicitOnly: true } }
+    })
+    const nodeId = await seedAgent(session)
+    await showAgent(session, nodeId, [items.assistant('a1', 'UNC: ![unc diagram](//fileserver/share/diagram.png)\n\nMapped: ![mapped diagram](mapped/diagram.png)')])
+    const log = conversation(page, 'Agent')
+    const placeholders = log.locator('.rich-image--network')
+    await expect(placeholders).toHaveCount(2)
+    await expect(placeholders.first()).toContainText('Network image')
+    expect((await agentCalls(app, 'files.describeImage')).filter(([, source]) => (source as { path: string }).path.startsWith('//'))).toEqual([])
+
+    await activate(page, 'Agent')
+    await placeholders.first().getByRole('button', { name: 'Load' }).click()
+    await expect(log.getByRole('button', { name: 'Image: unc diagram' }).locator('img')).toHaveAttribute('src', pixel)
+    await expect(placeholders).toHaveCount(1)
+    await placeholders.getByRole('button', { name: 'Load' }).click()
+    await expect(log.getByRole('button', { name: 'Image: mapped diagram' }).locator('img')).toHaveAttribute('src', pixel)
+    const calls = await agentCalls(app, 'files.describeImage')
+    expect(calls.filter(([, source]) => (source as { path: string }).path === '//fileserver/share/diagram.png')).toEqual([
+      [projectId, { kind: 'path', path: '//fileserver/share/diagram.png' }, { explicit: true }]
+    ])
+    expect(calls.filter(([, source]) => (source as { path: string }).path === 'mapped/diagram.png').map(([, , options]) => options ?? null)).toEqual([
+      null,
+      { explicit: true }
+    ])
+  } finally {
+    await app.close()
+  }
+})
+
 test('a live HTML answer submits its message, data, and annotations as the next prompt; diagrams render', async () => {
   const session = await launchScripted()
   const { page, app } = session
@@ -588,6 +837,7 @@ test('a live HTML answer submits its message, data, and annotations as the next 
       '<!doctype html>',
       '<button id="note" onclick="window.spade.annotate({ target: \'step-1\', text: \'Too vague\' })">Note</button>',
       '<button id="approve" onclick="window.spade.submit({ message: \'Approved\', data: { step: 2 } }).then(() => document.body.dataset.result = \'ok\', (error) => document.body.dataset.result = \'error: \' + error.message)">Approve</button>',
+      '<input aria-label="Draft" onkeydown="if (event.key === \'Escape\' && this.value) { event.preventDefault(); this.value = \'\' }">',
       '```'
     ].join('\n')
     await showAgent(session, nodeId, [items.assistant('a1', `${html}\n\n\`\`\`mermaid\ngraph TD\nA-->B\n\`\`\``)])
@@ -622,6 +872,17 @@ test('a live HTML answer submits its message, data, and annotations as the next 
     await answer.getByRole('button', { name: 'Approve' }).click()
     await expect(answer.locator('body')).toHaveAttribute('data-result', 'error: Paseo no longer has this agent.')
     expect(await agentCalls(app, 'agents.prompt')).toHaveLength(2)
+
+    // Escape inside the answer leaves the conversation (plan §6), unless the answer handled the key itself.
+    await activate(page, 'Agent')
+    const draft = answer.getByRole('textbox', { name: 'Draft' })
+    await draft.fill('x')
+    await draft.press('Escape')
+    await expect(draft).toHaveValue('')
+    await expect(nodeBody(page, 'Agent')).toHaveAttribute('data-active', 'true')
+    await draft.press('Escape')
+    await expect(nodeBody(page, 'Agent')).toHaveAttribute('data-active', 'false')
+    await expect(nodeHeader(page, 'Agent')).toBeFocused()
   } finally {
     await app.close()
   }

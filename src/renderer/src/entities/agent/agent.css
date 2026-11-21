@@ -1,11 +1,6 @@
 /* The agent conversation entity. Every color, radius, font, and spacing value comes from the Control Room
    tokens; layout dimensions are the only literal sizes. */
 
-/* An agent waiting for the user is visible from anywhere on the canvas, collapsed or not. */
-.spade-node:has(.agent-status[data-attention='true']) {
-  border-color: var(--warning);
-}
-
 .agent-status {
   display: inline-flex;
   gap: var(--cr-space-2);
@@ -369,17 +364,23 @@
   gap: var(--cr-space-4);
 }
 
-/* --- Artifact chips: existence is checked lazily --- */
+/* --- Artifact chips and links: existence is checked lazily --- */
 
-.agent-conversation .rich-artifact[data-path-state='missing'] {
+.agent-conversation :is(.rich-artifact, .rich-link)[data-path-state='missing'] {
   color: var(--muted);
   text-decoration-line: line-through;
   text-decoration-color: var(--faint);
   cursor: default;
 }
 
-.agent-conversation .rich-artifact[data-path-state='missing']::after {
-  content: 'not found';
+/* A network path outside the project: neutral until the user asks SPADE to check it. */
+.agent-conversation :is(.rich-artifact, .rich-link)[data-path-state='unchecked'] {
+  color: var(--text);
+  text-decoration-style: dashed;
+  text-decoration-color: var(--faint);
+}
+
+.agent-conversation :is(.rich-artifact, .rich-link):is([data-path-state='missing'], [data-path-state='unchecked'])::after {
   display: inline-block;
   margin-left: var(--cr-space-2);
   text-decoration: none;
@@ -387,6 +388,14 @@
   font: 700 var(--cr-text-xs) var(--mono);
   letter-spacing: 0.04em;
   text-transform: uppercase;
+}
+
+.agent-conversation :is(.rich-artifact, .rich-link)[data-path-state='missing']::after {
+  content: 'not found';
+}
+
+.agent-conversation :is(.rich-artifact, .rich-link)[data-path-state='unchecked']::after {
+  content: 'network · not checked';
 }
 
 .agent-conversation .rich-artifact[data-quiet='true'] {
@@ -766,6 +775,10 @@
 
 .agent-artifact-popover__failure {
   padding: 0 var(--cr-space-2);
+}
+
+.agent-lightbox {
+  display: contents;
 }
 
 .agent-lightbox__image {

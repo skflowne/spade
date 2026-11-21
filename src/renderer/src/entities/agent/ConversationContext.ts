@@ -14,6 +14,8 @@ export type ConversationServices = {
   submitBlocked: string | null
   subagentIds: ReadonlySet<string>
   openSubagent(subagentId: string): Promise<void>
+  // Escape inside an HTML answer that the answer did not handle: hands input back to the canvas (plan §6).
+  leaveAnswer(): void
 }
 
 export const ConversationContext = createContext<ConversationServices | null>(null)

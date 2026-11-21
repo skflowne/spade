@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test'
-import { detectArtifacts, parseArtifact, type Artifact } from '../../src/shared/artifacts'
+import { decodeFileUrl, detectArtifacts, parseArtifact, type Artifact } from '../../src/shared/artifacts'
 
 type Found = { text: string } & Artifact
 
@@ -232,5 +232,13 @@ test.describe('whole-string artifact parsing', () => {
     expect(parseArtifact('npm run build')).toBeNull()
     expect(parseArtifact('and/or')).toBeNull()
     expect(parseArtifact('')).toBeNull()
+  })
+})
+
+test.describe('file URLs', () => {
+  test('decode to a path, dropping the slash before a drive letter', () => {
+    expect(decodeFileUrl('file:///C:/My%20Docs/a.png')).toBe('C:/My Docs/a.png')
+    expect(decodeFileUrl('file:///home/me/a%23b.png')).toBe('/home/me/a#b.png')
+    expect(decodeFileUrl('file:///bad%E0%A4%A')).toBeNull()
   })
 })

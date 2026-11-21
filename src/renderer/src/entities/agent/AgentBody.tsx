@@ -1,20 +1,22 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentConfig } from '@shared/builtinEntities'
 import { DEFAULT_CONVERSATION_EXPANSION } from '@shared/domain'
+import { useCanvasActions } from '../../canvas/CanvasContext'
+import { focusNodeHeader } from '../../canvas/nodeFocus'
 import type { AnnotateHandler, SubmitHandler } from '../../rich'
-import { useAgentRuntime, useAppState, useSpadeStore } from '../../store/hooks'
+import { useAgentRuntime, useAppState } from '../../store/hooks'
 import type { EntityBodyProps } from '../types'
-import { AnnotationStore } from './annotations'
 import { ArtifactLayer } from './ArtifactLayer'
 import { Composer } from './Composer'
 import { ConversationContext, type ConversationServices } from './ConversationContext'
 import { ConversationView } from './ConversationView'
+import { conversationState } from './conversationState'
 import { effectiveExpansion, type ExpansionOverride } from './expansion'
 import { ExpansionControl } from './ExpansionControl'
 import { Permissions } from './Permissions'
 import { agentStatusOf, lastAssistantExcerpt, promptBlockReason, runtimeIdentity } from './status'
 import { Subagents } from './Subagents'
-import { formatSubmission } from './submission'
+import { createAnswerSubmitter } from './submission'
 import { useTimeline } from './useTimeline'
 
 const PREVIEW_PAGE_LIMIT = 12
@@ -24,11 +26,14 @@ export function AgentBody(props: EntityBodyProps<AgentConfig>): React.JSX.Elemen
   return props.detail === 'preview' ? <AgentPreview {...props} /> : <AgentConversation {...props} />
 }
 
-// Level-of-detail rendering: status and the last answer, from one small page.
+// Level-of-detail rendering: status and the last answer known. Reads one small page only when nothing is
+// remembered for the node or the conversation changed since.
 function AgentPreview({ node }: EntityBodyProps<AgentConfig>): React.JSX.Element {
   const runtime = useAgentRuntime(node.id)
-  const timeline = useTimeline(node.id, runtime?.resourceState ?? null, PREVIEW_PAGE_LIMIT)
-  const excerpt = timeline.state ? lastAssistantExcerpt(timeline.state.items, PREVIEW_EXCERPT_LIMIT) : null
+  // Re-renders whenever the remembered pages change.
+  useTimeline(node.id, runtime?.resourceState ?? null, PREVIEW_PAGE_LIMIT)
+  const answer = conversationState(node.id).lastAnswer
+  const excerpt = answer ? lastAssistantExcerpt([answer], PREVIEW_EXCERPT_LIMIT) : null
   return (
     <div className="agent-preview" data-testid="agent-preview">
       <p className="agent-preview__status">{runtime ? agentStatusOf(runtime).description : (node.cachedPresentation?.summary ?? 'No status yet')}</p>
@@ -40,16 +45,15 @@ function AgentPreview({ node }: EntityBodyProps<AgentConfig>): React.JSX.Element
 function AgentConversation({ node, config, project, host }: EntityBodyProps<AgentConfig>): React.JSX.Element {
   const runtime = useAgentRuntime(node.id)
   const app = useAppState()
-  const store = useSpadeStore()
   const timeline = useTimeline(node.id, runtime?.resourceState ?? null)
   const global = app?.settings.conversationExpansion ?? DEFAULT_CONVERSATION_EXPANSION
   const override = useOverride(config.expansion)
   const expansion = useMemo(() => effectiveExpansion(global, override.value), [global, override.value])
   const blocked = promptBlockReason(node, runtime)
-  const [annotations] = useState(() => new AnnotationStore())
+  const annotations = conversationState(node.id).annotations
   const latest = useRef({ blocked, nodeId: node.id })
   latest.current = { blocked, nodeId: node.id }
-  const notify = useCallback((message: string) => store.notify(message), [store])
+  const notify = useCallback((message: string) => host.notify(message), [host])
 
   const prompt = useCallback(async (text: string, contextNodeIds?: string[]): Promise<string | null> => {
     const result = await window.spadeHost.agents
@@ -58,6 +62,9 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
     return result.ok ? null : result.error.message
   }, [])
 
+  const [submitAnswer] = useState(() =>
+    createAnswerSubmitter({ annotations, blocked: () => latest.current.blocked, prompt: (text) => prompt(text) })
+  )
   const handlers = useRef(new Map<string, { onSubmit: SubmitHandler; onAnnotate: AnnotateHandler }>())
   const answerHandlers = useCallback(
     (answerKey: string, title: string | null) => {
@@ -65,14 +72,7 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
       if (!entry) {
         entry = {
           // Settles the answer script's promise: resolves once the agent accepted the prompt.
-          async onSubmit(input) {
-            const reason = latest.current.blocked
-            if (reason) throw new Error(reason)
-            const sent = annotations.get(answerKey)
-            const problem = await prompt(formatSubmission({ title, ...input, annotations: sent }))
-            if (problem !== null) throw new Error(problem)
-            annotations.clear(answerKey, sent)
-          },
+          onSubmit: (input) => submitAnswer(answerKey, title, input),
           onAnnotate(input) {
             annotations.add(answerKey, input)
           }
@@ -81,7 +81,7 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
       }
       return entry
     },
-    [annotations, prompt]
+    [annotations, submitAnswer]
   )
 
   const openSubagent = useCallback(
@@ -95,12 +95,18 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
     [host, notify]
   )
 
+  const canvasActions = useCanvasActions()
+  const leaveAnswer = useCallback(() => {
+    canvasActions.setActiveNode(null)
+    focusNodeHeader(latest.current.nodeId)
+  }, [canvasActions])
+
   const subagentList = runtime?.providerSubagents
   const subagentIds = useMemo(() => new Set((subagentList ?? []).map((subagent) => subagent.id)), [subagentList])
 
   const services = useMemo<ConversationServices>(
-    () => ({ expansion, annotations, answerHandlers, submitBlocked: blocked, subagentIds, openSubagent }),
-    [expansion, annotations, answerHandlers, blocked, subagentIds, openSubagent]
+    () => ({ expansion, annotations, answerHandlers, submitBlocked: blocked, subagentIds, openSubagent, leaveAnswer }),
+    [expansion, annotations, answerHandlers, blocked, subagentIds, openSubagent, leaveAnswer]
   )
 
   const setOverride = (value: ExpansionOverride | undefined): void => {
@@ -124,7 +130,7 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
   const items = timeline.state?.items ?? []
 
   return (
-    <ArtifactLayer projectId={project.id} nodeId={node.id} host={host} notify={notify}>
+    <ArtifactLayer projectId={project.id} projectRoot={project.rootPath} nodeId={node.id} host={host} revision={timeline.state}>
       <ConversationContext.Provider value={services}>
         <div className="agent-body">
           <div className="agent-toolbar">
@@ -142,6 +148,7 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
           />
           {subagentList ? <Subagents subagents={subagentList} onOpen={openSubagent} /> : null}
           <ConversationView
+            nodeId={node.id}
             items={items}
             hasOlder={timeline.state?.olderCursor != null}
             loadingOlder={timeline.loadingOlder}

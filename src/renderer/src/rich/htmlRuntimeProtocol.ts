@@ -16,6 +16,8 @@ export type RuntimeMessage =
   | { type: 'resize'; height: number }
   | { type: 'open-url'; url: string }
   | { type: 'call'; id: number; method: unknown; input: unknown }
+  // Escape pressed inside the answer and not handled by it: the host leaves the answer (plan §6).
+  | { type: 'escape' }
 
 export type HostMessage =
   | { source: typeof HOST_MESSAGE_SOURCE; token: string; type: 'load'; html: string }
@@ -29,6 +31,8 @@ export function parseRuntimeMessage(data: unknown, token: string): RuntimeMessag
   switch (message.type) {
     case 'ready':
       return { type: 'ready' }
+    case 'escape':
+      return { type: 'escape' }
     case 'resize':
       return typeof message.height === 'number' && Number.isFinite(message.height) && message.height >= 0
         ? { type: 'resize', height: Math.ceil(message.height) }
@@ -109,6 +113,14 @@ function prelude(token: string): string {
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', observe);
   else observe();
   window.addEventListener('load', measure);
+  // Keyboard events never leave the frame. An Escape the answer did not handle is reported once dispatch has
+  // finished, so handlers registered later than this one still get to prevent it.
+  window.addEventListener('keydown', (event) => {
+    if (event.key !== 'Escape' || event.isComposing) return;
+    setTimeout(() => {
+      if (!event.defaultPrevented) post({ type: 'escape' });
+    }, 0);
+  });
   document.addEventListener('click', (event) => {
     const anchor = event.target instanceof Element ? event.target.closest('a[href]') : null;
     if (!anchor || event.defaultPrevented) return;

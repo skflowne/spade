@@ -4,11 +4,19 @@ import type { Artifact } from '../../src/shared/artifacts'
 import { agentEntity } from '../../src/shared/builtinEntities'
 import type { ConversationExpansionPreferences } from '../../src/shared/domain'
 import type { PathInfo } from '../../src/shared/ipc'
-import { presentArtifact } from '../../src/renderer/src/entities/agent/artifactActions'
+import { decodeImageDataUrl, presentArtifact } from '../../src/renderer/src/entities/agent/artifactActions'
 import { effectiveExpansion, paneKindOf, withOverride } from '../../src/renderer/src/entities/agent/expansion'
 import { splitMessage } from '../../src/renderer/src/entities/agent/messageSegments'
+import { NEGATIVE_RECHECK_MS, PathChecks, type PathCheck } from '../../src/renderer/src/entities/agent/pathChecks'
 import { agentStatusOf, lastAssistantExcerpt } from '../../src/renderer/src/entities/agent/status'
-import { formatSubmission } from '../../src/renderer/src/entities/agent/submission'
+import { AnnotationStore } from '../../src/renderer/src/entities/agent/annotations'
+import {
+  conversationState,
+  forgetConversationState,
+  noteTimelineChanged,
+  remainingDraft
+} from '../../src/renderer/src/entities/agent/conversationState'
+import { createAnswerSubmitter, formatSubmission } from '../../src/renderer/src/entities/agent/submission'
 import { mergeNewestPage, mergeOlderPage, type TimelineState } from '../../src/renderer/src/entities/agent/timeline'
 import type { AgentRuntime } from '../../src/shared/agents'
 
@@ -166,6 +174,66 @@ test.describe('HTML answer submissions', () => {
     cyclic.self = cyclic
     expect(formatSubmission({ title: null, message: 'm', data: cyclic, annotations: [] })).toContain('Data: [object Object]')
   })
+
+  function scripted(): {
+    annotations: AnnotationStore
+    sent: string[]
+    settle(problem: string | null): void
+    submit: ReturnType<typeof createAnswerSubmitter>
+  } {
+    const annotations = new AnnotationStore()
+    const sent: string[] = []
+    const replies: Array<(problem: string | null) => void> = []
+    const submit = createAnswerSubmitter({
+      annotations,
+      blocked: () => null,
+      prompt: (text) => {
+        sent.push(text)
+        return new Promise((resolve) => replies.push(resolve))
+      }
+    })
+    return { annotations, sent, settle: (problem) => replies.shift()!(problem), submit }
+  }
+
+  test('a second submission from the same answer while one is in flight is refused, so annotations go out once', async () => {
+    const { annotations, sent, settle, submit } = scripted()
+    annotations.add('a#0', { text: 'Too vague' })
+    const first = submit('a#0', 'Plan', { message: 'Approved' })
+    await expect(submit('a#0', 'Plan', { message: 'Approved' })).rejects.toThrow(/still being sent/)
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toContain('- Too vague')
+    // The annotations left with the submission; one made meanwhile waits for the next one.
+    expect(annotations.get('a#0')).toEqual([])
+    annotations.add('a#0', { text: 'Later' })
+    settle(null)
+    await first
+    expect(annotations.get('a#0').map((annotation) => annotation.text)).toEqual(['Later'])
+    // Other answers are independent, and the answer can submit again once the first one settled.
+    const other = submit('a#1', null, { message: 'x' })
+    const again = submit('a#0', 'Plan', { message: 'Again' })
+    expect(sent).toHaveLength(3)
+    settle(null)
+    settle(null)
+    await Promise.all([other, again])
+  })
+
+  test('a failed submission puts its annotations back ahead of ones made meanwhile', async () => {
+    const { annotations, settle, submit } = scripted()
+    annotations.add('a#0', { text: 'First' })
+    const attempt = submit('a#0', null, { message: 'Go' })
+    annotations.add('a#0', { text: 'Second' })
+    settle('The agent is busy')
+    await expect(attempt).rejects.toThrow('The agent is busy')
+    expect(annotations.get('a#0').map((annotation) => annotation.text)).toEqual(['First', 'Second'])
+  })
+
+  test('a blocked agent refuses the submission without taking the annotations', async () => {
+    const annotations = new AnnotationStore()
+    annotations.add('a#0', { text: 'Kept' })
+    const submit = createAnswerSubmitter({ annotations, blocked: () => 'Paseo is unreachable.', prompt: async () => null })
+    await expect(submit('a#0', null, { message: 'Go' })).rejects.toThrow('Paseo is unreachable.')
+    expect(annotations.get('a#0')).toHaveLength(1)
+  })
 })
 
 test.describe('artifact actions', () => {
@@ -216,8 +284,20 @@ test.describe('artifact actions', () => {
     })
   })
 
-  test('an unchecked path offers only copying until its existence is known', () => {
+  test('a path offers only copying until its existence is known', () => {
     expect(presentArtifact(pathArtifact('src/a.ts'), undefined)).toEqual({ state: 'checking', quiet: false, actions: ['copy-path'] })
+  })
+
+  test('a network path not checked yet can be checked on request, revealed, or copied', () => {
+    expect(presentArtifact(pathArtifact('\\\\server\\share\\a.md'), info('\\\\server\\share\\a.md', 'unchecked'))).toEqual({
+      state: 'unchecked',
+      quiet: false,
+      actions: ['check', 'reveal', 'copy-path']
+    })
+  })
+
+  test('a path whose check failed is neither missing nor quiet', () => {
+    expect(presentArtifact(pathArtifact('Deno/Node.js'), 'failed')).toEqual({ state: 'unknown', quiet: false, actions: ['copy-path'] })
   })
 
   test('a link opens as a Web page node, in the browser, or is copied', () => {
@@ -227,6 +307,144 @@ test.describe('artifact actions', () => {
       quiet: false,
       actions: ['spawn-webpage', 'open-browser', 'copy-url']
     })
+  })
+
+  test('an inline image decodes from base64 and from percent-encoded UTF-8 text', () => {
+    const png = Uint8Array.from([0x89, 0x50, 0x4e, 0x47, 0x00, 0xff])
+    expect(decodeImageDataUrl(`data:image/png;base64,${Buffer.from(png).toString('base64')}`)).toEqual({ mimeType: 'image/png', bytes: png })
+    const svg = '<svg xmlns="http://www.w3.org/2000/svg"><text>✓ é</text></svg>'
+    const utf8 = new Uint8Array(Buffer.from(svg, 'utf8'))
+    expect(decodeImageDataUrl(`data:image/svg+xml,${encodeURIComponent(svg)}`)).toEqual({ mimeType: 'image/svg+xml', bytes: utf8 })
+    expect(decodeImageDataUrl(`data:image/svg+xml;charset=utf-8,${svg}`)).toEqual({ mimeType: 'image/svg+xml', bytes: utf8 })
+  })
+
+  test('an inline image that cannot be decoded is reported, not thrown', () => {
+    expect(decodeImageDataUrl('data:image/png;base64,@@not base64@@')).toBeNull()
+    expect(decodeImageDataUrl('data:image/svg+xml,%E0%A4%A')).toBeNull()
+    expect(decodeImageDataUrl('data:text/plain,hello')).toBeNull()
+  })
+})
+
+test.describe('path checks', () => {
+  type Answer = PathInfo['kind'] | 'reject'
+
+  function scripted(projectRoot: string): {
+    checks: PathChecks
+    calls: Array<[string, boolean]>
+    answer(path: string, value: Answer): void
+    advance(ms: number): void
+  } {
+    const calls: Array<[string, boolean]> = []
+    const answers = new Map<string, Answer>()
+    let clock = 0
+    const checks = new PathChecks({
+      projectRoot,
+      now: () => clock,
+      inspect: async (path, explicit) => {
+        calls.push([path, explicit])
+        const answer = answers.get(path) ?? 'missing'
+        if (answer === 'reject') throw new Error('bridge down')
+        return { input: path, absolutePath: path, kind: answer, isImage: false, line: null }
+      }
+    })
+    return { checks, calls, answer: (path, value) => answers.set(path, value), advance: (ms) => (clock += ms) }
+  }
+
+  const kindOf = (check: PathCheck | undefined): string | undefined =>
+    check?.status === 'done' ? check.info.kind : check?.status
+
+  test('a network path outside the project is never touched until an explicit check approves it', async () => {
+    const { checks, calls, answer } = scripted('C:\\work\\project')
+    const share = '\\\\server\\share\\spec.md'
+    expect(kindOf(await checks.check(share))).toBe('unchecked')
+    expect(kindOf(await checks.check('//server/share/spec.md'))).toBe('unchecked')
+    expect(kindOf(await checks.check('\\\\?\\UNC\\server\\share\\spec.md'))).toBe('unchecked')
+    expect(kindOf(await checks.check(share, { refresh: true }))).toBe('unchecked')
+    expect(checks.mayTouch(share)).toBe(false)
+    expect(calls).toEqual([])
+
+    answer(share, 'file')
+    expect(kindOf(await checks.check(share, { explicit: true }))).toBe('file')
+    expect(calls).toEqual([[share, true]])
+    expect(checks.mayTouch(share)).toBe(true)
+    expect(checks.mayTouch('\\\\SERVER\\share\\spec.md')).toBe(true)
+    expect(checks.mayTouch('\\\\server\\share\\other.md')).toBe(false)
+
+    // Local and relative paths are checked passively.
+    await checks.check('C:\\elsewhere\\a.txt')
+    await checks.check('src/a.ts')
+    expect(calls.slice(1)).toEqual([
+      ['C:\\elsewhere\\a.txt', false],
+      ['src/a.ts', false]
+    ])
+  })
+
+  test('a network path inside a project rooted on a share is an ordinary path', async () => {
+    const { checks, calls } = scripted('\\\\server\\share\\project')
+    expect(kindOf(await checks.check('\\\\server\\share\\project\\a.md'))).toBe('missing')
+    expect(calls).toEqual([['\\\\server\\share\\project\\a.md', false]])
+  })
+
+  test('the main process can also answer unchecked; only an explicit check asks again', async () => {
+    const { checks, calls, answer } = scripted('C:\\project')
+    answer('Z:\\mapped\\a.md', 'unchecked')
+    await checks.check('Z:\\mapped\\a.md')
+    await checks.check('Z:\\mapped\\a.md', { refresh: true })
+    expect(calls).toEqual([['Z:\\mapped\\a.md', false]])
+    answer('Z:\\mapped\\a.md', 'file')
+    expect(kindOf(await checks.check('Z:\\mapped\\a.md', { explicit: true }))).toBe('file')
+  })
+
+  test('missing and failed results are checked again later or on request; existing paths are not', async () => {
+    const { checks, calls, answer, advance } = scripted('/project')
+    let notified = 0
+    checks.subscribe(() => (notified += 1))
+
+    expect(kindOf(await checks.check('out/report.txt'))).toBe('missing')
+    expect(kindOf(await checks.check('out/report.txt'))).toBe('missing')
+    expect(calls).toHaveLength(1)
+
+    // Expiring right away would re-check on every streamed chunk; the caller learns when to expire again.
+    answer('out/report.txt', 'file')
+    advance(400)
+    expect(checks.expireNegatives()).toBe(NEGATIVE_RECHECK_MS - 400)
+    await checks.check('out/report.txt')
+    expect(calls).toHaveLength(1)
+    advance(NEGATIVE_RECHECK_MS - 400)
+    expect(checks.expireNegatives()).toBeNull()
+    expect(kindOf(await checks.check('out/report.txt'))).toBe('file')
+    expect(calls).toHaveLength(2)
+    advance(NEGATIVE_RECHECK_MS)
+    checks.expireNegatives()
+    await checks.check('out/report.txt', { refresh: true })
+    expect(calls).toHaveLength(2)
+
+    // A click re-checks a missing path at once.
+    await checks.check('notes.md')
+    answer('notes.md', 'file')
+    expect(kindOf(await checks.check('notes.md', { refresh: true }))).toBe('file')
+
+    // A failing bridge is not a missing path, and the next attempt asks again.
+    answer('flaky.txt', 'reject')
+    expect(kindOf(await checks.check('flaky.txt'))).toBe('failed')
+    answer('flaky.txt', 'file')
+    expect(kindOf(await checks.check('flaky.txt', { refresh: true }))).toBe('file')
+    expect(notified).toBeGreaterThanOrEqual(5)
+  })
+
+  test('a check in flight is shared, and keeps the previous result visible meanwhile', async () => {
+    const { checks, calls, answer, advance } = scripted('/project')
+    await checks.check('a.txt')
+    answer('a.txt', 'file')
+    advance(NEGATIVE_RECHECK_MS)
+    checks.expireNegatives()
+    const first = checks.check('a.txt')
+    const second = checks.check('a.txt')
+    expect(kindOf(checks.get('a.txt'))).toBe('missing')
+    await Promise.all([first, second])
+    expect(calls).toHaveLength(2)
+    expect(kindOf(checks.get('a.txt'))).toBe('file')
+    expect(checks.get('never-checked.txt')).toBeUndefined()
   })
 })
 
@@ -251,6 +469,22 @@ test.describe('assistant message segments', () => {
     expect(splitMessage('```mermaid\ngraph TD\nA-->B\n```\n')).toEqual([
       { type: 'markdown', source: '```mermaid\ngraph TD\nA-->B\n```\n' }
     ])
+  })
+
+  test('a fence still being streamed inside a list or a quote is pending too', () => {
+    expect(splitMessage('Steps:\n\n- First\n- Diagram:\n\n  ```mermaid\n  graph TD\n  A-->')).toEqual([
+      { type: 'markdown', source: 'Steps:\n\n- First\n- Diagram:\n\n' },
+      { type: 'pending', language: 'mermaid' }
+    ])
+    expect(splitMessage('Intro\n\n> Note\n>\n> ```spade-html\n> <p>partial')).toEqual([
+      { type: 'markdown', source: 'Intro\n\n> Note\n>\n' },
+      { type: 'pending', language: 'spade-html' }
+    ])
+    // Closed, or ordinary code, the nested fence stays inside the Markdown.
+    const closed = '- Diagram:\n\n  ```mermaid\n  graph TD\n  A-->B\n  ```\n'
+    expect(splitMessage(closed)).toEqual([{ type: 'markdown', source: closed }])
+    const code = '- Code:\n\n  ```ts\n  const a ='
+    expect(splitMessage(code)).toEqual([{ type: 'markdown', source: code }])
   })
 })
 
@@ -295,5 +529,37 @@ test.describe('agent status', () => {
     expect(lastAssistantExcerpt(items, 100)).toBe('Second line')
     expect(lastAssistantExcerpt([message('a', 'x'.repeat(20))], 10)).toBe(`${'x'.repeat(9)}…`)
     expect(lastAssistantExcerpt([tool('t', 'shell')], 10)).toBeNull()
+  })
+})
+
+test.describe('remembered conversation state', () => {
+  test('outlives the mounted view, keeps the last answer it saw, and is dropped with its node', () => {
+    const state = conversationState('node-remembered')
+    expect(state.stale).toBe(true)
+    state.setTimeline({ epoch: 'e1', items: [message('a', 'The answer'), tool('t', 'shell')], olderCursor: null })
+    expect(state.stale).toBe(false)
+    // A newer window without assistant text keeps the last answer known.
+    state.setTimeline({ epoch: 'e1', items: [tool('u', 'read')], olderCursor: 'c1' })
+    expect(lastAssistantExcerpt(state.lastAnswer ? [state.lastAnswer] : [], 100)).toBe('The answer')
+    state.draft = 'unsent'
+    expect(conversationState('node-remembered')).toBe(state)
+
+    noteTimelineChanged('node-remembered')
+    expect(state.stale).toBe(true)
+    // Nodes never shown are not tracked.
+    noteTimelineChanged('node-never-shown')
+
+    forgetConversationState('node-remembered')
+    const fresh = conversationState('node-remembered')
+    expect(fresh).not.toBe(state)
+    expect(fresh.draft).toBe('')
+    expect(fresh.timeline).toBeNull()
+  })
+
+  test('sending clears only the text that was sent', () => {
+    expect(remainingDraft('Hello', 'Hello')).toBe('')
+    expect(remainingDraft('Hello\nand more typed meanwhile', 'Hello')).toBe('and more typed meanwhile')
+    expect(remainingDraft('Replaced meanwhile', 'Hello')).toBe('Replaced meanwhile')
+    expect(remainingDraft('', 'Hello')).toBe('')
   })
 })

@@ -11,11 +11,12 @@ type HtmlAnswerBlockProps = {
   onSubmit: SubmitHandler
   onAnnotate: AnnotateHandler
   onOpenUrl?: (url: string, anchor: HTMLElement) => void
+  onEscape?: () => void
 }
 
 // A live HTML answer with explicit runtime controls: Reload starts a fresh runtime, Dispose
 // removes it, Mount starts it again, Source shows the document without disposing the runtime.
-export function HtmlAnswerBlock({ html, title, onSubmit, onAnnotate, onOpenUrl }: HtmlAnswerBlockProps): React.JSX.Element {
+export function HtmlAnswerBlock({ html, title, onSubmit, onAnnotate, onOpenUrl, onEscape }: HtmlAnswerBlockProps): React.JSX.Element {
   const [generation, setGeneration] = useState(1)
   const [mounted, setMounted] = useState(true)
   const [showSource, setShowSource] = useState(false)
@@ -51,6 +52,7 @@ export function HtmlAnswerBlock({ html, title, onSubmit, onAnnotate, onOpenUrl }
             onSubmit={onSubmit}
             onAnnotate={onAnnotate}
             onOpenUrl={onOpenUrl}
+            onEscape={onEscape}
           />
         </div>
       ) : showSource ? null : (

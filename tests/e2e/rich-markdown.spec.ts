@@ -331,6 +331,9 @@ test.describe('HTML answer runtime protocol', () => {
       input: { message: 'x' }
     })
 
+    expect(parseRuntimeMessage({ ...base, type: 'escape' }, 'current')).toEqual({ type: 'escape' })
+
+    expect(parseRuntimeMessage({ ...base, type: 'escape' }, 'other')).toBeNull()
     expect(parseRuntimeMessage({ ...base, type: 'ready' }, 'other')).toBeNull()
     expect(parseRuntimeMessage({ ...base, source: 'elsewhere', type: 'ready' }, 'current')).toBeNull()
     expect(parseRuntimeMessage({ ...base, type: 'resize', height: Number.NaN }, 'current')).toBeNull()

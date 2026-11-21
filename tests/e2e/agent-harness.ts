@@ -1,7 +1,7 @@
 import { crc32, deflateSync } from 'node:zlib'
 import type { ElectronApplication } from '@playwright/test'
 import type { AgentProviderInfo, AgentRuntime, AgentTimelinePage, ConversationItem } from '../../src/shared/agents'
-import { SPADE_HOST_EVENTS } from '../../src/shared/ipc'
+import { SPADE_HOST_EVENTS, type PathKind } from '../../src/shared/ipc'
 
 // Scripts the agent side of a real SPADE instance without Paseo: the main-process IPC handlers for agent
 // requests are replaced from the test and agent events are pushed to the window, the same technique the
@@ -127,6 +127,62 @@ export async function agentCalls(app: ElectronApplication, method: string): Prom
     (_electron, method) =>
       (globalThis as unknown as ScriptGlobal).__agentScript.calls.filter((call) => call.method === method).map((call) => call.args),
     method
+  )
+}
+
+// A scripted path for `files.inspectPath`: its kind (absolute path and image flag optional), or 'reject' for a
+// failing bridge call. Unscripted paths are missing.
+export type ScriptedPath = { kind: PathKind; absolutePath?: string; isImage?: boolean } | 'reject'
+// A scripted `files.describeImage` reply. `explicitOnly`: calls not marked explicit fail as an unapproved
+// network path, as the main process answers for a network path outside the project root.
+export type ScriptedImage = { reply: Reply; explicitOnly?: boolean }
+
+type FileScript = { paths: Record<string, ScriptedPath>; images: Record<string, ScriptedImage> }
+type FileScriptGlobal = ScriptGlobal & { __fileScript?: FileScript }
+
+// Replaces the path checks and image descriptions of the file bridge (other file methods stay real) and
+// merges `files` into what is scripted so far. Calls are recorded like agent calls.
+export async function scriptFiles(
+  app: ElectronApplication,
+  files: { paths?: Record<string, ScriptedPath>; images?: Record<string, ScriptedImage> }
+): Promise<void> {
+  await app.evaluate(
+    ({ ipcMain }, { paths, images }) => {
+      const global = globalThis as unknown as FileScriptGlobal
+      if (!global.__fileScript) {
+        const files: FileScript = { paths: {}, images: {} }
+        global.__fileScript = files
+        const record = (method: string, args: unknown[]): void => void global.__agentScript.calls.push({ method, args })
+        ipcMain.removeHandler('spade:files.inspectPath')
+        ipcMain.handle('spade:files.inspectPath', (_event, ...args: unknown[]) => {
+          record('files.inspectPath', args)
+          const path = args[1] as string
+          const entry = files.paths[path]
+          if (entry === 'reject') return { ok: false, error: { code: 'failed', message: 'Scripted failure' } }
+          const value = {
+            input: path,
+            absolutePath: entry?.absolutePath ?? path,
+            kind: entry?.kind ?? 'missing',
+            isImage: entry?.isImage ?? false,
+            line: null
+          }
+          return { ok: true, value }
+        })
+        ipcMain.removeHandler('spade:files.describeImage')
+        ipcMain.handle('spade:files.describeImage', (_event, ...args: unknown[]) => {
+          record('files.describeImage', args)
+          const source = args[1] as { kind: string; path?: string }
+          const explicit = (args[2] as { explicit?: boolean } | undefined)?.explicit === true
+          const entry = source.path === undefined ? undefined : files.images[source.path]
+          if (!entry) return { ok: false, error: { code: 'not-found', message: 'No such image' } }
+          if (entry.explicitOnly && !explicit) return { ok: false, error: { code: 'network-path', message: 'Network path not approved' } }
+          return entry.reply
+        })
+      }
+      Object.assign(global.__fileScript.paths, paths)
+      Object.assign(global.__fileScript.images, images)
+    },
+    { paths: files.paths ?? {}, images: files.images ?? {} }
   )
 }
 
