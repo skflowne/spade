@@ -11,6 +11,14 @@ export type EntityDefinition<Config = unknown> = {
   collapsedSize: Size
   // Returns the validated config or throws an Error describing the first problem.
   parseConfig(value: unknown): Config
+  // What an agent is told about a node beyond its title (plan §9). Callers truncate the result.
+  describeForAgent?(config: Config): AgentDescription
+}
+
+export type AgentDescription = {
+  // Where the content lives, e.g. { kind: 'url', value: 'https://…' }.
+  locator?: { kind: string; value: string }
+  excerpt?: string
 }
 
 export class EntityRegistry {
