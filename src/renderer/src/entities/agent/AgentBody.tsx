@@ -130,7 +130,7 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
   const items = timeline.state?.items ?? []
 
   return (
-    <ArtifactLayer projectId={project.id} nodeId={node.id} host={host}>
+    <ArtifactLayer projectId={project.id} projectRoot={project.rootPath} nodeId={node.id} host={host} revision={timeline.state}>
       <ConversationContext.Provider value={services}>
         <div className="agent-body">
           <div className="agent-toolbar">

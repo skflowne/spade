@@ -1,9 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, type ReactNode } from 'react'
 import type { ConversationItem } from '@shared/agents'
-import { parseArtifact } from '@shared/artifacts'
-import type { PathInfo } from '@shared/ipc'
-import { presentArtifact } from './artifactActions'
-import { useArtifacts } from './ArtifactLayer'
 import { ConversationItemView } from './ConversationItems'
 import { conversationState } from './conversationState'
 
@@ -38,7 +34,6 @@ export function ConversationView({ nodeId, items, hasOlder, loadingOlder, onLoad
   }
   // Distance from the bottom to restore once older items are prepended before `firstId`.
   const restore = useRef<{ fromBottom: number; firstId: string | undefined } | null>(null)
-  const { inspect } = useArtifacts()
 
   useLayoutEffect(() => {
     const element = scroller.current
@@ -77,7 +72,6 @@ export function ConversationView({ nodeId, items, hasOlder, loadingOlder, onLoad
     return () => observer.disconnect()
   }, [])
 
-  useChipExistence(scroller, inspect)
 
   const loadOlder = async (): Promise<void> => {
     const element = scroller.current
@@ -111,54 +105,4 @@ export function ConversationView({ nodeId, items, hasOlder, loadingOlder, onLoad
       </div>
     </div>
   )
-}
-
-const CHIP_SELECTOR = 'button.rich-artifact[data-artifact-kind="path"], button.rich-artifact[data-artifact-kind="image"]'
-
-// Checks each path chip's existence once it scrolls into view and marks missing ones disabled. The chips
-// belong to the shared rich components, so the result is recorded in attributes React does not manage.
-function useChipExistence(
-  container: React.RefObject<HTMLElement | null>,
-  inspect: (path: string) => Promise<PathInfo>
-): void {
-  useEffect(() => {
-    const root = container.current
-    if (!root) return
-    const observed = new WeakSet<Element>()
-    const visibility = new IntersectionObserver(
-      (entries) => {
-        for (const entry of entries) {
-          if (!entry.isIntersecting) continue
-          const chip = entry.target as HTMLElement
-          visibility.unobserve(chip)
-          const artifact = parseArtifact(chip.textContent ?? '')
-          if (artifact?.kind !== 'path') continue
-          void inspect(artifact.value).then((info) => {
-            const presentation = presentArtifact(artifact, info)
-            chip.dataset.pathState = presentation.state
-            if (presentation.state === 'missing') {
-              chip.setAttribute('aria-disabled', 'true')
-              chip.setAttribute('aria-description', 'Not found')
-              if (presentation.quiet) chip.dataset.quiet = 'true'
-            }
-          })
-        }
-      },
-      { root }
-    )
-    const scan = (): void => {
-      for (const chip of root.querySelectorAll(CHIP_SELECTOR)) {
-        if (observed.has(chip)) continue
-        observed.add(chip)
-        visibility.observe(chip)
-      }
-    }
-    scan()
-    const mutations = new MutationObserver(scan)
-    mutations.observe(root, { childList: true, subtree: true })
-    return () => {
-      visibility.disconnect()
-      mutations.disconnect()
-    }
-  }, [container, inspect])
 }

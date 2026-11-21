@@ -12,6 +12,7 @@ import {
   png,
   pushRuntime,
   runtimeFor,
+  scriptFiles,
   setProviders,
   setReply,
   setTimeline,
@@ -705,6 +706,122 @@ test('an agent message with a path, an image, and a URL offers every action', as
       origin: 'artifact',
       sourceArtifact: { kind: 'url', value: 'https://example.com/page' }
     })
+  } finally {
+    await app.close()
+  }
+})
+
+test('path chips follow the file system and leave network paths alone until the user asks', async () => {
+  const session = await launchScripted()
+  const { page, app, projectId } = session
+  const unc = '\\\\fileserver\\share\\spec.md'
+  try {
+    await scriptFiles(app, {
+      paths: {
+        'src/App.t': { kind: 'missing' },
+        'src/App.tsx': { kind: 'file' },
+        'out/report.txt': { kind: 'missing' },
+        'notes/todo.md': { kind: 'missing' },
+        'flaky/a.txt': 'reject'
+      }
+    })
+    const nodeId = await seedAgent(session)
+    const report = (status: 'running' | 'completed'): ConversationItem =>
+      items.tool('w1', { toolKind: 'edit', name: 'Write', summary: 'out/report.txt', path: 'out/report.txt', status })
+    const conversationWith = (streamed: string, status: 'running' | 'completed'): ConversationItem[] => [
+      items.assistant('a1', `Shared spec: \`${unc}\`. Notes: \`notes/todo.md\`. Flaky: \`flaky/a.txt\`. See [the plan](docs/plan.md).`),
+      report(status),
+      items.assistant('a2', streamed)
+    ]
+    await showAgent(session, nodeId, conversationWith('Open `src/App.t', 'running'))
+    const log = conversation(page, 'Agent')
+    const chip = (text: string): Locator => log.locator('button.rich-artifact').filter({ hasText: new RegExp(`^${escape(text)}$`) })
+    const reportChip = log.locator('[data-tool-kind="edit"] .agent-pane__path button')
+
+    // Visible chips are checked lazily; a network path outside the project is never touched on its own.
+    await expect(chip('src/App.t')).toHaveAttribute('data-path-state', 'missing')
+    await expect(reportChip).toHaveAttribute('data-path-state', 'missing')
+    await expect(chip(unc)).toHaveAttribute('data-path-state', 'unchecked')
+    await expect(chip(unc)).not.toHaveAttribute('aria-disabled', 'true')
+    // Markdown links to paths are checked too.
+    await expect(log.getByRole('button', { name: 'the plan' })).toHaveAttribute('data-path-state', 'missing')
+    // A failed check is not a missing file.
+    await expect(chip('flaky/a.txt')).toHaveAttribute('data-path-state', 'unknown')
+    await expect(chip('flaky/a.txt')).not.toHaveAttribute('aria-disabled', 'true')
+
+    // The streamed message completes the path: the same chip now shows the existing file.
+    await setTimeline(app, nodeId, { epoch: 'e1', olderCursor: null, items: conversationWith('Open `src/App.tsx`', 'running') })
+    await expect(chip('src/App.tsx')).toHaveAttribute('data-path-state', 'file')
+    await expect(chip('src/App.tsx')).not.toHaveAttribute('aria-disabled', 'true')
+
+    // The edit tool created its file: the next timeline change checks the missing path again.
+    await scriptFiles(app, { paths: { 'out/report.txt': { kind: 'file' } } })
+    await setTimeline(app, nodeId, { epoch: 'e1', olderCursor: null, items: conversationWith('Open `src/App.tsx`', 'completed') })
+    await expect(reportChip).toHaveAttribute('data-path-state', 'file')
+
+    // Clicking a path known to be missing checks it again.
+    await scriptFiles(app, { paths: { 'notes/todo.md': { kind: 'file' }, 'flaky/a.txt': { kind: 'file' } } })
+    await activate(page, 'Agent')
+    await chip('notes/todo.md').click({ force: true })
+    let popover = page.getByRole('dialog', { name: 'Path actions' })
+    await expect(popover.getByRole('button')).toHaveText(['Reveal in Explorer', 'Copy path'])
+    await page.keyboard.press('Escape')
+    await chip('flaky/a.txt').click()
+    await expect(popover.getByRole('button')).toHaveText(['Reveal in Explorer', 'Copy path'])
+    await page.keyboard.press('Escape')
+
+    // The network path: not checked until the user asks, from its own popover.
+    await chip(unc).click()
+    popover = page.getByRole('dialog', { name: 'Path actions' })
+    await expect(popover).toContainText('Network path — not checked')
+    await expect(popover.getByRole('button')).toHaveText(['Check this path', 'Reveal in Explorer', 'Copy path'])
+    expect((await agentCalls(app, 'files.inspectPath')).filter(([, path]) => path === unc)).toEqual([])
+    await scriptFiles(app, { paths: { [unc]: { kind: 'file' } } })
+    await popover.getByRole('button', { name: 'Check this path' }).click()
+    await expect(popover.getByRole('button')).toHaveText(['Reveal in Explorer', 'Copy path'])
+    await expect(chip(unc)).toHaveAttribute('data-path-state', 'file')
+    expect((await agentCalls(app, 'files.inspectPath')).filter(([, path]) => path === unc)).toEqual([[projectId, unc, { explicit: true }]])
+    // Passive checks never claim to be explicit.
+    for (const [, path, options] of await agentCalls(app, 'files.inspectPath')) {
+      if (path !== unc) expect(options ?? {}).not.toHaveProperty('explicit', true)
+    }
+  } finally {
+    await app.close()
+  }
+})
+
+test('a network image in an answer loads only when the user asks', async () => {
+  const session = await launchScripted()
+  const { page, app, projectId } = session
+  const pixel = `data:image/png;base64,${png(4, 4).toString('base64')}`
+  const ready = { ok: true as const, image: { url: pixel, width: 4, height: 4, revision: '1' } }
+  try {
+    // A UNC path is recognised in the renderer; a mapped path only by the main process's answer.
+    await scriptFiles(app, {
+      images: { '//fileserver/share/diagram.png': { reply: ready }, 'mapped/diagram.png': { reply: ready, explicitOnly: true } }
+    })
+    const nodeId = await seedAgent(session)
+    await showAgent(session, nodeId, [items.assistant('a1', 'UNC: ![unc diagram](//fileserver/share/diagram.png)\n\nMapped: ![mapped diagram](mapped/diagram.png)')])
+    const log = conversation(page, 'Agent')
+    const placeholders = log.locator('.rich-image--network')
+    await expect(placeholders).toHaveCount(2)
+    await expect(placeholders.first()).toContainText('Network image')
+    expect((await agentCalls(app, 'files.describeImage')).filter(([, source]) => (source as { path: string }).path.startsWith('//'))).toEqual([])
+
+    await activate(page, 'Agent')
+    await placeholders.first().getByRole('button', { name: 'Load' }).click()
+    await expect(log.getByRole('button', { name: 'Image: unc diagram' }).locator('img')).toHaveAttribute('src', pixel)
+    await expect(placeholders).toHaveCount(1)
+    await placeholders.getByRole('button', { name: 'Load' }).click()
+    await expect(log.getByRole('button', { name: 'Image: mapped diagram' }).locator('img')).toHaveAttribute('src', pixel)
+    const calls = await agentCalls(app, 'files.describeImage')
+    expect(calls.filter(([, source]) => (source as { path: string }).path === '//fileserver/share/diagram.png')).toEqual([
+      [projectId, { kind: 'path', path: '//fileserver/share/diagram.png' }, { explicit: true }]
+    ])
+    expect(calls.filter(([, source]) => (source as { path: string }).path === 'mapped/diagram.png').map(([, , options]) => options ?? null)).toEqual([
+      null,
+      { explicit: true }
+    ])
   } finally {
     await app.close()
   }

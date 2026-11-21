@@ -1,6 +1,6 @@
 import { createContext, memo, useContext, useMemo, useState, type ReactNode } from 'react'
 import { parseArtifact } from '../../../shared/artifacts'
-import { ArtifactChip } from './ArtifactChip'
+import { ArtifactButton, ArtifactChip } from './ArtifactChip'
 import { BlockAction } from './BlockFrame'
 import { CodeBlock } from './CodeBlock'
 import type { RichContentHandlers } from './handlers'
@@ -243,15 +243,9 @@ function Inline({ inline, inLink }: { inline: RichInline; inLink: boolean }): Re
         )
       }
       return (
-        <button
-          type="button"
-          className="rich-link"
-          data-artifact-kind={artifact.isImage ? 'image' : artifact.kind}
-          title={inline.title ?? inline.href}
-          onClick={(event) => onArtifact(artifact, event.currentTarget)}
-        >
+        <ArtifactButton artifact={artifact} className="rich-link" title={inline.title ?? inline.href} onArtifact={onArtifact}>
           {label}
-        </button>
+        </ArtifactButton>
       )
     }
     case 'image':

@@ -1,5 +1,6 @@
-import { useMemo } from 'react'
+import { useMemo, useRef, type ReactNode } from 'react'
 import { detectArtifacts, type Artifact } from '../../../shared/artifacts'
+import { artifactViewAttributes, useArtifactObserver, useArtifactView } from './artifactState'
 import type { ArtifactHandler } from './handlers'
 import './rich.css'
 
@@ -13,14 +14,36 @@ type ArtifactChipProps = {
 export function ArtifactChip({ artifact, text, onArtifact }: ArtifactChipProps): React.JSX.Element {
   const kind = artifact.isImage ? 'image' : artifact.kind
   return (
+    <ArtifactButton artifact={artifact} className={`rich-artifact rich-artifact--${kind}`} title={describe(artifact)} onArtifact={onArtifact}>
+      {text}
+    </ArtifactButton>
+  )
+}
+
+// A button that shows an artifact with the host's view of it (ArtifactStateContext) and reports to the host
+// when it is on screen. Used for chips and for Markdown links.
+export function ArtifactButton(props: {
+  artifact: Artifact
+  className: string
+  title: string
+  onArtifact: ArtifactHandler
+  children: ReactNode
+}): React.JSX.Element {
+  const { artifact, onArtifact } = props
+  const ref = useRef<HTMLButtonElement>(null)
+  const view = useArtifactView(artifact)
+  useArtifactObserver(ref, artifact)
+  return (
     <button
+      ref={ref}
       type="button"
-      className={`rich-artifact rich-artifact--${kind}`}
-      data-artifact-kind={kind}
-      title={describe(artifact)}
+      className={props.className}
+      data-artifact-kind={artifact.isImage ? 'image' : artifact.kind}
+      title={props.title}
+      {...artifactViewAttributes(view)}
       onClick={(event) => onArtifact(artifact, event.currentTarget)}
     >
-      {text}
+      {props.children}
     </button>
   )
 }

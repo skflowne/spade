@@ -5,6 +5,7 @@ import type { PathInfo } from '../../../../shared/ipc'
 // through a bridge command; nothing here touches the filesystem.
 
 export type ArtifactActionId =
+  | 'check'
   | 'reveal'
   | 'open-folder'
   | 'copy-path'
@@ -15,6 +16,7 @@ export type ArtifactActionId =
   | 'copy-url'
 
 export const ARTIFACT_ACTION_LABELS: Record<ArtifactActionId, string> = {
+  check: 'Check this path',
   reveal: 'Reveal in Explorer',
   'open-folder': 'Open in Explorer',
   'copy-path': 'Copy path',
@@ -25,7 +27,8 @@ export const ARTIFACT_ACTION_LABELS: Record<ArtifactActionId, string> = {
   'copy-url': 'Copy link'
 }
 
-export type ArtifactState = 'checking' | 'file' | 'image' | 'folder' | 'missing' | 'url'
+// 'unchecked': a network path SPADE does not touch until the user asks; 'unknown': the check itself failed.
+export type ArtifactState = 'checking' | 'file' | 'image' | 'folder' | 'missing' | 'unchecked' | 'unknown' | 'url'
 
 export type ArtifactPresentation = {
   state: ArtifactState
@@ -34,10 +37,11 @@ export type ArtifactPresentation = {
   actions: ArtifactActionId[]
 }
 
-// `info` is undefined until the path's existence has been checked.
-export function presentArtifact(artifact: Artifact, info: PathInfo | undefined): ArtifactPresentation {
+// `info` is undefined until the path's existence has been checked, and 'failed' when the check failed.
+export function presentArtifact(artifact: Artifact, info: PathInfo | 'failed' | undefined): ArtifactPresentation {
   if (artifact.kind === 'url') return { state: 'url', quiet: false, actions: ['spawn-webpage', 'open-browser', 'copy-url'] }
   if (info === undefined) return { state: 'checking', quiet: false, actions: ['copy-path'] }
+  if (info === 'failed') return { state: 'unknown', quiet: false, actions: ['copy-path'] }
   switch (info.kind) {
     case 'directory':
       return { state: 'folder', quiet: false, actions: ['open-folder', 'copy-path'] }
@@ -48,7 +52,7 @@ export function presentArtifact(artifact: Artifact, info: PathInfo | undefined):
     case 'missing':
       return { state: 'missing', quiet: isRelativePath(artifact.value), actions: ['copy-path'] }
     case 'unchecked':
-      return { state: 'checking', quiet: false, actions: ['copy-path'] }
+      return { state: 'unchecked', quiet: false, actions: ['check', 'reveal', 'copy-path'] }
   }
 }
 

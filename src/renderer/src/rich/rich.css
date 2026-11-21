@@ -309,6 +309,21 @@ pre.rich-raw-html code {
   font-size: var(--cr-text-sm);
 }
 
+/* An image on another machine: loaded only when the user asks. */
+.rich-image--network {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--cr-space-3);
+  padding: var(--cr-space-2) var(--cr-space-2) var(--cr-space-2) var(--cr-space-4);
+  border-style: dashed;
+  color: var(--muted);
+  font-size: var(--cr-text-sm);
+}
+
+.rich-image--network .rich-block__action {
+  border-color: var(--line);
+}
+
 /* Block chrome shared by code, diagrams, and HTML answers */
 
 .rich-block {

@@ -7,6 +7,7 @@ import type { PathInfo } from '../../src/shared/ipc'
 import { decodeImageDataUrl, presentArtifact } from '../../src/renderer/src/entities/agent/artifactActions'
 import { effectiveExpansion, paneKindOf, withOverride } from '../../src/renderer/src/entities/agent/expansion'
 import { splitMessage } from '../../src/renderer/src/entities/agent/messageSegments'
+import { NEGATIVE_RECHECK_MS, PathChecks, type PathCheck } from '../../src/renderer/src/entities/agent/pathChecks'
 import { agentStatusOf, lastAssistantExcerpt } from '../../src/renderer/src/entities/agent/status'
 import { AnnotationStore } from '../../src/renderer/src/entities/agent/annotations'
 import {
@@ -283,8 +284,20 @@ test.describe('artifact actions', () => {
     })
   })
 
-  test('an unchecked path offers only copying until its existence is known', () => {
+  test('a path offers only copying until its existence is known', () => {
     expect(presentArtifact(pathArtifact('src/a.ts'), undefined)).toEqual({ state: 'checking', quiet: false, actions: ['copy-path'] })
+  })
+
+  test('a network path not checked yet can be checked on request, revealed, or copied', () => {
+    expect(presentArtifact(pathArtifact('\\\\server\\share\\a.md'), info('\\\\server\\share\\a.md', 'unchecked'))).toEqual({
+      state: 'unchecked',
+      quiet: false,
+      actions: ['check', 'reveal', 'copy-path']
+    })
+  })
+
+  test('a path whose check failed is neither missing nor quiet', () => {
+    expect(presentArtifact(pathArtifact('Deno/Node.js'), 'failed')).toEqual({ state: 'unknown', quiet: false, actions: ['copy-path'] })
   })
 
   test('a link opens as a Web page node, in the browser, or is copied', () => {
@@ -309,6 +322,129 @@ test.describe('artifact actions', () => {
     expect(decodeImageDataUrl('data:image/png;base64,@@not base64@@')).toBeNull()
     expect(decodeImageDataUrl('data:image/svg+xml,%E0%A4%A')).toBeNull()
     expect(decodeImageDataUrl('data:text/plain,hello')).toBeNull()
+  })
+})
+
+test.describe('path checks', () => {
+  type Answer = PathInfo['kind'] | 'reject'
+
+  function scripted(projectRoot: string): {
+    checks: PathChecks
+    calls: Array<[string, boolean]>
+    answer(path: string, value: Answer): void
+    advance(ms: number): void
+  } {
+    const calls: Array<[string, boolean]> = []
+    const answers = new Map<string, Answer>()
+    let clock = 0
+    const checks = new PathChecks({
+      projectRoot,
+      now: () => clock,
+      inspect: async (path, explicit) => {
+        calls.push([path, explicit])
+        const answer = answers.get(path) ?? 'missing'
+        if (answer === 'reject') throw new Error('bridge down')
+        return { input: path, absolutePath: path, kind: answer, isImage: false, line: null }
+      }
+    })
+    return { checks, calls, answer: (path, value) => answers.set(path, value), advance: (ms) => (clock += ms) }
+  }
+
+  const kindOf = (check: PathCheck | undefined): string | undefined =>
+    check?.status === 'done' ? check.info.kind : check?.status
+
+  test('a network path outside the project is never touched until an explicit check approves it', async () => {
+    const { checks, calls, answer } = scripted('C:\\work\\project')
+    const share = '\\\\server\\share\\spec.md'
+    expect(kindOf(await checks.check(share))).toBe('unchecked')
+    expect(kindOf(await checks.check('//server/share/spec.md'))).toBe('unchecked')
+    expect(kindOf(await checks.check('\\\\?\\UNC\\server\\share\\spec.md'))).toBe('unchecked')
+    expect(kindOf(await checks.check(share, { refresh: true }))).toBe('unchecked')
+    expect(checks.mayTouch(share)).toBe(false)
+    expect(calls).toEqual([])
+
+    answer(share, 'file')
+    expect(kindOf(await checks.check(share, { explicit: true }))).toBe('file')
+    expect(calls).toEqual([[share, true]])
+    expect(checks.mayTouch(share)).toBe(true)
+    expect(checks.mayTouch('\\\\SERVER\\share\\spec.md')).toBe(true)
+    expect(checks.mayTouch('\\\\server\\share\\other.md')).toBe(false)
+
+    // Local and relative paths are checked passively.
+    await checks.check('C:\\elsewhere\\a.txt')
+    await checks.check('src/a.ts')
+    expect(calls.slice(1)).toEqual([
+      ['C:\\elsewhere\\a.txt', false],
+      ['src/a.ts', false]
+    ])
+  })
+
+  test('a network path inside a project rooted on a share is an ordinary path', async () => {
+    const { checks, calls } = scripted('\\\\server\\share\\project')
+    expect(kindOf(await checks.check('\\\\server\\share\\project\\a.md'))).toBe('missing')
+    expect(calls).toEqual([['\\\\server\\share\\project\\a.md', false]])
+  })
+
+  test('the main process can also answer unchecked; only an explicit check asks again', async () => {
+    const { checks, calls, answer } = scripted('C:\\project')
+    answer('Z:\\mapped\\a.md', 'unchecked')
+    await checks.check('Z:\\mapped\\a.md')
+    await checks.check('Z:\\mapped\\a.md', { refresh: true })
+    expect(calls).toEqual([['Z:\\mapped\\a.md', false]])
+    answer('Z:\\mapped\\a.md', 'file')
+    expect(kindOf(await checks.check('Z:\\mapped\\a.md', { explicit: true }))).toBe('file')
+  })
+
+  test('missing and failed results are checked again later or on request; existing paths are not', async () => {
+    const { checks, calls, answer, advance } = scripted('/project')
+    let notified = 0
+    checks.subscribe(() => (notified += 1))
+
+    expect(kindOf(await checks.check('out/report.txt'))).toBe('missing')
+    expect(kindOf(await checks.check('out/report.txt'))).toBe('missing')
+    expect(calls).toHaveLength(1)
+
+    // Expiring right away would re-check on every streamed chunk; the caller learns when to expire again.
+    answer('out/report.txt', 'file')
+    advance(400)
+    expect(checks.expireNegatives()).toBe(NEGATIVE_RECHECK_MS - 400)
+    await checks.check('out/report.txt')
+    expect(calls).toHaveLength(1)
+    advance(NEGATIVE_RECHECK_MS - 400)
+    expect(checks.expireNegatives()).toBeNull()
+    expect(kindOf(await checks.check('out/report.txt'))).toBe('file')
+    expect(calls).toHaveLength(2)
+    advance(NEGATIVE_RECHECK_MS)
+    checks.expireNegatives()
+    await checks.check('out/report.txt', { refresh: true })
+    expect(calls).toHaveLength(2)
+
+    // A click re-checks a missing path at once.
+    await checks.check('notes.md')
+    answer('notes.md', 'file')
+    expect(kindOf(await checks.check('notes.md', { refresh: true }))).toBe('file')
+
+    // A failing bridge is not a missing path, and the next attempt asks again.
+    answer('flaky.txt', 'reject')
+    expect(kindOf(await checks.check('flaky.txt'))).toBe('failed')
+    answer('flaky.txt', 'file')
+    expect(kindOf(await checks.check('flaky.txt', { refresh: true }))).toBe('file')
+    expect(notified).toBeGreaterThanOrEqual(5)
+  })
+
+  test('a check in flight is shared, and keeps the previous result visible meanwhile', async () => {
+    const { checks, calls, answer, advance } = scripted('/project')
+    await checks.check('a.txt')
+    answer('a.txt', 'file')
+    advance(NEGATIVE_RECHECK_MS)
+    checks.expireNegatives()
+    const first = checks.check('a.txt')
+    const second = checks.check('a.txt')
+    expect(kindOf(checks.get('a.txt'))).toBe('missing')
+    await Promise.all([first, second])
+    expect(calls).toHaveLength(2)
+    expect(kindOf(checks.get('a.txt'))).toBe('file')
+    expect(checks.get('never-checked.txt')).toBeUndefined()
   })
 })
 
