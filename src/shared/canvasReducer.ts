@@ -106,7 +106,10 @@ function applyChange(canvas: Canvas, command: CanvasCommand, context: CanvasComm
       const edge = canvas.edges.find((candidate) => candidate.id === command.edgeId)
       if (!edge) throw new CanvasCommandError('unknown-edge', `Unknown edge: ${command.edgeId}`)
       if (edge.relation !== 'references') {
-        throw new CanvasCommandError('invalid-command', 'Only references edges can be disconnected; reparent or remove the node instead')
+        throw new CanvasCommandError(
+          'invalid-command',
+          'Only references edges can be disconnected; reparent or remove the node instead'
+        )
       }
       return {
         canvas: { ...canvas, edges: canvas.edges.filter((candidate) => candidate.id !== edge.id) },
@@ -118,7 +121,8 @@ function applyChange(canvas: Canvas, command: CanvasCommand, context: CanvasComm
       const positions = new Map(command.moves.map((move) => [requireNode(canvas, move.nodeId).id, move.position]))
       const changed = updateNodes(canvas, [...positions.keys()], context.now, (node) => {
         const position = positions.get(node.id)!
-        return position.x === node.position.x && position.y === node.position.y ? node : { ...node, position: { ...position } }
+        const unchanged = position.x === node.position.x && position.y === node.position.y
+        return unchanged ? node : { ...node, position: { ...position } }
       })
       const ids = changedIds(canvas, changed)
       return {
@@ -132,7 +136,9 @@ function applyChange(canvas: Canvas, command: CanvasCommand, context: CanvasComm
       const { width, height } = command.size
       return {
         canvas: updateNodes(canvas, [node.id], context.now, (current) =>
-          current.size?.width === width && current.size?.height === height ? current : { ...current, size: { width, height } }
+          current.size?.width === width && current.size?.height === height
+            ? current
+            : { ...current, size: { width, height } }
         ),
         summary: `Resized ${quote(node)}`,
         nodeIds: [node.id]
@@ -264,7 +270,8 @@ function createNode(
   let edgeId: string | undefined
   if (placement.kind === 'child') {
     edgeId = context.createId()
-    edges.push(childEdge(edgeId, placement.parentId, id, placement.origin, placement.sourceArtifact, undefined, context.now))
+    const { parentId: from, origin, sourceArtifact } = placement
+    edges.push(childEdge(edgeId, from, id, origin, sourceArtifact, undefined, context.now))
   }
 
   const subject = `${definition.displayName} "${clip(title)}"`
