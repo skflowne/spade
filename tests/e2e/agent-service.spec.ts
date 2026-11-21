@@ -352,7 +352,7 @@ test('spawns an agent in the project root and keeps the caller prompt unmodified
     // The saved default mode belongs to its provider; another provider gets its own default.
     const second = await session.gateway.execute(
       project.id,
-      { type: 'startTree', node: { ...agentSeed('Review'), config: { provider: 'codex', model: null, mode: null, prompt: 'Review' }, title: 'Reviewer' } },
+      { type: 'startTree', node: { ...agentSeed('Review'), config: { provider: 'codex', model: null, mode: null, prompt: 'Review', expansion: { read: true } }, title: 'Reviewer' } },
       user
     )
     expect(session.paseo.spawns[1]).toEqual({
@@ -366,7 +366,8 @@ test('spawns an agent in the project root and keeps the caller prompt unmodified
     expect(after.nodes.find((candidate) => candidate.id === second.nodeId)).toMatchObject({
       title: 'Reviewer',
       workspaceId: canvas.workspaces[0].id,
-      config: { provider: 'codex', model: 'provider-default-model', mode: 'provider-default-mode', prompt: 'Review' }
+      // The conversation's expansion override survives the adapter's config normalization.
+      config: { provider: 'codex', model: 'provider-default-model', mode: 'provider-default-mode', prompt: 'Review', expansion: { read: true } }
     })
   })
 })

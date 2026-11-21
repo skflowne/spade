@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test, type Page } from '@playwright/test'
 import { indexTree } from '../../src/shared/tree'
+import { installAgentScript, setProviders } from './agent-harness'
 import {
   canvasNode,
   createNoteFromToolbar,
@@ -469,12 +470,19 @@ test('shows a failed creation in the dialog and as a dismissible notice', async 
   const spade = await launchWithProject()
   const { page } = spade
   try {
+    // Paseo lists a provider, then cannot spawn: UI specs run with Paseo disabled in the main process.
+    await installAgentScript(spade.app)
+    await setProviders(spade.app, {
+      providers: [
+        { id: 'claude', label: 'Claude', available: true, status: 'ready', error: null, models: [], modes: [], defaultModeId: null }
+      ]
+    })
     await page.getByRole('toolbar', { name: 'Canvas' }).getByRole('button', { name: 'New node' }).click()
     await page.getByRole('menu', { name: 'New node' }).getByRole('menuitem', { name: 'Agent' }).click()
     const dialog = page.getByRole('dialog', { name: 'New agent' })
-    await dialog.getByLabel('Provider', { exact: true }).fill('claude')
+    await expect(dialog.getByLabel('Provider', { exact: true })).toHaveValue('claude')
+    await dialog.getByLabel('Prompt', { exact: true }).fill('Plan the work')
     await dialog.getByRole('button', { name: 'Create' }).click()
-    // UI specs run with Paseo disabled, so the main process rejects the creation.
     await expect(dialog.getByRole('alert')).toContainText('Could not create the agent')
     await dialog.getByRole('button', { name: 'Cancel' }).click()
     await expect(dialog).toBeHidden()

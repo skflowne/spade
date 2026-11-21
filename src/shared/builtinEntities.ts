@@ -1,3 +1,4 @@
+import type { ConversationExpansionPreferences } from './domain'
 import { EntityRegistry, type EntityDefinition } from './entities'
 
 export type NoteConfig = { body: string }
@@ -9,7 +10,11 @@ export type AgentConfig = {
   mode: string | null
   // The initial prompt as the caller wrote it, without any SPADE-added context.
   prompt: string | null
+  // This conversation's override of the global expansion preferences; absent keys follow the global value.
+  expansion?: Partial<ConversationExpansionPreferences>
 }
+
+const EXPANSION_KEYS = ['toolCall', 'diff', 'html', 'thinking', 'read'] as const
 
 export type ImageSource = { kind: 'path'; path: string } | { kind: 'asset'; assetId: string }
 export type ImageConfig = { source: ImageSource; caption?: string }
@@ -47,6 +52,18 @@ function optionalText(value: unknown, field: string): string | null {
   return text(value, field)
 }
 
+function optionalExpansion(value: unknown): Partial<ConversationExpansionPreferences> | undefined {
+  if (value === undefined || value === null) return undefined
+  const fields = record(value, 'Agent expansion')
+  const parsed: Partial<ConversationExpansionPreferences> = {}
+  for (const [key, flag] of Object.entries(fields)) {
+    if (!(EXPANSION_KEYS as readonly string[]).includes(key)) throw new Error(`expansion.${key} is not a conversation pane type`)
+    if (typeof flag !== 'boolean') throw new Error(`expansion.${key} must be a boolean`)
+    parsed[key as keyof ConversationExpansionPreferences] = flag
+  }
+  return Object.keys(parsed).length > 0 ? parsed : undefined
+}
+
 export const noteEntity: EntityDefinition<NoteConfig> = {
   type: NOTE_ENTITY,
   version: 1,
@@ -69,11 +86,13 @@ export const agentEntity: EntityDefinition<AgentConfig> = {
   collapsedSize: { width: 320, height: 96 },
   parseConfig(value) {
     const config = record(value, 'Agent')
+    const expansion = optionalExpansion(config.expansion)
     return {
       provider: text(config.provider, 'provider'),
       model: optionalText(config.model, 'model'),
       mode: optionalText(config.mode, 'mode'),
-      prompt: optionalText(config.prompt, 'prompt')
+      prompt: optionalText(config.prompt, 'prompt'),
+      ...(expansion === undefined ? {} : { expansion })
     }
   },
   // The locator comes from the node's Paseo resourceRef.

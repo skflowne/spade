@@ -1,73 +1,46 @@
-import { useState } from 'react'
 import { AGENT_ENTITY, type AgentConfig } from '@shared/builtinEntities'
-import { useAgentRuntime } from '../../store/hooks'
-import { DetailList, TextField } from '../../ui/fields'
-import { StatusBadge } from '../../ui/StatusBadge'
 import { defineEntityRenderer } from '../registry'
-import type { EntityBodyProps, EntityCreateFormProps, EntityStatusProps, NodeStatusTone } from '../types'
+import type { EntityMenuAction, EntityMenuContext } from '../types'
+import { AgentBody } from './AgentBody'
+import { AgentCreateForm } from './AgentCreateForm'
+import { AgentStatus } from './AgentStatus'
+import { agentNodeHandles } from './nodeHandles'
+import { promptBlockReason } from './status'
+import './agent.css'
 
-// Minimal placeholder: the agent conversation slice replaces this file wholesale.
+// The agent conversation entity (plan §7.1): spawn form, header status, conversation, composer,
+// permissions, provider sub-agents, and rich conversation artifacts.
 
-function AgentBody({ config }: EntityBodyProps<AgentConfig>): React.JSX.Element {
-  return (
-    <div className="entity-summary">
-      <DetailList
-        rows={[
-          ['Provider', config.provider],
-          ['Model', config.model ?? 'Provider default'],
-          ['Mode', config.mode ?? 'Provider default'],
-          ['Prompt', config.prompt ?? 'None']
-        ]}
-      />
-    </div>
-  )
-}
-
-const ACTIVITY_TONE: Record<string, NodeStatusTone> = {
-  starting: 'info',
-  running: 'info',
-  attention: 'warning',
-  error: 'danger',
-  idle: 'success'
-}
-
-function AgentStatus({ node }: EntityStatusProps<AgentConfig>): React.JSX.Element | null {
-  const runtime = useAgentRuntime(node.id)
-  if (!runtime) return null
-  return (
-    <StatusBadge
-      status={{ label: runtime.activity, tone: ACTIVITY_TONE[runtime.activity] ?? 'neutral', description: runtime.status }}
-    />
-  )
-}
-
-function AgentCreateForm({ formId, onSubmit }: EntityCreateFormProps): React.JSX.Element {
-  const [title, setTitle] = useState('')
-  const [provider, setProvider] = useState('')
-  const [model, setModel] = useState('')
-  const [mode, setMode] = useState('')
-  const [prompt, setPrompt] = useState('')
-  const optional = (value: string): string | null => (value.trim() ? value.trim() : null)
-  return (
-    <form
-      id={formId}
-      className="entity-form"
-      onSubmit={(event) => {
-        event.preventDefault()
-        onSubmit({
-          entityType: AGENT_ENTITY,
-          config: { provider: provider.trim(), model: optional(model), mode: optional(mode), prompt: optional(prompt) },
-          ...(title.trim() ? { title: title.trim() } : {})
+function menuActions({ node }: EntityMenuContext<AgentConfig>): EntityMenuAction[] {
+  const handle = agentNodeHandles.get(node.id)
+  const runtime = handle?.runtime ?? null
+  const notify = handle?.notify ?? ((message: string) => console.error(message))
+  const actions: EntityMenuAction[] = []
+  if (runtime && (runtime.activity === 'running' || runtime.activity === 'starting')) {
+    actions.push({
+      id: 'interrupt',
+      label: 'Interrupt',
+      disabled: promptBlockReason(node, runtime) !== null,
+      onSelect: () => {
+        void window.spadeHost.agents.interrupt(node.id).then((result) => {
+          if (!result.ok) notify(`Could not interrupt the agent: ${result.error.message}`)
         })
-      }}
-    >
-      <TextField label="Title" value={title} onChange={setTitle} autoFocus />
-      <TextField label="Provider" value={provider} onChange={setProvider} required placeholder="claude" monospace />
-      <TextField label="Model" value={model} onChange={setModel} monospace />
-      <TextField label="Mode" value={mode} onChange={setMode} monospace />
-      <TextField label="Prompt" value={prompt} onChange={setPrompt} multiline />
-    </form>
-  )
+      }
+    })
+  }
+  const agentId = runtime?.agentId ?? node.resourceRef?.id
+  if (agentId) {
+    actions.push({
+      id: 'copy-agent-id',
+      label: 'Copy agent id',
+      onSelect: () => {
+        void window.spadeHost.files.copyText(agentId).then((result) => {
+          if (!result.ok) notify(`Could not copy the agent id: ${result.error.message}`)
+        })
+      }
+    })
+  }
+  return actions
 }
 
 export const agentRenderer = defineEntityRenderer<AgentConfig>({
@@ -75,5 +48,6 @@ export const agentRenderer = defineEntityRenderer<AgentConfig>({
   icon: 'A',
   Body: AgentBody,
   Status: AgentStatus,
-  CreateForm: AgentCreateForm
+  CreateForm: AgentCreateForm,
+  menuActions
 })
