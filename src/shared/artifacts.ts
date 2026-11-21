@@ -154,7 +154,8 @@ function hasControlCharacter(path: string): boolean {
   return false
 }
 
-function decodeFileUrl(raw: string): string | null {
+// A file: URL as a path; null when its percent-encoding is invalid.
+export function decodeFileUrl(raw: string): string | null {
   try {
     const decoded = decodeURIComponent(raw.replace(/^file:\/\//i, ''))
     return /^\/[A-Za-z]:[\\/]/.test(decoded) ? decoded.slice(1) : decoded

@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { IMAGE_ENTITY, WEB_PAGE_ENTITY } from '@shared/builtinEntities'
-import type { Artifact } from '@shared/artifacts'
+import { decodeFileUrl, type Artifact } from '@shared/artifacts'
 import type { NodeSeed } from '@shared/commands'
 import type { PathInfo, Result } from '@shared/ipc'
 import type { ArtifactHandler, ImageResolver } from '../../rich'
@@ -151,13 +151,7 @@ export function ArtifactLayer({ projectId, nodeId, host, children }: ArtifactLay
 }
 
 function imagePath(src: string): string {
-  if (!/^file:/i.test(src)) return src
-  try {
-    const decoded = decodeURIComponent(src.replace(/^file:\/\//i, ''))
-    return /^\/[A-Za-z]:[\\/]/.test(decoded) ? decoded.slice(1) : decoded
-  } catch {
-    return src
-  }
+  return /^file:/i.test(src) ? (decodeFileUrl(src) ?? src) : src
 }
 
 type ArtifactPopoverProps = {
