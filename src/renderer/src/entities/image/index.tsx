@@ -1,43 +1,62 @@
 import { useState } from 'react'
 import { IMAGE_ENTITY, type ImageConfig } from '@shared/builtinEntities'
-import { DetailList, TextField } from '../../ui/fields'
+import { resolveProjectPath } from '@shared/paths'
+import { TextField } from '../../ui/fields'
 import { defineEntityRenderer } from '../registry'
-import type { EntityBodyProps, EntityCreateFormProps } from '../types'
+import type { EntityCreateFormProps, EntityMenuAction } from '../types'
+import { ImageBody } from './ImageBody'
+import { copyImagePath, requestImage, revealImage, useFailureNotices } from './imageRequests'
 
-// Minimal placeholder: the viewer slice replaces this file wholesale.
-
-function ImageBody({ config }: EntityBodyProps<ImageConfig>): React.JSX.Element {
-  const source = config.source.kind === 'path' ? config.source.path : `SPADE asset ${config.source.assetId}`
-  return (
-    <div className="entity-summary">
-      <DetailList
-        rows={[
-          ['Source', <span className="mono">{source}</span>],
-          ['Caption', config.caption ?? 'None']
-        ]}
-      />
-    </div>
-  )
-}
-
-function ImageCreateForm({ formId, onSubmit }: EntityCreateFormProps): React.JSX.Element {
-  const [title, setTitle] = useState('')
+function ImageCreateForm({ project, formId, onSubmit }: EntityCreateFormProps): React.JSX.Element {
+  useFailureNotices()
   const [path, setPath] = useState('')
+  const [caption, setCaption] = useState('')
+  const [pickFailure, setPickFailure] = useState<string | null>(null)
+
+  const choose = async (): Promise<void> => {
+    setPickFailure(null)
+    try {
+      const chosen = await window.spadeHost.files.pickImage(project.id)
+      if (chosen !== null) setPath(chosen)
+    } catch (error) {
+      setPickFailure(error instanceof Error ? error.message : String(error))
+    }
+  }
+
   return (
     <form
       id={formId}
       className="entity-form"
       onSubmit={(event) => {
         event.preventDefault()
+        const trimmedCaption = caption.trim()
         onSubmit({
           entityType: IMAGE_ENTITY,
-          config: { source: { kind: 'path', path: path.trim() } },
-          ...(title.trim() ? { title: title.trim() } : {})
+          config: { source: { kind: 'path', path: path.trim() }, ...(trimmedCaption ? { caption: trimmedCaption } : {}) }
         })
       }}
     >
-      <TextField label="Title" value={title} onChange={setTitle} autoFocus />
-      <TextField label="Path" value={path} onChange={setPath} required monospace hint="Absolute, or relative to the project root." />
+      <div className="image-form__pick">
+        <TextField
+          label="Path"
+          value={path}
+          onChange={setPath}
+          required
+          autoFocus
+          monospace
+          hint={
+            pickFailure ? (
+              <span className="image-form__error">{pickFailure}</span>
+            ) : (
+              'PNG, JPEG, GIF, WebP, or SVG. Absolute, or relative to the project root.'
+            )
+          }
+        />
+        <button type="button" className="cr-button" onClick={() => void choose()}>
+          Choose image…
+        </button>
+      </div>
+      <TextField label="Caption" value={caption} onChange={setCaption} />
     </form>
   )
 }
@@ -46,5 +65,19 @@ export const imageRenderer = defineEntityRenderer<ImageConfig>({
   type: IMAGE_ENTITY,
   icon: 'I',
   Body: ImageBody,
-  CreateForm: ImageCreateForm
+  CreateForm: ImageCreateForm,
+  menuActions: ({ node, config, project }) => {
+    const path = config.source.kind === 'path' ? resolveProjectPath(project.rootPath, config.source.path) : null
+    const fileActions: EntityMenuAction[] = path
+      ? [
+          { id: 'reveal', label: 'Reveal in Explorer', onSelect: () => void revealImage(project.id, path) },
+          { id: 'copy-path', label: 'Copy path', onSelect: () => void copyImagePath(path) }
+        ]
+      : []
+    return [
+      ...fileActions,
+      { id: 'full-size', label: 'Open full size', disabled: node.collapsed, onSelect: () => requestImage(node.id, 'full-size') },
+      { id: 'reload', label: 'Reload', disabled: node.collapsed, onSelect: () => requestImage(node.id, 'reload') }
+    ]
+  }
 })
