@@ -608,6 +608,7 @@ test('a live HTML answer submits its message, data, and annotations as the next 
       '<!doctype html>',
       '<button id="note" onclick="window.spade.annotate({ target: \'step-1\', text: \'Too vague\' })">Note</button>',
       '<button id="approve" onclick="window.spade.submit({ message: \'Approved\', data: { step: 2 } }).then(() => document.body.dataset.result = \'ok\', (error) => document.body.dataset.result = \'error: \' + error.message)">Approve</button>',
+      '<input aria-label="Draft" onkeydown="if (event.key === \'Escape\' && this.value) { event.preventDefault(); this.value = \'\' }">',
       '```'
     ].join('\n')
     await showAgent(session, nodeId, [items.assistant('a1', `${html}\n\n\`\`\`mermaid\ngraph TD\nA-->B\n\`\`\``)])
@@ -642,6 +643,17 @@ test('a live HTML answer submits its message, data, and annotations as the next 
     await answer.getByRole('button', { name: 'Approve' }).click()
     await expect(answer.locator('body')).toHaveAttribute('data-result', 'error: Paseo no longer has this agent.')
     expect(await agentCalls(app, 'agents.prompt')).toHaveLength(2)
+
+    // Escape inside the answer leaves the conversation (plan §6), unless the answer handled the key itself.
+    await activate(page, 'Agent')
+    const draft = answer.getByRole('textbox', { name: 'Draft' })
+    await draft.fill('x')
+    await draft.press('Escape')
+    await expect(draft).toHaveValue('')
+    await expect(nodeBody(page, 'Agent')).toHaveAttribute('data-active', 'true')
+    await draft.press('Escape')
+    await expect(nodeBody(page, 'Agent')).toHaveAttribute('data-active', 'false')
+    await expect(nodeHeader(page, 'Agent')).toBeFocused()
   } finally {
     await app.close()
   }

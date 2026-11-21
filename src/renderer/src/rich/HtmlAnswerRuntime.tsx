@@ -19,6 +19,8 @@ export type HtmlAnswerRuntimeProps = {
   onAnnotate: AnnotateHandler
   // http(s) links clicked inside the answer; they never navigate the runtime or the app.
   onOpenUrl?: (url: string, anchor: HTMLElement) => void
+  // Escape pressed inside the answer that the answer did not handle itself (keyboard events stay in the frame).
+  onEscape?: () => void
   minHeight?: number
   maxHeight?: number
 }
@@ -42,16 +44,17 @@ function RuntimeFrame({
   onSubmit,
   onAnnotate,
   onOpenUrl,
+  onEscape,
   minHeight = DEFAULT_MIN_HEIGHT,
   maxHeight = DEFAULT_MAX_HEIGHT
 }: HtmlAnswerRuntimeProps): React.JSX.Element {
   const frameRef = useRef<HTMLIFrameElement>(null)
   const [token] = useState(() => crypto.randomUUID())
   const [contentHeight, setContentHeight] = useState<number | null>(null)
-  const latest = useRef({ html, onSubmit, onAnnotate, onOpenUrl })
+  const latest = useRef({ html, onSubmit, onAnnotate, onOpenUrl, onEscape })
 
   useLayoutEffect(() => {
-    latest.current = { html, onSubmit, onAnnotate, onOpenUrl }
+    latest.current = { html, onSubmit, onAnnotate, onOpenUrl, onEscape }
   })
 
   // A layout effect so the listener exists before the frame can announce itself.
@@ -83,6 +86,9 @@ function RuntimeFrame({
           return
         case 'open-url':
           latest.current.onOpenUrl?.(message.url, frame)
+          return
+        case 'escape':
+          latest.current.onEscape?.()
           return
         case 'call': {
           const reply = (error: string | null): void =>

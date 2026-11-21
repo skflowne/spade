@@ -34,12 +34,19 @@ export const AssistantMessage = memo(function AssistantMessage({ itemId, text }:
 
 function MarkdownSegment({ answerKey, source }: { answerKey: string; source: string }): React.JSX.Element {
   const { onArtifact, resolveImage } = useArtifacts()
-  const { answerHandlers } = useConversation()
+  const { answerHandlers, leaveAnswer } = useConversation()
   // HTML answers nested inside Markdown (e.g. in a list) share this segment's annotations.
   const { onSubmit, onAnnotate } = answerHandlers(answerKey, null)
   return (
     <>
-      <RichMarkdown source={source} onArtifact={onArtifact} resolveImage={resolveImage} onSubmit={onSubmit} onAnnotate={onAnnotate} />
+      <RichMarkdown
+        source={source}
+        onArtifact={onArtifact}
+        resolveImage={resolveImage}
+        onSubmit={onSubmit}
+        onAnnotate={onAnnotate}
+        onEscape={leaveAnswer}
+      />
       <AnnotationList answerKey={answerKey} />
     </>
   )
@@ -47,7 +54,7 @@ function MarkdownSegment({ answerKey, source }: { answerKey: string; source: str
 
 function HtmlAnswer({ answerKey, html, title }: { answerKey: string; html: string; title: string | null }): React.JSX.Element {
   const { onArtifact } = useArtifacts()
-  const { expansion, answerHandlers, submitBlocked } = useConversation()
+  const { expansion, answerHandlers, submitBlocked, leaveAnswer } = useConversation()
   const [toggled, setToggled] = useState<boolean | null>(null)
   const expanded = toggled ?? expansion.html
   const { onSubmit, onAnnotate } = answerHandlers(answerKey, title)
@@ -66,6 +73,7 @@ function HtmlAnswer({ answerKey, html, title }: { answerKey: string; html: strin
               const artifact = { kind: 'url' as const, value: url, line: null, column: null, isImage: false }
               onArtifact(artifact, anchor)
             }}
+            onEscape={leaveAnswer}
           />
           <button type="button" className="agent-html-answer__collapse" onClick={() => setToggled(false)}>
             Hide {name}

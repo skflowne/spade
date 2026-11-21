@@ -15,4 +15,6 @@ export type RichContentHandlers = {
   resolveImage: ImageResolver
   onSubmit: SubmitHandler
   onAnnotate: AnnotateHandler
+  // Escape pressed inside a live HTML answer that the answer did not handle.
+  onEscape?: () => void
 }

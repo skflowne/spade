@@ -31,12 +31,13 @@ export const RichMarkdown = memo(function RichMarkdown({
   onArtifact,
   resolveImage,
   onSubmit,
-  onAnnotate
+  onAnnotate,
+  onEscape
 }: RichMarkdownProps): React.JSX.Element {
   const blocks = useMemo(() => parseRichMarkdown(source), [source])
   const handlers = useMemo(
-    () => ({ onArtifact, resolveImage, onSubmit, onAnnotate }),
-    [onAnnotate, onArtifact, onSubmit, resolveImage]
+    () => ({ onArtifact, resolveImage, onSubmit, onAnnotate, onEscape }),
+    [onAnnotate, onArtifact, onSubmit, resolveImage, onEscape]
   )
   return (
     <HandlersContext.Provider value={handlers}>
@@ -166,12 +167,14 @@ function FencedBlock({ block }: { block: Extract<RichBlock, { type: 'code' }> })
 }
 
 function LiveHtml({ html, title }: { html: string; title: string | null }): React.JSX.Element {
-  const { onSubmit, onAnnotate, onArtifact } = useHandlers()
+  const { onSubmit, onAnnotate, onArtifact, onEscape } = useHandlers()
   const onOpenUrl = (url: string, anchor: HTMLElement): void => {
     const artifact = parseArtifact(url)
     if (artifact) onArtifact(artifact, anchor)
   }
-  return <HtmlAnswerBlock html={html} title={title} onSubmit={onSubmit} onAnnotate={onAnnotate} onOpenUrl={onOpenUrl} />
+  return (
+    <HtmlAnswerBlock html={html} title={title} onSubmit={onSubmit} onAnnotate={onAnnotate} onOpenUrl={onOpenUrl} onEscape={onEscape} />
+  )
 }
 
 // A plain ```html fence is code until the user chooses to run it.

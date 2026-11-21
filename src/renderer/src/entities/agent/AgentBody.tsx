@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { AgentConfig } from '@shared/builtinEntities'
 import { DEFAULT_CONVERSATION_EXPANSION } from '@shared/domain'
+import { useCanvasActions } from '../../canvas/CanvasContext'
+import { focusNodeHeader } from '../../canvas/nodeFocus'
 import type { AnnotateHandler, SubmitHandler } from '../../rich'
 import { useAgentRuntime, useAppState, useSpadeStore } from '../../store/hooks'
 import type { EntityBodyProps } from '../types'
@@ -95,12 +97,18 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
     [host, notify]
   )
 
+  const canvasActions = useCanvasActions()
+  const leaveAnswer = useCallback(() => {
+    canvasActions.setActiveNode(null)
+    focusNodeHeader(latest.current.nodeId)
+  }, [canvasActions])
+
   const subagentList = runtime?.providerSubagents
   const subagentIds = useMemo(() => new Set((subagentList ?? []).map((subagent) => subagent.id)), [subagentList])
 
   const services = useMemo<ConversationServices>(
-    () => ({ expansion, annotations, answerHandlers, submitBlocked: blocked, subagentIds, openSubagent }),
-    [expansion, annotations, answerHandlers, blocked, subagentIds, openSubagent]
+    () => ({ expansion, annotations, answerHandlers, submitBlocked: blocked, subagentIds, openSubagent, leaveAnswer }),
+    [expansion, annotations, answerHandlers, blocked, subagentIds, openSubagent, leaveAnswer]
   )
 
   const setOverride = (value: ExpansionOverride | undefined): void => {
