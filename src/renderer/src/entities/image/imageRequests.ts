@@ -1,48 +1,32 @@
-import { useEffect } from 'react'
-import { useSpadeStore } from '../../store/hooks'
+// Node menu entries run outside React; this lets them reach the mounted body of the same node, and tell
+// when no body is there to act.
 
-// Node menu entries run outside React; these let them reach the mounted body of the same node and show
-// failures as notices.
+export type ImageBodyControls = {
+  reload(): void
+  openFullSize(): void
+  // Why the image cannot be opened at full size, or null when it can.
+  fullSizeUnavailable: string | null
+}
 
-export type ImageRequest = 'reload' | 'full-size'
+const bodies = new Map<string, ImageBodyControls>()
 
-const listeners = new Map<string, Set<(request: ImageRequest) => void>>()
-
-export function onImageRequest(nodeId: string, listener: (request: ImageRequest) => void): () => void {
-  const set = listeners.get(nodeId) ?? new Set()
-  set.add(listener)
-  listeners.set(nodeId, set)
+export function registerImageBody(nodeId: string, controls: ImageBodyControls): () => void {
+  bodies.set(nodeId, controls)
   return () => {
-    set.delete(listener)
-    if (set.size === 0) listeners.delete(nodeId)
+    if (bodies.get(nodeId) === controls) bodies.delete(nodeId)
   }
 }
 
-export function requestImage(nodeId: string, request: ImageRequest): void {
-  for (const listener of [...(listeners.get(nodeId) ?? [])]) listener(request)
+export function imageBodyOf(nodeId: string): ImageBodyControls | null {
+  return bodies.get(nodeId) ?? null
 }
 
-let notify: ((message: string) => void) | null = null
-
-// Registers the app's notices as the place menu-action failures go.
-export function useFailureNotices(): void {
-  const store = useSpadeStore()
-  useEffect(() => {
-    notify = (message) => store.notify(message)
-  }, [store])
-}
-
-export function reportFailure(message: string): void {
-  if (notify) notify(message)
-  else console.error(message)
-}
-
-export async function revealImage(projectId: string, path: string): Promise<void> {
+export async function revealImage(projectId: string, path: string, notify: (message: string) => void): Promise<void> {
   const result = await window.spadeHost.files.reveal(projectId, path)
-  if (!result.ok) reportFailure(result.error.message)
+  if (!result.ok) notify(`Could not reveal the image: ${result.error.message}`)
 }
 
-export async function copyImagePath(path: string): Promise<void> {
+export async function copyImagePath(path: string, notify: (message: string) => void): Promise<void> {
   const result = await window.spadeHost.files.copyText(path)
-  if (!result.ok) reportFailure(result.error.message)
+  if (!result.ok) notify(`Could not copy the path: ${result.error.message}`)
 }

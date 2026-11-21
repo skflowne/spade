@@ -1,9 +1,11 @@
 import { useState } from 'react'
 import { WEB_PAGE_ENTITY, type WebPageConfig } from '@shared/builtinEntities'
+import type { CanvasNode } from '@shared/domain'
+import type { Result } from '@shared/ipc'
 import { TextField } from '../../ui/fields'
 import { defineEntityRenderer } from '../registry'
 import type { EntityCreateFormProps } from '../types'
-import { requestReload } from './reloadRequests'
+import { reloaderOf } from './reloadRequests'
 import { normalizeWebAddress } from './webAddress'
 import { WebPageBody } from './WebPageBody'
 
@@ -41,10 +43,10 @@ function WebPageCreateForm({ formId, onSubmit }: EntityCreateFormProps): React.J
   )
 }
 
-function report(action: string): (result: { ok: boolean }) => void {
-  return (result) => {
-    if (!result.ok) console.error(`${action} failed`, result)
-  }
+// Why Reload cannot work right now, or null when it can.
+function reloadUnavailable(node: CanvasNode): string | null {
+  if (node.collapsed) return 'node collapsed'
+  return reloaderOf(node.id) ? null : 'page not loaded'
 }
 
 export const webPageRenderer = defineEntityRenderer<WebPageConfig>({
@@ -52,17 +54,35 @@ export const webPageRenderer = defineEntityRenderer<WebPageConfig>({
   icon: 'W',
   Body: WebPageBody,
   CreateForm: WebPageCreateForm,
-  menuActions: ({ node, config }) => [
-    {
-      id: 'open-external',
-      label: 'Open in default browser',
-      onSelect: () => void window.spadeHost.files.openExternal(config.url).then(report('Opening the page'))
-    },
-    {
-      id: 'copy-url',
-      label: 'Copy URL',
-      onSelect: () => void window.spadeHost.files.copyText(config.url).then(report('Copying the URL'))
-    },
-    { id: 'reload', label: 'Reload', disabled: node.collapsed, onSelect: () => requestReload(node.id) }
-  ]
+  menuActions: ({ node, config, host }) => {
+    const report =
+      (action: string) =>
+      (result: Result): void => {
+        if (!result.ok) host.notify(`${action}: ${result.error.message}`)
+      }
+    const unavailable = reloadUnavailable(node)
+    return [
+      {
+        id: 'open-external',
+        label: 'Open in default browser',
+        onSelect: () => void window.spadeHost.files.openExternal(config.url).then(report('Could not open the page'))
+      },
+      {
+        id: 'copy-url',
+        label: 'Copy URL',
+        onSelect: () => void window.spadeHost.files.copyText(config.url).then(report('Could not copy the URL'))
+      },
+      {
+        id: 'reload',
+        label: unavailable ? `Reload (${unavailable})` : 'Reload',
+        disabled: unavailable !== null,
+        onSelect: () => {
+          // The page may have gone between opening the menu and choosing.
+          const reload = reloaderOf(node.id)
+          if (reload) reload()
+          else host.notify('The page is not loaded, so it cannot be reloaded.')
+        }
+      }
+    ]
+  }
 })

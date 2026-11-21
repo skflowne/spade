@@ -5,7 +5,7 @@ import { useCanvasActions } from '../../canvas/CanvasContext'
 import type { EntityBodyProps, NodeStatus } from '../types'
 import { useGuestSlot } from './guestSlots'
 import { LocatorPersistence } from './locatorPersistence'
-import { onReloadRequested } from './reloadRequests'
+import { registerReload } from './reloadRequests'
 import { normalizeWebAddress, sameWebAddress } from './webAddress'
 import {
   ABORTED_LOAD,
@@ -294,13 +294,7 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
     else if (document.activeElement === attached) attached.blur()
   }, [active, attached])
 
-  useEffect(
-    () =>
-      onReloadRequested(node.id, () => {
-        if (attached) attached.reload()
-      }),
-    [node.id, attached]
-  )
+  useEffect(() => (attached ? registerReload(node.id, () => attached.reload()) : undefined), [node.id, attached])
 
   const status = statusOf(page, live)
   const statusKey = status ? `${status.label}|${status.tone}|${status.description}` : ''

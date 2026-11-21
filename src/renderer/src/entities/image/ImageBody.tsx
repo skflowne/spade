@@ -4,12 +4,19 @@ import type { ImageInfo } from '@shared/ipc'
 import { isSamePath, resolveProjectPath } from '@shared/paths'
 import type { EntityBodyProps, NodeStatus } from '../types'
 import { ImageLightbox } from './ImageLightbox'
-import { copyImagePath, onImageRequest, revealImage, useFailureNotices } from './imageRequests'
+import { copyImagePath, registerImageBody, revealImage } from './imageRequests'
 import './image.css'
 
 type Problem = { code: string; message: string }
 
 const MISSING = 'image-missing'
+
+// Why the image cannot be opened at full size, or null when it can.
+function fullSizeUnavailable(image: ImageInfo | null, problem: Problem | null, isFile: boolean): string | null {
+  if (problem?.code === MISSING) return isFile ? 'file not found' : 'image not found'
+  if (problem) return 'image cannot be shown'
+  return image ? null : 'image not loaded'
+}
 
 function statusOf(image: ImageInfo | null, problem: Problem | null): NodeStatus | null {
   if (problem) {
@@ -24,7 +31,6 @@ function statusOf(image: ImageInfo | null, problem: Problem | null): NodeStatus 
 }
 
 export function ImageBody({ node, config, project, active, detail, host }: EntityBodyProps<ImageConfig>): React.JSX.Element {
-  useFailureNotices()
   const { source } = config
   const path = source.kind === 'path' ? resolveProjectPath(project.rootPath, source.path) : null
   const sourceKey = source.kind === 'path' ? `path:${path}` : `asset:${source.assetId}`
@@ -73,14 +79,17 @@ export function ImageBody({ node, config, project, active, detail, host }: Entit
     wasActive.current = active
   }, [active, describe])
 
+  const unavailable = fullSizeUnavailable(image, problem, path !== null)
   useEffect(
     () =>
-      onImageRequest(node.id, (request) => {
-        if (request === 'reload') void describe()
-        else setFullSize(true)
+      registerImageBody(node.id, {
+        reload: () => void describe(),
+        openFullSize: () => setFullSize(true),
+        fullSizeUnavailable: unavailable
       }),
-    [node.id, describe]
+    [node.id, describe, unavailable]
   )
+  const notify = (message: string): void => host.notify(message)
 
   const status = statusOf(image, problem)
   const statusKey = status ? `${status.label}|${status.tone}|${status.description}` : ''
@@ -132,10 +141,10 @@ export function ImageBody({ node, config, project, active, detail, host }: Entit
           <div className="image-node__toolbar" role="toolbar" aria-label="Image">
             {path ? (
               <>
-                <button type="button" className="cr-button cr-button--ghost image-node__action" onClick={() => void revealImage(project.id, path)}>
+                <button type="button" className="cr-button cr-button--ghost image-node__action" onClick={() => void revealImage(project.id, path, notify)}>
                   Reveal
                 </button>
-                <button type="button" className="cr-button cr-button--ghost image-node__action" onClick={() => void copyImagePath(path)}>
+                <button type="button" className="cr-button cr-button--ghost image-node__action" onClick={() => void copyImagePath(path, notify)}>
                   Copy path
                 </button>
               </>
@@ -143,7 +152,7 @@ export function ImageBody({ node, config, project, active, detail, host }: Entit
             <button
               type="button"
               className="cr-button cr-button--ghost image-node__action"
-              disabled={!image || problem !== null}
+              disabled={unavailable !== null}
               onClick={() => setFullSize(true)}
             >
               Full size

@@ -5,10 +5,9 @@ import { TextField } from '../../ui/fields'
 import { defineEntityRenderer } from '../registry'
 import type { EntityCreateFormProps, EntityMenuAction } from '../types'
 import { ImageBody } from './ImageBody'
-import { copyImagePath, requestImage, revealImage, useFailureNotices } from './imageRequests'
+import { copyImagePath, imageBodyOf, revealImage, type ImageBodyControls } from './imageRequests'
 
 function ImageCreateForm({ project, formId, onSubmit }: EntityCreateFormProps): React.JSX.Element {
-  useFailureNotices()
   const [path, setPath] = useState('')
   const [caption, setCaption] = useState('')
   const [pickFailure, setPickFailure] = useState<string | null>(null)
@@ -65,18 +64,38 @@ export const imageRenderer = defineEntityRenderer<ImageConfig>({
   icon: 'I',
   Body: ImageBody,
   CreateForm: ImageCreateForm,
-  menuActions: ({ node, config, project }) => {
+  menuActions: ({ node, config, project, host }) => {
+    const notify = (message: string): void => host.notify(message)
     const path = config.source.kind === 'path' ? resolveProjectPath(project.rootPath, config.source.path) : null
     const fileActions: EntityMenuAction[] = path
       ? [
-          { id: 'reveal', label: 'Reveal in Explorer', onSelect: () => void revealImage(project.id, path) },
-          { id: 'copy-path', label: 'Copy path', onSelect: () => void copyImagePath(path) }
+          { id: 'reveal', label: 'Reveal in Explorer', onSelect: () => void revealImage(project.id, path, notify) },
+          { id: 'copy-path', label: 'Copy path', onSelect: () => void copyImagePath(path, notify) }
         ]
       : []
+    const body = imageBodyOf(node.id)
+    const noBody = node.collapsed ? 'node collapsed' : 'image not loaded'
+    const fullSizeUnavailable = body ? body.fullSizeUnavailable : noBody
+    // The body may have gone between opening the menu and choosing.
+    const withBody = (act: (controls: ImageBodyControls) => void) => () => {
+      const current = imageBodyOf(node.id)
+      if (current) act(current)
+      else host.notify('The image is not shown right now; expand the node and try again.')
+    }
     return [
       ...fileActions,
-      { id: 'full-size', label: 'Open full size', disabled: node.collapsed, onSelect: () => requestImage(node.id, 'full-size') },
-      { id: 'reload', label: 'Reload', disabled: node.collapsed, onSelect: () => requestImage(node.id, 'reload') }
+      {
+        id: 'full-size',
+        label: fullSizeUnavailable ? `Open full size (${fullSizeUnavailable})` : 'Open full size',
+        disabled: fullSizeUnavailable !== null,
+        onSelect: withBody((controls) => controls.openFullSize())
+      },
+      {
+        id: 'reload',
+        label: body ? 'Reload' : `Reload (${noBody})`,
+        disabled: !body,
+        onSelect: withBody((controls) => controls.reload())
+      }
     ]
   }
 })

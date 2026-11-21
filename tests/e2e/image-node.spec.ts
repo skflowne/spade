@@ -16,6 +16,7 @@ import {
   scratchDirectory,
   type Spade
 } from './ui-harness'
+import { failInMain, menuEntry, noticeAlerts } from './entity-harness'
 
 // A solid-color RGB PNG of the given size.
 function png(width: number, height: number, [red, green, blue]: [number, number, number]): Buffer {
@@ -189,6 +190,12 @@ test('an image node opens a typed path relative to the project root, even before
   const record = (await readCanvas(page)).nodes.find((node) => node.title === 'later.png')!
   expect(record.config).toEqual({ source: { kind: 'path', path: file } })
 
+  // There is nothing to open at full size, and the menu says why.
+  const fullSize = await menuEntry(page, 'later.png', 'Open full size')
+  await expect(fullSize).toBeDisabled()
+  await expect(fullSize).toContainText('file not found')
+  await page.keyboard.press('Escape')
+
   await writeFile(file, png(120, 360, [10, 10, 10]))
   await expectShown(page, 'later.png', 120, 360)
 
@@ -196,6 +203,16 @@ test('an image node opens a typed path relative to the project root, even before
   await nodeBody(page, 'later.png').click()
   await canvasNode(page, 'later.png').getByRole('button', { name: 'Copy path' }).click()
   await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe(file)
+
+  // A collapsed node has no body: Reload waits for it, and a failed menu action is still reported.
+  await nodeMenu(page, 'later.png', 'Collapse node')
+  const reload = await menuEntry(page, 'later.png', 'Reload')
+  await expect(reload).toBeDisabled()
+  await expect(reload).toContainText('node collapsed')
+  await page.keyboard.press('Escape')
+  await failInMain(app, 'files.reveal', 'Explorer could not be started.')
+  await nodeMenu(page, 'later.png', 'Reveal in Explorer')
+  await expect(noticeAlerts(page)).toContainText('Explorer could not be started.')
   await app.close()
 })
 

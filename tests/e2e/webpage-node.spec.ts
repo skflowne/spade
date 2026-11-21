@@ -20,6 +20,7 @@ import {
   scratchDirectory,
   type Spade
 } from './ui-harness'
+import { failInMain, menuEntry, noticeAlerts } from './entity-harness'
 
 // Two small pages served locally; each page load gets a fresh random token, so an unchanged token proves
 // the guest did not reload.
@@ -306,6 +307,11 @@ test('a canvas keeps at most twelve live pages, and activating a paused page bri
 
   const paused = page.getByTestId('canvas-node').filter({ has: page.getByTestId('webpage-placeholder') })
   const pausedTitle = (await paused.getByRole('heading').textContent())!
+  // A paused page has nothing to reload, and its menu says why.
+  const reload = await menuEntry(page, pausedTitle, 'Reload')
+  await expect(reload).toBeDisabled()
+  await expect(reload).toContainText('page not loaded')
+  await page.keyboard.press('Escape')
   await nodeBody(page, pausedTitle).click()
   await expect(canvasNode(page, pausedTitle).getByTestId('webpage-guest')).toBeVisible()
   await expect.poll(async () => (await guests(app)).length).toBe(12)
@@ -331,6 +337,23 @@ test('popups navigate the same guest and open no window', async () => {
   await app.close()
 })
 
+test('the node menu reloads a live page and reports failed actions as notices', async () => {
+  const { app, page } = await launchWithProject()
+  await createWebPageFromToolbar(page, `${origin}/a`)
+  const title = hostTitle()
+  const guest = await guestAt(app, `${origin}/a`)
+  await expect.poll(async () => (await guests(app))[0]?.title).toBe('Page A')
+
+  await countLoads(app, guest.id)
+  await (await menuEntry(page, title, 'Reload')).click()
+  await expect.poll(() => loadsOf(app, guest.id)).toBe(1)
+
+  await failInMain(app, 'files.openExternal', 'No browser could be started.')
+  await (await menuEntry(page, title, 'Open in default browser')).click()
+  await expect(noticeAlerts(page)).toContainText('No browser could be started.')
+  await app.close()
+})
+
 test('collapsing unmounts the guest and expanding restores the page', async () => {
   const { app, page } = await launchWithProject()
   await createWebPageFromToolbar(page, `${origin}/a`)
@@ -343,6 +366,10 @@ test('collapsing unmounts the guest and expanding restores the page', async () =
   await expect(canvasNode(page, title).getByTestId('node-body')).toHaveCount(0)
   await expect.poll(async () => (await guests(app)).length).toBe(0)
   await expect.poll(() => webPageUrl(page)).toBe(`${origin}/b`)
+  const reload = await menuEntry(page, title, 'Reload')
+  await expect(reload).toBeDisabled()
+  await expect(reload).toContainText('node collapsed')
+  await page.keyboard.press('Escape')
 
   await nodeMenu(page, title, 'Expand node')
   const restored = await guestAt(app, `${origin}/b`)

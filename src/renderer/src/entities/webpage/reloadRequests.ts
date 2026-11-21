@@ -1,16 +1,14 @@
-// Lets the node menu's Reload reach the mounted body of the same node.
-const listeners = new Map<string, Set<() => void>>()
+// Lets the node menu's Reload reach the mounted body of the same node. A body registers only while it has a
+// page to reload, so the menu can tell when Reload cannot work.
+const reloaders = new Map<string, () => void>()
 
-export function onReloadRequested(nodeId: string, listener: () => void): () => void {
-  const set = listeners.get(nodeId) ?? new Set()
-  set.add(listener)
-  listeners.set(nodeId, set)
+export function registerReload(nodeId: string, reload: () => void): () => void {
+  reloaders.set(nodeId, reload)
   return () => {
-    set.delete(listener)
-    if (set.size === 0) listeners.delete(nodeId)
+    if (reloaders.get(nodeId) === reload) reloaders.delete(nodeId)
   }
 }
 
-export function requestReload(nodeId: string): void {
-  for (const listener of [...(listeners.get(nodeId) ?? [])]) listener()
+export function reloaderOf(nodeId: string): (() => void) | null {
+  return reloaders.get(nodeId) ?? null
 }
