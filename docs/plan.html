@@ -222,10 +222,9 @@
 <p>Examples:</p>
 <ul>
 <li>Paseo agent ID</li>
-<li>Filesystem path plus project identity (images, later files)</li>
-<li>Electron browser instance ID</li>
-<li>SPADE-owned asset ID for an image SPADE had to store itself (§4.7)</li>
+<li>Paseo provider-native sub-agent: parent agent ID plus sub-agent ID</li>
 </ul>
+<p>Decided in SPADE-36: only nodes that point at a resource owned elsewhere carry a reference, and today those are agent nodes. Image and web page nodes have <code>resourceRef: null</code>; their config is the single source of truth for the path, SPADE asset ID (§4.7), or URL, so no second locator can drift from it.</p>
 <h3 id="4-3-project">4.3 Project</h3>
 <p>A project is a root directory and the canvas that belongs to it. It does not require a Git repository, and SPADE never inspects or changes the directory's contents beyond reading what the user opens.</p>
 <pre><code class="language-ts">type Project = {
@@ -319,12 +318,20 @@
 <p>Decided in B3:</p>
 <ul>
 <li><strong>Surface.</strong> One <code>spade</code> command. Reads: <code>whoami</code>, <code>projects</code>, <code>tree</code>, <code>nodes</code>, <code>node</code>, <code>edges</code>, <code>activity</code>, <code>entities</code>, <code>providers</code>. Changes: <code>spawn</code> (a child of the caller by default; <code>--parent</code>, <code>--tree</code>, or <code>--new-tree</code> otherwise), <code>reparent</code>, <code>move</code>, <code>resize</code>, <code>rename</code>, <code>describe</code>, <code>edit</code>, <code>collapse</code>, <code>expand</code>, <code>archive</code>, <code>restore</code>, <code>remove</code> (each with <code>--branch</code> where it applies), <code>connect</code>, <code>disconnect</code>, and <code>prompt</code>. Plus <code>help</code> and <code>skill</code>. Every command accepts <code>--json</code>; reads are paged. There is no viewport or focus command.</li>
-<li><strong>Transport.</strong> The running application serves a local HTTP control server on <code>127.0.0.1</code> with an OS-assigned port and a bearer token created at each start. It writes a discovery file, <code>control.json</code>, and launcher shims, <code>bin/spade</code> and <code>bin/spade.cmd</code>, into its own application data directory. The shims run the bundled CLI with the application's own executable in Node mode, so agents need no separate Node install. The CLI identifies the calling agent from <code>PASEO_AGENT_ID</code>.</li>
-<li><strong>Skill delivery.</strong> SPADE appends a few lines to every agent's initial prompt naming the agent's node, its project, and the shim path. The agent runs <code>spade skill</code> to read the <code>spade-canvas</code> skill bundled with the CLI. Nothing is written into project directories or provider configuration.</li>
+<li><strong>Transport.</strong> The running application serves a local HTTP control server on <code>127.0.0.1</code> with an OS-assigned port and a bearer token created at each start. It writes a discovery file, <code>control.json</code>, and three launcher shims into its own application data directory: <code>bin/spade</code> (POSIX sh, also for Git Bash on Windows, with forward-slash paths), <code>bin/spade.ps1</code> (PowerShell), and <code>bin/spade.cmd</code> (cmd.exe, which re-parses quotes and special characters, so text goes through stdin). The shims run the bundled CLI with the application's own executable in Node mode, so agents need no separate Node install. The CLI identifies the calling agent from <code>PASEO_AGENT_ID</code>.</li>
+<li><strong>Skill delivery.</strong> SPADE appends a few lines to every agent's initial prompt naming the agent's node, its project, and the shim path; on Windows it lists the three launchers in that order. The agent runs <code>spade skill</code> to read the <code>spade-canvas</code> skill bundled with the CLI. Nothing is written into project directories or provider configuration.</li>
 <li>An agent spawned through the CLI becomes a Paseo child of the calling agent.</li>
+</ul>
+<p>Decided in SPADE-36:</p>
+<ul>
+<li><strong>No silent identity.</strong> A change or <code>prompt</code> without <code>PASEO_AGENT_ID</code> is refused with <code>identity-required</code> unless a person at a terminal passes <code>--as-user</code> to act as the user. Nothing falls back to the user silently. A spoofed <code>PASEO_AGENT_ID</code> is still not detected (§21).</li>
+<li><strong>Text through stdin.</strong> Any one free-text argument of a command can be <code>-</code> to read that value from stdin, the safe way to pass arbitrary text.</li>
+<li><strong>Stable error codes.</strong> Reducer, agent-service (<code>agent-missing</code>, <code>paseo-unavailable</code>, …), and control errors reach the CLI with their own code; only unexpected failures are <code>internal</code>.</li>
+<li><strong>Prompt attribution.</strong> A prompt one agent sends another starts with a line naming the sending node, so both the receiving agent and the user see who sent it. Prompts are not canvas commands and are not recorded in the activity log.</li>
 </ul>
 <p>Commands: <code>spawnChild(sourceNodeId, type, config, target, origin)</code>, <code>startTree(type, config, placement)</code>, <code>reparent(nodeId, newParentId | null)</code> (moves the whole branch; rejects cycles; <code>null</code> makes the node a new root), <code>collapseBranch</code> / <code>expandBranch</code> (hides descendants and shows a count), and <code>archiveBranch</code>.</p>
 <p>Removing a single node never deletes its children: they are promoted to the removed node's parent, or become roots if it had none. Deleting a whole branch is an explicit action. Removing a node removes only SPADE records.</p>
+<p>A removed node stays removed. The canvas remembers the resource of every removed node (the newest 500), and SPADE's own reconciliation never adds a node for one of them again, also after a restart. A user or an agent creating that resource again clears its entry.</p>
 <p>Sub-agents use the same mechanic. A managed sub-agent identified by Paseo's durable parent identity appears as a collapsed <code>child</code> node with origin <code>delegated</code>. A sub-agent can itself have children of any type, so a branch can start at a sub-agent and continue with images and web pages.</p>
 <p>Edges are provenance and context. They do not schedule, trigger, or stream live data.</p>
 <h3 id="4-7-persistence">4.7 Persistence and project safety</h3>
@@ -503,6 +510,13 @@
 <li>Lazy mount near readable zoom or when focused</li>
 <li>Disposal/unmount without losing the durable resource</li>
 </ul>
+<p>As built for node wrappers:</p>
+<ul>
+<li>Collapsing, hiding, archiving, or removing the active node returns input to the outer canvas.</li>
+<li>Escape that closes a dialog, popover, or menu does not deactivate the node behind it.</li>
+<li><code>Fit</code>, <code>Full height</code>, and every other focus move center within the canvas area left free by the breadcrumb bar and the minimap; <code>Fit all</code> frames the nodes in the area the minimap leaves free.</li>
+<li>A node body that fails recovers when its record changes and offers <code>Retry</code>.</li>
+</ul>
 <h2 id="7-required-initial-entities">7. Required initial entities</h2>
 <p>The core (B1 to B3) needs one entity: the agent conversation. Image and web page viewers follow (B4), then the rich conversation actions that spawn them (B5). Everything else is deferred (§7.4).</p>
 <h3 id="7-1-agent-conversation">7.1 Agent conversation</h3>
@@ -514,6 +528,7 @@
 <li>Spawn: the caller selects provider, model, mode, and prompt. The working directory is always the project root. The mode default comes from a user setting; unattended runs depend on it.</li>
 <li>Can spawn child nodes from any message, artifact, or the generic node chrome, using the tree mechanic (§4.6). When the agent itself spawns a child, it defaults to continuing its own tree, from itself or from a node below it; it can also read and change the wider graph through the agent CLI (§4.6).</li>
 <li>Can attach selected connected nodes as bounded context (§9).</li>
+<li>Each node's conversation UI state (draft, shared-context picks, pending annotations, loaded history, scroll position) survives collapse and level-of-detail changes for the renderer's lifetime.</li>
 </ul>
 <h4 id="rich-conversation-artifacts">Rich conversation artifacts</h4>
 <p>The conversation recognizes artifacts in agent and user messages and in tool output, and offers typed actions on each. Every action runs through a main-process command; the renderer never touches the filesystem or the shell.</p>
@@ -550,7 +565,8 @@
 </table>
 <ul>
 <li>Every <code>Spawn as…</code> action uses the target choice from §4.6: child of this conversation node (default), pick a tree or node, or start a new tree. The new node records origin <code>artifact</code> with the artifact locator.</li>
-<li>Paths are checked for existence lazily; missing paths render disabled rather than failing.</li>
+<li>Paths are checked for existence lazily, and missing or unknown ones again when the conversation changes or the path is clicked; missing paths render disabled rather than failing, and a check that fails shows the path as unknown, not missing.</li>
+<li><strong>Network paths.</strong> Decided in SPADE-36: a network (UNC) path outside the project root is never stat-ed, opened, watched, or served because it appears in conversation text. It shows as unchecked until the user explicitly asks for it (<code>Check this path</code>, <code>Load</code>, <code>Reveal</code>), which approves that path for the session. Paths inside the project root are always allowed. Mapped drive letters cannot be told apart from local drives and are not covered (§21).</li>
 <li><strong>Invariant:</strong> files are only revealed, never launched. Only <code>showItemInFolder</code> is used for files; <code>openPath</code> is used only for directories, so a path in a message can never execute a program.</li>
 </ul>
 <h4 id="conversation-expansion-preferences">Conversation expansion preferences</h4>
@@ -583,7 +599,7 @@ const defaultConversationExpansion = {
 <ul>
 <li>Displays a local image file (PNG, JPEG, GIF, WebP, SVG) from its path, or from the SPADE asset store.</li>
 <li>Default size follows the image's aspect ratio within the legibility bounds in §8; the user can resize.</li>
-<li>Reloads when the file changes on disk. A missing or unreadable file shows an explicit state and keeps the node and its children.</li>
+<li>Reloads when the file changes on disk. A missing or unreadable file shows an explicit state and keeps the node and its children. A network image outside the project root shows "not loaded" until the user clicks <code>Load</code> (§7.1).</li>
 <li>Decided in B4: each image file SPADE has described is watched by polling that file's status, never its directory, so watching survives editors that replace files and files that disappear and return. At most 256 files are watched; the least recently described stop first.</li>
 <li>Actions: reveal in Explorer, copy path, open full-size, spawn child (tree mechanic).</li>
 <li>Large images are decoded lazily and downscaled for display; memory use is bounded by the performance strategy (§12).</li>
@@ -603,7 +619,15 @@ const defaultConversationExpansion = {
 <li>The P2 prototype selected the guest <code>&lt;webview&gt;</code>: it stayed live through pan, zoom, resize, clipping, stacking, reparenting, focus, keyboard, wheel, navigation, popup interception, remount and persistent sessions, including 20 simultaneous guests on native Windows. Electron still officially warns about <code>&lt;webview&gt;</code> stability; treat it as a monitored risk.</li>
 <li>If guest stability later fails, fall back to one selected/expanded native overlay or a separate window, with its limitations stated.</li>
 </ul>
-<p>Popups are denied and navigate the same guest. Guest sessions use a persistent partition. Long-duration, crash-recovery, and download behavior are untested and must be verified by the implementation. Until downloads are designed, the B4 implementation refuses them.</p>
+<p>Popups are denied and navigate the same guest. Guest sessions use a persistent partition. Long-duration and download behavior are untested and must be verified by the implementation. Until downloads are designed, the B4 implementation refuses them.</p>
+<p>As built:</p>
+<ul>
+<li>A guest takes calls as soon as it is attached, before <code>dom-ready</code>, which a page that never answers never fires.</li>
+<li>An address set from outside the page, such as an agent changing the node's URL, wins over the page that was loading.</li>
+<li>Page zoom follows the canvas zoom once it settles, not on every frame.</li>
+<li>A crashed guest shows the failure, and <code>Reload</code> replaces it.</li>
+<li>Below canvas zoom 0.5 the guest is unmounted and a placeholder shows the page's title and URL; above it the page returns at the same URL.</li>
+</ul>
 <h3 id="7-4-deferred-entities">7.4 Deferred entities</h3>
 <p>Terminal, file editor (Monaco with LSP), diff/changes, whiteboard, task board, and GitHub issue/pull-request entities are not part of the first usable version. Their earlier designs remain in this page's Git history and in the merged prototypes. Add them through the entity registry when real use shows a need.</p>
 <h2 id="8-workspace-and-git-workflow">8. Default layout and placement</h2>
@@ -627,6 +651,8 @@ const defaultConversationExpansion = {
 <li>When the natural slot is taken, the new node slides down in the same column to the nearest free slot. It keeps sibling spacing from nodes of its own tree and tree spacing from other trees.</li>
 <li>A new root goes 240 below the lowest existing content, left-aligned with the leftmost node.</li>
 <li>Archived nodes reserve no space.</li>
+<li>Centering a new node uses the canvas area left free by the breadcrumb bar and the minimap (§6).</li>
+<li>Closing the spawn dialog while its node is being created does not cancel the creation; the node appears without taking the viewport or focus.</li>
 </ul>
 <h3 id="layout-implementation">Implementation constraint</h3>
 <p>Placement is one pure, deterministic function over the existing rectangles, the parent, and the new node's size. It lives in shared code and is tested directly. Entity renderers never compute positions.</p>
@@ -693,6 +719,7 @@ const defaultConversationExpansion = {
 <li>Current user interaction/annotation state</li>
 <li>Revision and creation timestamp</li>
 </ul>
+<p>Not built yet: an HTML answer lives only in the agent's message in Paseo, and its annotations stay in memory until it is submitted (§21).</p>
 <h3 id="interactive-answer-bridge">Interactive answer bridge</h3>
 <p>Inject a small SPADE API into each custom answer runtime:</p>
 <pre><code class="language-ts">window.spade = {
@@ -711,7 +738,7 @@ const defaultConversationExpansion = {
 <li>Editable structured recommendations</li>
 <li>A <code>Submit feedback</code> action that sends the artifact revision, annotations, and entered data back to the originating agent</li>
 </ul>
-<p>User submissions become explicit conversation events/follow-up prompts; custom scripts do not mutate the canonical conversation directly.</p>
+<p>User submissions become explicit conversation events/follow-up prompts; custom scripts do not mutate the canonical conversation directly. As built, each answer has at most one submission in flight; its annotations leave with it and come back if the prompt fails. Escape inside an answer returns control to the canvas unless the answer handled it.</p>
 <h3 id="accepted-prototype-risk">Accepted prototype risk</h3>
 <p>An unsandboxed, same-origin Electron document is more privileged than opening a generated HTML file in a normal external browser because it may share application origin, state, or exposed preload APIs. Security is not a v1 constraint, but the implementation should record this accepted risk and keep the custom runtime replaceable so isolation can be added later without changing the artifact contract.</p>
 <h2 id="12-canvas-navigation-and-scale">12. Canvas navigation and scale</h2>
@@ -740,7 +767,7 @@ const defaultConversationExpansion = {
 <li>Keep group boundaries and meaningful edges visible.</li>
 <li>Allow minimap click/drag to center quickly.</li>
 </ul>
-<p>The exact zoom thresholds must be tuned during the build; do not hard-code product semantics around an arbitrary initial value.</p>
+<p>The exact zoom thresholds must be tuned during the build; do not hard-code product semantics around an arbitrary initial value. As built, node bodies switch to their preview below canvas zoom 0.5; a web page's preview is a placeholder with its title and URL (§7.3).</p>
 <h3 id="performance-strategy">Performance strategy</h3>
 <ul>
 <li>Lazy-mount Monaco, tldraw, xterm and browser renderers.</li>
@@ -748,6 +775,7 @@ const defaultConversationExpansion = {
 <li>Use cheap preview shells when zoomed out.</li>
 <li>Avoid keeping every browser/editor/terminal active on a large canvas.</li>
 <li>Test 100 mixed nodes and a smaller number of simultaneously active heavy nodes.</li>
+<li>As built: canvas pushes are structurally shared in the renderer store, so nodes whose records did not change do not re-render, and a live page applies a new zoom only once the canvas zoom settles.</li>
 </ul>
 <h2 id="13-paseo-integration-boundary">13. Paseo integration boundary</h2>
 <p>Paseo's current architecture is a good technical fit:</p>
@@ -773,13 +801,13 @@ const defaultConversationExpansion = {
 <ul>
 <li>One daemon connection with explicit readiness and reconnect. A missing daemon is a normal state that recovers on its own.</li>
 <li>Identify the client with a semver <code>appVersion</code>; a non-semver value hides non-legacy providers from the session.</li>
-<li>Exact agent reads, spawn with caller-selected cwd/provider/model/mode/prompt and an optional durable parent, prompt, interrupt, archive.</li>
+<li>Exact agent reads, spawn with caller-selected cwd/provider/model/mode/prompt and an optional durable parent, prompt, interrupt, archive. The agent service archives an agent only to roll back a spawn whose creation command failed after Paseo created the agent; removing or archiving a node never touches its agent.</li>
 <li>Durable managed-child identity and parent relations, mapped to <code>child</code> edges.</li>
 <li>Normalized, bounded timelines that tolerate changed epochs/ranges after a daemon restart.</li>
 <li>Pending permissions presented on the agent node and answered through a generic command.</li>
 <li>Persisting opaque agent and workspace identities before any fallible refresh, so restarts never duplicate nodes.</li>
 </ul>
-<p>The daemon address comes from the SPADE setting, then <code>SPADE_PASEO_URL</code>, then the listen address the local daemon records in its <code>paseo.pid</code> or <code>config.json</code>, then Paseo's default <code>ws://127.0.0.1:6767/ws</code>.</p>
+<p>The daemon address comes from the SPADE setting, then <code>SPADE_PASEO_URL</code>, then the listen address the local daemon records in its <code>paseo.pid</code> or <code>config.json</code>, then Paseo's default <code>ws://127.0.0.1:6767/ws</code>. It is resolved once when SPADE starts, so a daemon started later on a non-default port is found only after SPADE restarts (§21).</p>
 <h4 id="paseo-0-17">What changed with Paseo 0.17</h4>
 <ul>
 <li>The client owns its subscriptions: SPADE opens agent and event observations that survive reconnects, instead of the prototype's polling. The daemon sends agent updates and session events only while an observation is open.</li>
@@ -789,7 +817,7 @@ const defaultConversationExpansion = {
 <li>User and assistant messages in 0.17 timelines carry no images; images reach the conversation only through tool output and image paths.</li>
 </ul>
 <h3 id="known-technical-risk">Known technical risk</h3>
-<p>The public Paseo SDK facade still cannot share one connection across agents, timelines, provider sub-agents, and event observations, so the adapter keeps one confined internal <code>DaemonClient</code> import. Complete sub-agent coverage after parent archival is impossible on 0.17. The full Claude run that stalled on 0.14 was not reproduced on the short runs of the live validation scripts; long runs remain untested. Reconciliation after a daemon restart is covered by fake-driver tests only. SPADE keeps these dependencies isolated.</p>
+<p>The public Paseo SDK facade still cannot share one connection across agents, timelines, provider sub-agents, and event observations, so the adapter keeps one confined internal <code>DaemonClient</code> import. Complete sub-agent coverage after parent archival is impossible on 0.17. The full Claude run that stalled on 0.14 was not reproduced on the short runs of the live validation scripts; long runs remain untested. <code>npm run test:live</code> has passed against a real Paseo 0.17.0 daemon, including a relaunch of SPADE, but it never restarts the daemon: reconciliation after a daemon restart is covered by fake-driver tests only. SPADE keeps these dependencies isolated.</p>
 <h3 id="plugin-boundary">Plugin boundary</h3>
 <p>Paseo's plugin system may be useful for daemon-side SPADE RPCs later, but a complete React Flow shell does not fit naturally as a Paseo sidebar plugin. SPADE remains a separate frontend.</p>
 <h2 id="14-github-scope">14. GitHub and Git scope</h2>
@@ -922,7 +950,7 @@ const defaultConversationExpansion = {
 <p>Unresolved P3 findings that still bear on the agent brick: a full Claude run stalled on Paseo 0.14, sub-agent coverage after parent archival is unproven, and timeline epochs/ranges change after a daemon restart. Their status on Paseo 0.17 is in §13.</p>
 <h2 id="20-proposed-implementation-sequence">20. Implementation sequence</h2>
 <p>The core is <strong>project, agents, and tree</strong> (B1 to B3), which together are the first usable version. Viewer nodes and rich conversation come next (B4, B5), then groups (B6). Bricks are built in this order. Each brick is its own issue and pull request, ends with a working application, and follows the repository's verification rules. Build in <code>src/</code> on the existing entity registry and canvas commands; update <code>docs/foundation.html</code> and <code>docs/architecture.html</code> as each brick lands.</p>
-<p><strong>Status:</strong> B1 to B5 are implemented (SPADE-36); see the <a href="foundation.html">foundation</a> for what exists. B6 grouping is next. The B3 criterion of restarting Paseo is covered by fake-driver tests only (§13).</p>
+<p><strong>Status:</strong> B1 to B5 are implemented (SPADE-36); see the <a href="foundation.html">foundation</a> for what exists. B6 grouping is next. The live acceptance run, <code>npm run test:live</code>, has passed against a real Paseo 0.17.0 daemon and verified B1, B3, B4, and B5 through the real UI; its sub-agent is a provider-native one. The B3 criterion of restarting Paseo is covered by fake-driver tests only (§13).</p>
 <table>
 <thead>
 <tr>
@@ -970,11 +998,14 @@ const defaultConversationExpansion = {
 <li>Final default sizes and spacing in §8. B2 kept the initial values; tune them against real content.</li>
 <li>Which connected nodes are included automatically as agent context versus requiring explicit selection (§9). Today only explicitly selected nodes are included.</li>
 <li>Acceptable active-node budget for webview and conversation renderers on a large canvas. Today at most 12 web page guests per canvas stay live.</li>
-<li>Long-duration <code>&lt;webview&gt;</code> stability, crash recovery, and downloads (refused for now).</li>
-<li>Durable memory of delegated children the user removed. Reconciliation does not add a removed managed sub-agent back while SPADE runs, but adds it again after a restart.</li>
-<li>Whether paths found in agent output are inspected automatically when they are UNC paths. Today every visible path chip is checked for existence, and checking a UNC path contacts that server.</li>
-<li>Packaged-build behavior of the CLI shims. They run the application executable with <code>ELECTRON_RUN_AS_NODE</code>, which a packaged build only honors with Electron's <code>RunAsNode</code> fuse enabled, and the CLI script must stay readable outside an asar archive. There is no packaged build yet.</li>
-<li>How the CLI proves which agent is calling, and attribution of prompts. Today it trusts the caller's <code>PASEO_AGENT_ID</code>, and <code>spade prompt</code> is not recorded in the activity log (§4.6).</li>
+<li>Long-duration <code>&lt;webview&gt;</code> stability and downloads (refused for now).</li>
+<li>Mapped network drives. A mapped drive letter cannot be told apart from a local drive, so the network-path rule (§7.1) does not cover it.</li>
+<li>Packaged-build behavior of the CLI launchers. They run the application executable with <code>ELECTRON_RUN_AS_NODE</code>, which a packaged build only honors with Electron's <code>RunAsNode</code> fuse enabled, and the CLI script must stay readable outside an asar archive. There is no packaged build yet, and none of the Windows launchers (<code>spade</code> under Git Bash, <code>spade.ps1</code>, <code>spade.cmd</code>) has been run on Windows.</li>
+<li>Per-agent credentials for the CLI. Today it trusts the caller's <code>PASEO_AGENT_ID</code>, so a spoofed identity is not detected (§4.6).</li>
+<li>Finding a Paseo daemon started after SPADE on a non-default port without restarting SPADE (§13).</li>
+<li>Undo for agent changes. Today they can only be reviewed, in the Activity panel and on recently changed nodes.</li>
+<li>Storing HTML answers as artifact revisions (§11).</li>
+<li>Live verification of reconciliation after a Paseo daemon restart, covered by fake-driver tests only (§13).</li>
 <li>Remote Paseo hosts and non-Windows platforms. Both are out of scope for v1.</li>
 </ol>
 <h2 id="22-principal-risks">22. Principal risks</h2>
@@ -1020,7 +1051,7 @@ const defaultConversationExpansion = {
 <tr>
 <td>Resource leaks after node removal or restart</td>
 <td>High</td>
-<td>Explicit attach/dispose/reconcile lifecycle per entity</td>
+<td>Explicit attach/dispose/reconcile lifecycle per entity; a creation command that fails releases the resource its adapter created</td>
 </tr>
 <tr>
 <td>Windows path edge cases (drive letters, UNC, long paths, case)</td>

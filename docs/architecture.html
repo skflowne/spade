@@ -41,7 +41,7 @@
   <div class="architecture-diagram-wrap">
     <svg class="architecture-diagram" viewBox="0 0 1080 800" role="img" aria-labelledby="current-title current-desc">
       <title id="current-title">SPADE process architecture</title>
-      <desc id="current-desc">The user works in the sandboxed React renderer, which contains the store and shell, the React Flow canvas, the entity renderers, and the rich blocks, and hosts web pages as guest webviews. The renderer reaches the main process only through the preload bridge, window.spadeHost, over IPC. The main process contains the workspace gateway, which owns the records and writes them atomically to the application data directory; the file service, which reads project files and reveals them in Explorer; the agent service with its Paseo adapter, which talks to the Paseo daemon over WebSocket; and the control server, which Paseo agents call with the spade CLI over local HTTP with a bearer token. Every canvas change runs through the gateway queue.</desc>
+      <desc id="current-desc">The user works in the sandboxed React renderer, which contains the store and shell, the React Flow canvas, the entity renderers, and the rich blocks, and hosts web pages as guest webviews. The renderer reaches the main process only through the preload bridge, window.spadeHost, over IPC. The main process contains the workspace gateway, which owns the records and writes them atomically to the application data directory; the file service, which reads project files and reveals them in Explorer, and touches a network path outside the project only when the user asks for it; the agent service with its Paseo adapter, which talks to the Paseo daemon over WebSocket; and the control server, which Paseo agents call with the spade CLI over local HTTP with a bearer token. Every canvas change runs through the gateway queue.</desc>
       <defs>
         <marker id="current-arrow" class="diagram-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M 0 0 L 10 5 L 0 10 z"></path>
@@ -129,12 +129,12 @@
 </figure>
 
 <h2 id="domain-relationships">Core data relationships</h2>
-<p>A project is a root directory plus one canvas. The canvas holds the nodes and the two kinds of edges between them, the project's workspace, the saved viewport, and the activity log. Projects, the selection, and settings are stored in <code>index.json</code>; each canvas is its own file.</p>
+<p>A project is a root directory plus one canvas. The canvas holds the nodes and the two kinds of edges between them, the project's workspace, the saved viewport, the activity log, and the resources of removed nodes, which reconciliation never adds back. Projects, the selection, and settings are stored in <code>index.json</code>; each canvas is its own file.</p>
 <figure class="architecture-figure">
   <div class="architecture-diagram-wrap">
     <svg class="architecture-diagram" viewBox="0 0 1080 620" role="img" aria-labelledby="domain-title domain-desc">
       <title id="domain-title">SPADE core data hierarchy and relationships</title>
-      <desc id="domain-desc">A project, listed in index.json, is a root directory plus one canvas stored in its own file. The canvas holds a workspace for the project root, an activity log of attributed changes, the saved viewport, and canvas nodes. A child edge joins a parent node to a child node and records its origin: spawned, delegated, or artifact. A references edge with an optional label joins any two nodes without changing the tree. A node names its workspace through workspaceId and points at the resource it shows through a resource reference made of provider, kind, and ID, such as a Paseo agent, an image file, a SPADE asset, or a web page guest.</desc>
+      <desc id="domain-desc">A project, listed in index.json, is a root directory plus one canvas stored in its own file. The canvas holds a workspace for the project root, an activity log of attributed changes, the saved viewport, the dismissed resources of removed nodes that reconciliation never adds back, and canvas nodes. A child edge joins a parent node to a child node and records its origin: spawned, delegated, or artifact. A references edge with an optional label joins any two nodes without changing the tree. A node names its workspace through workspaceId and points at a resource owned elsewhere through a resource reference made of provider, kind, and ID. Only agent nodes carry one, for a Paseo agent or a provider-native sub-agent; note, image, and web page nodes have none and keep their locator in their config.</desc>
       <defs>
         <marker id="domain-arrow" class="diagram-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M 0 0 L 10 5 L 0 10 z"></path>
@@ -149,20 +149,25 @@
       <rect class="diagram-boundary" x="60" y="150" width="710" height="410" rx="14"></rect>
       <text class="diagram-kicker" x="85" y="182">CANVAS · canvases/&lt;projectId&gt;.json</text>
 
-      <rect class="diagram-box diagram-box--amber" x="85" y="205" width="215" height="95" rx="12"></rect>
-      <text class="diagram-kicker" x="110" y="235">LOCATION</text>
-      <text class="diagram-title" x="110" y="263">Workspace</text>
-      <text class="diagram-copy" x="110" y="285">Project root · Paseo ID</text>
+      <rect class="diagram-box diagram-box--amber" x="85" y="205" width="150" height="95" rx="12"></rect>
+      <text class="diagram-kicker" x="105" y="235">LOCATION</text>
+      <text class="diagram-title" x="105" y="263">Workspace</text>
+      <text class="diagram-copy" x="105" y="285">Root · Paseo ID</text>
 
-      <rect class="diagram-box diagram-box--neutral" x="330" y="205" width="215" height="95" rx="12"></rect>
-      <text class="diagram-kicker" x="355" y="235">ATTRIBUTION</text>
-      <text class="diagram-title" x="355" y="263">Activity log</text>
-      <text class="diagram-copy" x="355" y="285">Actor · command · nodes</text>
+      <rect class="diagram-box diagram-box--neutral" x="255" y="205" width="150" height="95" rx="12"></rect>
+      <text class="diagram-kicker" x="275" y="235">ATTRIBUTION</text>
+      <text class="diagram-title" x="275" y="263">Activity log</text>
+      <text class="diagram-copy" x="275" y="285">Actor · command</text>
 
-      <rect class="diagram-box diagram-box--neutral" x="575" y="205" width="170" height="95" rx="12"></rect>
-      <text class="diagram-kicker" x="600" y="235">VIEW</text>
-      <text class="diagram-title" x="600" y="263">Viewport</text>
-      <text class="diagram-copy" x="600" y="285">Restored on switch</text>
+      <rect class="diagram-box diagram-box--neutral" x="425" y="205" width="150" height="95" rx="12"></rect>
+      <text class="diagram-kicker" x="445" y="235">VIEW</text>
+      <text class="diagram-title" x="445" y="263">Viewport</text>
+      <text class="diagram-copy" x="445" y="285">Restored on switch</text>
+
+      <rect class="diagram-box diagram-box--neutral" x="595" y="205" width="150" height="95" rx="12"></rect>
+      <text class="diagram-kicker" x="615" y="235">REMOVED</text>
+      <text class="diagram-title" x="615" y="263">Dismissed</text>
+      <text class="diagram-copy" x="615" y="285">Never re-added</text>
 
       <rect class="diagram-box" x="85" y="345" width="205" height="105" rx="12"></rect>
       <text class="diagram-kicker" x="110" y="377">CANVAS NODE</text>
@@ -189,20 +194,20 @@
       <path class="diagram-line diagram-line--muted" d="M 190 345 L 190 300"></path>
       <text class="diagram-edge-label" x="202" y="327">workspaceId</text>
 
-      <rect class="diagram-box diagram-box--neutral" x="880" y="320" width="175" height="210" rx="12"></rect>
-      <text class="diagram-kicker" x="900" y="350">EXTERNAL IDENTITY</text>
-      <text class="diagram-title" x="900" y="380">Resource ref</text>
-      <text class="diagram-copy" x="900" y="404">provider · kind · id</text>
-      <line class="diagram-divider" x1="900" y1="420" x2="1035" y2="420"></line>
-      <text class="diagram-note" x="900" y="444">paseo · agent</text>
-      <text class="diagram-note" x="900" y="466">filesystem · image</text>
-      <text class="diagram-note" x="900" y="488">spade · asset</text>
-      <text class="diagram-note" x="900" y="510">electron · webview</text>
-      <path class="diagram-line diagram-line--muted" d="M 740 397 L 880 397" marker-end="url(#domain-arrow)"></path>
-      <text class="diagram-edge-label" x="800" y="385">resourceRef</text>
+      <rect class="diagram-box diagram-box--neutral" x="870" y="320" width="204" height="210" rx="12"></rect>
+      <text class="diagram-kicker" x="886" y="350">EXTERNAL IDENTITY</text>
+      <text class="diagram-title" x="886" y="380">Resource ref</text>
+      <text class="diagram-copy" x="886" y="404">provider · kind · id</text>
+      <line class="diagram-divider" x1="886" y1="420" x2="1058" y2="420"></line>
+      <text class="diagram-note" x="886" y="444">paseo · agent</text>
+      <text class="diagram-note" x="886" y="466">paseo · provider-subagent</text>
+      <text class="diagram-note" x="886" y="488">Agent nodes only;</text>
+      <text class="diagram-note" x="886" y="510">others have none</text>
+      <path class="diagram-line diagram-line--muted" d="M 740 397 L 870 397" marker-end="url(#domain-arrow)"></path>
+      <text class="diagram-edge-label" x="795" y="385">resourceRef</text>
     </svg>
   </div>
-  <figcaption>The project is the parent boundary and its canvas is the unit of storage. Tree structure lives only in <code>child</code> edges; <code>references</code> edges add context. A node stores a locator for what it shows; Paseo and the filesystem stay authoritative for the resources themselves.</figcaption>
+  <figcaption>The project is the parent boundary and its canvas is the unit of storage. Tree structure lives only in <code>child</code> edges; <code>references</code> edges add context. An agent node stores Paseo's exact identity for its agent; image and web page nodes keep their path, asset ID, or URL only in their config. Paseo and the filesystem stay authoritative for the resources themselves.</figcaption>
 </figure>
 
 <h2 id="selected-project-management-presentation">Selected project-management presentation</h2>
@@ -213,7 +218,7 @@
 <li>Structure is a forest of <code>child</code> edges; a branch is a derived view of one node and its descendants. One generic tree mechanic in <code>src/shared/tree.ts</code> serves every node type, including agents and sub-agents.</li>
 <li>Agents read and change the graph through the same commands as the user, via the <code>spade</code> CLI taught by a skill, not MCP. When an agent names no target, a spawned node becomes its own child.</li>
 <li>Automatic placement of new nodes is one pure shared function that never overlaps nodes and never moves existing nodes.</li>
-<li>Node chrome and inactive node bodies keep canvas pan and zoom; a body captures wheel and pointer input only after the user activates it, until Escape or a click elsewhere.</li>
+<li>Node chrome and inactive node bodies keep canvas pan and zoom; a body captures wheel and pointer input only after the user activates it, until Escape, a click elsewhere, or the node is collapsed, hidden, archived, or removed.</li>
 <li><strong>Planned (B6):</strong> a shared Group container that owns child bounds, nesting, movement, navigation gutters, and <code>Fit</code> / <code>Full height</code> for groups within one canvas. Group membership will be explicit; overlapping a group never changes it. There is no Project container and groups never separate projects.</li>
 </ul>
 
@@ -224,7 +229,7 @@
 <li>SPADE persists its own records and exact external references as <code>provider + kind + opaque ID</code> in its application data directory, never inside project directories. Paseo stays authoritative for agents, workspaces, parent relations, and timelines.</li>
 <li>One Paseo adapter on <code>@getpaseo/client</code> 0.17.0 owns one daemon connection, with readiness, reconnect, and client-owned observations. The confined internal <code>DaemonClient</code> import stays inside <code>src/main/paseo</code>.</li>
 <li>Managed sub-agents relate to their parent through Paseo's durable parent identity, never through titles, prompts, paths, or ordering. Provider-native sub-agents are listed on demand and keep their last known list when Paseo can no longer read them.</li>
-<li>Agents reach SPADE through a local HTTP control server on <code>127.0.0.1</code>, found through a discovery file and called by launcher shims, all in SPADE's data directory.</li>
+<li>Agents reach SPADE through a local HTTP control server on <code>127.0.0.1</code>, found through a discovery file and called by launchers for POSIX shells, PowerShell, and cmd.exe, all in SPADE's data directory. A change without an agent identity is refused unless a person at a terminal passes <code>--as-user</code>.</li>
 </ul>
 <p>Open risks: provider-native sub-agents cannot be read once their parent is archived; daemon-restart reconciliation is covered by fake-driver tests, not by a live run; long agent runs on Paseo 0.17 are untested. See <a href="plan.html">plan</a> §13.</p>
 
@@ -234,7 +239,7 @@
   <div class="architecture-diagram-wrap">
     <svg class="architecture-diagram" viewBox="0 0 1080 600" role="img" aria-labelledby="entity-title entity-desc">
       <title id="entity-title">SPADE entity and external integration boundary</title>
-      <desc id="entity-desc">Generic canvas commands, with validation, the reducer, and placement, resolve a shared entity definition per node type that holds its type, version, sizes, config parser, and agent description. The generic node wrapper renders each type's entity renderer, which owns the body, create form, status, and menu actions. Creation commands run the type's main-process entity adapter first; the agent, image, and web page adapters create their resources through SPADE services that reach the Paseo daemon, the filesystem, Windows Explorer, and web content. The built-in types are note, agent, image, and webpage. A Group container is planned.</desc>
+      <desc id="entity-desc">Generic canvas commands, with validation, the reducer, and placement, resolve a shared entity definition per node type that holds its type, version, sizes, config parser, and agent description. The generic node wrapper renders each type's entity renderer, which owns the body, create form, status, and menu actions. Creation commands run the type's main-process entity adapter first. The agent adapter spawns the Paseo agent and archives it again if the command then fails; the image and web page adapters normalize their config and size and create no resource reference. SPADE services reach the Paseo daemon, the filesystem, Windows Explorer, and web content. The built-in types are note, agent, image, and webpage. A Group container is planned.</desc>
       <defs>
         <marker id="entity-arrow" class="diagram-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M 0 0 L 10 5 L 0 10 z"></path>
@@ -265,8 +270,8 @@
       <rect class="diagram-box" x="405" y="320" width="290" height="140" rx="12"></rect>
       <text class="diagram-kicker" x="430" y="352">PER TYPE · MAIN PROCESS</text>
       <text class="diagram-title" x="430" y="384">Entity adapter</text>
-      <text class="diagram-copy" x="430" y="410">Creates the resource first</text>
-      <text class="diagram-copy" x="430" y="433">Agent · image · web page</text>
+      <text class="diagram-copy" x="430" y="410">Agent: spawns · archives on failure</text>
+      <text class="diagram-copy" x="430" y="433">Image · web page: normalize config</text>
 
       <rect class="diagram-box diagram-box--planned diagram-box--neutral" x="55" y="490" width="290" height="55" rx="10"></rect>
       <text class="diagram-kicker" x="80" y="512">PLANNED</text>
@@ -310,9 +315,9 @@
 </thead>
 <tbody>
 <tr><td><code>note</code></td><td><code>{ body }</code>; 320×200</td><td>None; the node has no resource</td><td>Editable text</td></tr>
-<tr><td><code>agent</code></td><td><code>{ provider, model, mode, prompt }</code>; 640×720, collapsed 320×96</td><td>The agent service spawns the Paseo agent in the project root; <code>paseo · agent</code></td><td>Conversation, composer with context selection, permissions, sub-agents, artifacts</td></tr>
-<tr><td><code>image</code></td><td><code>{ source: path | asset, caption? }</code>; 560×420 until the image is measured</td><td>The file service resolves the path and fits the size to the image; <code>filesystem · image</code> or <code>spade · asset</code></td><td>Image with reload, reveal, copy path, and full-size view</td></tr>
-<tr><td><code>webpage</code></td><td><code>{ url }</code>, http or https; 960×640</td><td>The file service normalizes the URL; <code>electron · webview</code></td><td>Guest <code>&lt;webview&gt;</code> with address bar and navigation</td></tr>
+<tr><td><code>agent</code></td><td><code>{ provider, model, mode, prompt }</code>; 640×720, collapsed 320×96</td><td>The agent service spawns the Paseo agent in the project root, and archives it again if the creation command fails; <code>paseo · agent</code></td><td>Conversation, composer with context selection, permissions, sub-agents, artifacts</td></tr>
+<tr><td><code>image</code></td><td><code>{ source: path | asset, caption? }</code>; 560×420 until the image is measured</td><td>The file service resolves the path and fits the size to the image; no resource reference, the config is the source of truth</td><td>Image with reload, reveal, copy path, and full-size view</td></tr>
+<tr><td><code>webpage</code></td><td><code>{ url }</code>, http or https; 960×640</td><td>The file service normalizes the URL; no resource reference, the config is the source of truth</td><td>Guest <code>&lt;webview&gt;</code> with address bar and navigation</td></tr>
 </tbody>
 </table>
 
