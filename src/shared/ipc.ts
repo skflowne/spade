@@ -15,12 +15,22 @@ import type { AppSettings, Canvas, Project } from './domain'
 // (`window.spade` is reserved for the bridge injected into agent-authored HTML, plan §11.)
 export const SPADE_HOST_GLOBAL = 'spadeHost'
 
+// Something SPADE could not load safely and worked around; shown to the user until the app restarts.
+export type AppProblem = {
+  // A persistence error code, e.g. "corrupt-data" or "unsupported-version".
+  code: string
+  message: string
+  // The project whose canvas is affected; null for app-wide records.
+  projectId: string | null
+}
+
 export type AppState = {
   projects: Project[]
   selectedProjectId: string | null
   settings: AppSettings
   paseo: PaseoConnection
   appVersion: string
+  problems: AppProblem[]
 }
 
 export type Failure = { ok: false; error: { code: string; message: string } }
@@ -103,3 +113,33 @@ export type SpadeHostBridge = {
 }
 
 export const IPC_CHANNEL_PREFIX = 'spade:'
+
+// "namespace.method" for every request method of the bridge, e.g. "canvas.execute".
+export type SpadeHostMethod = {
+  [Namespace in keyof SpadeHostBridge]: Exclude<
+    `${Namespace}.${keyof SpadeHostBridge[Namespace] & string}`,
+    `${string}.on${string}`
+  >
+}[keyof SpadeHostBridge]
+
+export function spadeHostChannel(method: SpadeHostMethod): string {
+  return `${IPC_CHANNEL_PREFIX}${method}`
+}
+
+// Main-to-renderer pushes, one channel per bridge `on…` listener.
+export const SPADE_HOST_EVENTS = {
+  appState: `${IPC_CHANNEL_PREFIX}event:app-state`,
+  canvasChanged: `${IPC_CHANNEL_PREFIX}event:canvas-changed`,
+  agentRuntime: `${IPC_CHANNEL_PREFIX}event:agent-runtime`,
+  agentTimelineChanged: `${IPC_CHANNEL_PREFIX}event:agent-timeline-changed`,
+  imageChanged: `${IPC_CHANNEL_PREFIX}event:image-changed`
+} as const
+
+// Bridge methods whose result has no failure shape cross IPC wrapped in this envelope; the preload
+// unwraps it and rejects with an Error carrying the code and message on failure.
+export type EnvelopedMethod = Extract<
+  SpadeHostMethod,
+  'app.getState' | 'canvas.get' | 'agents.getRuntimes' | 'files.inspectPath' | 'files.pickImage'
+>
+
+export type IpcEnvelope<Value> = { ok: true; value: Value } | Failure

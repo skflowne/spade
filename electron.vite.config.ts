@@ -7,6 +7,8 @@ export default defineConfig({
     plugins: [externalizeDepsPlugin()]
   },
   preload: {
+    // Sandboxed preloads run as plain CommonJS scripts; Electron cannot load them as ES modules.
+    build: { rollupOptions: { output: { format: 'cjs' } } },
     plugins: [externalizeDepsPlugin()]
   },
   renderer: {
