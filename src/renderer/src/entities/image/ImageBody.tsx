@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { ImageConfig } from '@shared/builtinEntities'
 import type { ImageInfo } from '@shared/ipc'
 import { isSamePath, resolveProjectPath } from '@shared/paths'
+import { nodeHeader } from '../../canvas/nodeFocus'
 import type { EntityBodyProps, NodeStatus } from '../types'
 import { ImageLightbox } from './ImageLightbox'
 import { copyImagePath, registerImageBody, revealImage } from './imageRequests'
@@ -40,7 +41,8 @@ export function ImageBody({ node, config, project, active, detail, host }: Entit
   const sourceKey = source.kind === 'path' ? `path:${path}` : `asset:${source.assetId}`
   const [image, setImage] = useState<ImageInfo | null>(null)
   const [problem, setProblem] = useState<Problem | null>(null)
-  const [fullSize, setFullSize] = useState(false)
+  // Open, with the control that opened it (null from the node menu, whose entry is gone by then).
+  const [fullSize, setFullSize] = useState<{ opener: HTMLElement | null } | null>(null)
   const sequence = useRef(0)
   const latestSource = useRef(source)
   latestSource.current = source
@@ -91,7 +93,7 @@ export function ImageBody({ node, config, project, active, detail, host }: Entit
     () =>
       registerImageBody(node.id, {
         reload: () => void describe(),
-        openFullSize: () => setFullSize(true),
+        openFullSize: () => setFullSize({ opener: null }),
         fullSizeUnavailable: unavailable
       }),
     [node.id, describe, unavailable]
@@ -171,7 +173,7 @@ export function ImageBody({ node, config, project, active, detail, host }: Entit
               type="button"
               className="cr-button cr-button--ghost image-node__action"
               disabled={unavailable !== null}
-              onClick={() => setFullSize(true)}
+              onClick={(event) => setFullSize({ opener: event.currentTarget })}
             >
               Full size
             </button>
@@ -187,7 +189,13 @@ export function ImageBody({ node, config, project, active, detail, host }: Entit
         </figcaption>
       ) : null}
       {fullSize && image && !problem ? (
-        <ImageLightbox title={node.title} alt={alt} image={image} onClose={() => setFullSize(false)} />
+        <ImageLightbox
+          title={node.title}
+          alt={alt}
+          image={image}
+          onClose={() => setFullSize(null)}
+          returnFocusTo={() => (fullSize.opener?.isConnected ? fullSize.opener : nodeHeader(node.id))}
+        />
       ) : null}
     </figure>
   )

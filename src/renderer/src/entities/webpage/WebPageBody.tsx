@@ -344,7 +344,9 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
     }
     setDraft(null)
     setDraftInvalid(false)
+    // Before its guest is callable the page goes there as soon as it is; without a guest it mounts there.
     go({ url, follow: false })
+    if (!element.current) slot.request()
   }
 
   const retry = (): void => {

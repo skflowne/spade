@@ -7,18 +7,29 @@ type ImageLightboxProps = {
   alt: string
   image: ImageInfo
   onClose(): void
+  // Where keyboard focus goes once the lightbox is gone, resolved then.
+  returnFocusTo(): HTMLElement | null
 }
 
 // The image at its natural size, or fitted to the window. A modal <dialog> portalled out of the node: inside
 // it, the canvas transform would not matter (top layer), but the inactive body's `inert` would.
-export function ImageLightbox({ title, alt, image, onClose }: ImageLightboxProps): React.JSX.Element {
+export function ImageLightbox({ title, alt, image, onClose, returnFocusTo }: ImageLightboxProps): React.JSX.Element {
   const ref = useRef<HTMLDialogElement>(null)
   const titleId = useId()
   const [fit, setFit] = useState(true)
+  const returnFocus = useRef(returnFocusTo)
+  returnFocus.current = returnFocusTo
 
   useLayoutEffect(() => {
     const dialog = ref.current
     if (dialog && !dialog.open) dialog.showModal()
+    return () => {
+      // The dialog is unmounted rather than closed, which would skip the browser's own focus restore; and
+      // the rest of the window stays inert, refusing focus, until it is closed.
+      if (dialog?.open) dialog.close()
+      const target = returnFocus.current()
+      if (target?.isConnected) target.focus({ preventScroll: true })
+    }
   }, [])
 
   return createPortal(
@@ -27,6 +38,12 @@ export function ImageLightbox({ title, alt, image, onClose }: ImageLightboxProps
       className="cr-dialog image-lightbox"
       aria-labelledby={titleId}
       onCancel={(event) => {
+        event.preventDefault()
+        onClose()
+      }}
+      // Handled here, so the canvas's own Escape (leave the active node) does not also run.
+      onKeyDown={(event) => {
+        if (event.key !== 'Escape') return
         event.preventDefault()
         onClose()
       }}

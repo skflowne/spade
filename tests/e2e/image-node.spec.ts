@@ -169,6 +169,8 @@ test('an image node shows a picked file, follows it on disk, and keeps its tree 
     .toBe(200)
   await page.keyboard.press('Escape')
   await expect(lightbox).toBeHidden()
+  // Opened from the node menu, whose entry is gone: focus returns to the node.
+  await expect(nodeHeader(page, 'shot.png')).toBeFocused()
 
   await app.close()
   const relaunched = await launch(userData)
@@ -206,6 +208,13 @@ test('an image node opens a typed path relative to the project root, even before
   await nodeBody(page, 'later.png').click()
   await canvasNode(page, 'later.png').getByRole('button', { name: 'Copy path' }).click()
   await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe(file)
+  // Closing the lightbox returns focus to the control that opened it.
+  const fullSizeButton = canvasNode(page, 'later.png').getByRole('button', { name: 'Full size' })
+  await fullSizeButton.click()
+  await expect(page.getByRole('dialog', { name: 'later.png' })).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(page.getByRole('dialog', { name: 'later.png' })).toBeHidden()
+  await expect(fullSizeButton).toBeFocused()
 
   // A collapsed node has no body: Reload waits for it, and a failed menu action is still reported.
   await nodeMenu(page, 'later.png', 'Collapse node')
