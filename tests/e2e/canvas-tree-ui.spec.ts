@@ -571,6 +571,46 @@ test('re-renders only the body whose node changed: not on a saved viewport, not 
   }
 })
 
+test('lets a slow creation finish after its dialog is closed, without taking a later dialog or the view', async () => {
+  const spade = await launchWithProject()
+  const { page, app } = spade
+  try {
+    await createNoteFromToolbar(page, { title: 'Anchor' })
+    const newNote = async (): Promise<ReturnType<Page['getByRole']>> => {
+      await page.getByRole('toolbar', { name: 'Canvas' }).getByRole('button', { name: 'New node' }).click()
+      await page.getByRole('menu', { name: 'New node' }).getByRole('menuitem', { name: 'Note' }).click()
+      return page.getByRole('dialog', { name: 'New note' })
+    }
+
+    await holdCanvasCommands(app, { type: 'startTree', node: { title: 'Slow' } })
+    const slow = await newNote()
+    await slow.getByLabel('Title', { exact: true }).fill('Slow')
+    await slow.getByRole('button', { name: 'Create' }).click()
+    await expect(slow.getByRole('status')).toContainText('Creating')
+    await expect(slow.getByRole('status')).toContainText('without moving your view')
+    await expect(slow.getByRole('button', { name: 'Create' })).toBeDisabled()
+    await slow.getByRole('button', { name: 'Close' }).click()
+    await expect(slow).toBeHidden()
+
+    const viewport = await renderedViewport(page)
+    const other = await newNote()
+    await other.getByLabel('Title', { exact: true }).fill('Other')
+    await releaseCanvasCommands(app)
+    await expect(canvasNode(page, 'Slow')).toBeVisible()
+    await page.waitForTimeout(300)
+    await expect(other).toBeVisible()
+    await expect(other.getByLabel('Title', { exact: true })).toHaveValue('Other')
+    expect(await renderedViewport(page)).toEqual(viewport)
+
+    await other.getByRole('button', { name: 'Create' }).click()
+    await expect(other).toBeHidden()
+    await expect(page.getByRole('navigation', { name: 'Current focus' }).locator('[aria-current="location"]')).toHaveText(/Other/)
+    await expectNoNotice(page)
+  } finally {
+    await spade.app.close()
+  }
+})
+
 test('shows a failed creation in the dialog and as a dismissible notice', async () => {
   const spade = await launchWithProject()
   const { page } = spade

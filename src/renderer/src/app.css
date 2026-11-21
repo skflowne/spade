@@ -484,6 +484,14 @@ legend {
   align-items: baseline;
 }
 
+.spawn-progress {
+  flex: 1;
+  align-self: center;
+  color: var(--muted);
+  font-size: var(--cr-text-sm);
+  line-height: 1.4;
+}
+
 /* --- App frame --- */
 
 .app-shell {
