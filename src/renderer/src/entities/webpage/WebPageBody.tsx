@@ -83,6 +83,9 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
   }))
   const [draft, setDraft] = useState<string | null>(null)
   const [draftInvalid, setDraftInvalid] = useState(false)
+  // `guest` and `ready` still describe an unmounted guest for one commit, when its element is already detached
+  // and every webview method throws; `live` is current in that commit.
+  const attached = live && ready ? guest : null
 
   const latest = useRef({ host, active, url: config.url })
   latest.current.host = host
@@ -103,7 +106,7 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
     if (!locator.recordChanged(config.url)) return
     latest.current.url = config.url
     setPage((current) => ({ ...current, url: config.url }))
-    if (guest && ready && !sameWebAddress(guest.getURL(), config.url)) guest.loadURL(config.url).catch(ignore)
+    if (attached && !sameWebAddress(attached.getURL(), config.url)) attached.loadURL(config.url).catch(ignore)
     // Only a record change moves the guest; the guest's own navigation must not re-run this.
   }, [config.url, locator])
 
@@ -137,7 +140,9 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
   }, [live])
 
   const syncHistory = useCallback((element: WebviewElement) => {
-    setPage((current) => ({ ...current, canGoBack: element.canGoBack(), canGoForward: element.canGoForward() }))
+    // Read now, while the event's guest is attached, not in the updater, which may run after it unmounts.
+    const history = { canGoBack: element.canGoBack(), canGoForward: element.canGoForward() }
+    setPage((current) => ({ ...current, ...history }))
   }, [])
 
   useEffect(() => {
@@ -196,22 +201,22 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
 
   // Chromium keeps page zoom per host, so a navigation to another host starts at 100% again.
   useEffect(() => {
-    if (guest && ready) guest.setZoomFactor(Math.max(zoom, MIN_PAGE_ZOOM))
-  }, [guest, ready, zoom, page.url])
+    if (attached) attached.setZoomFactor(Math.max(zoom, MIN_PAGE_ZOOM))
+  }, [attached, zoom, page.url])
 
   // Activation hands keyboard focus to the page; deactivation returns it to the canvas.
   useEffect(() => {
-    if (!guest || !ready) return
-    if (active) guest.focus()
-    else if (document.activeElement === guest) guest.blur()
-  }, [active, guest, ready])
+    if (!attached) return
+    if (active) attached.focus()
+    else if (document.activeElement === attached) attached.blur()
+  }, [active, attached])
 
   useEffect(
     () =>
       onReloadRequested(node.id, () => {
-        if (guest && ready) guest.reload()
+        if (attached) attached.reload()
       }),
-    [node.id, guest, ready]
+    [node.id, attached]
   )
 
   const status = statusOf(page, live)
@@ -230,14 +235,14 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
     }
     setDraft(null)
     setDraftInvalid(false)
-    if (guest && ready) guest.loadURL(url).catch(ignore)
+    if (attached) attached.loadURL(url).catch(ignore)
   }
 
   const retry = (): void => {
-    if (!guest || !ready) return
+    if (!attached) return
     const failed = page.failure?.url
-    if (failed && normalizeWebAddress(failed)) guest.loadURL(failed).catch(ignore)
-    else guest.reload()
+    if (failed && normalizeWebAddress(failed)) attached.loadURL(failed).catch(ignore)
+    else attached.reload()
   }
 
   const usable = live && ready
