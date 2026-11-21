@@ -79,4 +79,25 @@ canvas. Add `--json` to any command for exact structured output.
 
 ## Rich answers
 
-(Placeholder: rich answer conventions are added here.)
+Your messages render as Markdown in your conversation node. Beyond plain Markdown:
+
+- **Paths, images, and links are actionable.** Write file and folder paths (absolute, or relative to the
+  project root, optionally `path:line`) and http(s) URLs plainly or in backticks; the user can reveal them
+  in Explorer, or open an image or page as a node in a tree. Put paths that contain spaces in backticks.
+  `![alt](path-or-url)` shows an inline thumbnail.
+- **Diagrams:** a fenced block with the info string `mermaid` renders as a diagram.
+- **Live HTML answers:** a fenced block whose info string starts with `spade-html` (any following words
+  become its title) is rendered as a live document, scripts included. Give a complete HTML document. Use
+  it for forms, choices, and plans the user annotates, not for ordinary prose.
+
+  ````
+  ```spade-html Plan review
+  <!doctype html>
+  <button onclick="window.spade.submit({ message: 'Approved', data: { step: 2 } })">Approve</button>
+  ```
+  ````
+
+  Inside it, `window.spade.submit({ message?, data? })` sends the user's input back to you as their next
+  message, and `window.spade.annotate({ target?, text, data? })` attaches a comment that is sent with the
+  next submit. Both return promises. SPADE's `--cr-*` CSS variables are available for styling.
+- A plain `html` fence stays a code block the user can choose to render.
