@@ -69,6 +69,14 @@
 <li>Production code has no test-only switches or branches. Tests inject fakes through the same constructor options and service interfaces the composition uses, or replace Electron APIs from the test.</li>
 <li>Live checks spend real agent runs and depend on a running daemon, so they are never part of the gate.</li>
 </ul>
+<h2 id="live-checks">Live checks</h2>
+<p><code>npm run test:live</code> builds the app and runs <code>tests/live/first-usable-version.spec.ts</code> through <code>playwright.live.config.ts</code>: one real Claude agent drives B1 to B5 through the real UI against the local Paseo daemon, in scratch directories, and is archived afterwards with the <code>paseo</code> CLI. Screenshots and the main-process log go to <code>artifacts/live</code>. On headless Linux, use <code>xvfb-run -a npm run test:live</code>. Options:</p>
+<ul>
+<li><code>SPADE_LIVE_MODEL</code> — the agent's model (default <code>claude-haiku-4-5</code>).</li>
+<li><code>SPADE_LIVE_MODE</code> — the agent's mode (default <code>default</code>, which asks for permissions; the run answers them with the Allow button).</li>
+<li><code>SPADE_LIVE_KEEP=1</code> — keep the scratch data.</li>
+</ul>
+<p>It has passed against Paseo 0.17.0. It relaunches SPADE but never restarts the daemon, so reconciliation after a daemon restart is covered by fake-driver tests only.</p>
 <h2 id="behavioral-changes">Behavioral changes</h2>
 <ol>
 <li>Write or extend the test first.</li>
