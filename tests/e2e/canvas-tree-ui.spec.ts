@@ -109,7 +109,7 @@ test('spawns nodes with every target choice, readable and without overlap, and n
       await nodeHeader(page, 'Root A').click()
       await expect(page.getByTestId('picking-banner')).toBeHidden()
       await expect(dialog).toBeVisible()
-      await expect(dialog.getByLabel('Node', { exact: true })).toHaveValue(await nodeIdByTitle(page, 'Root A'))
+      await expect(dialog.getByRole('treeitem', { name: 'Root A', exact: true })).toHaveAttribute('aria-selected', 'true')
     })
     expect(await parentTitleOf(page, 'Child 2')).toBe('Root A')
 
@@ -121,7 +121,7 @@ test('spawns nodes with every target choice, readable and without overlap, and n
     // Choose from the tree list and attach to that tree's root.
     await spawnFrom(page, 'Root B', 'Child 3', async (dialog) => {
       await dialog.getByRole('radio', { name: 'Pick a tree or node' }).check()
-      await dialog.getByLabel('Node', { exact: true }).selectOption(await nodeIdByTitle(page, 'Child 1'))
+      await dialog.getByRole('treeitem', { name: 'Child 1', exact: true }).click()
       await dialog.getByRole('radio', { name: "Attach to its tree's root" }).check()
     })
     expect(await parentTitleOf(page, 'Child 3')).toBe('Root A')
@@ -239,6 +239,53 @@ test('spawns nodes with every target choice, readable and without overlap, and n
   }
 })
 
+test('carries a whole branch through an Alt+drag even when a node in it changes mid-drag', async () => {
+  const spade = await launchWithProject()
+  const { page } = spade
+  try {
+    const trunkId = await seedNote(page, 'Trunk')
+    await execute(page, {
+      type: 'spawnChild',
+      sourceNodeId: trunkId,
+      node: { entityType: 'note', config: { body: '' }, title: 'Twig', position: { x: 0, y: 400 } },
+      origin: 'spawned'
+    })
+    await expect(canvasNode(page, 'Twig')).toBeVisible()
+    await execute(page, { type: 'moveNodes', moves: [{ nodeId: trunkId, position: { x: 0, y: 0 } }] })
+    await fitAll(page)
+    await expect(page.locator('.spade-edge--child path.react-flow__edge-path')).toHaveAttribute('marker-end', /url/)
+
+    const twigBefore = (await canvasNode(page, 'Twig').boundingBox())!
+    const trunk = (await nodeHeader(page, 'Trunk').boundingBox())!
+    const start = { x: trunk.x + 30, y: trunk.y + trunk.height / 2 }
+    await page.keyboard.down('Alt')
+    await page.mouse.move(start.x, start.y)
+    await page.mouse.down()
+    await page.mouse.move(start.x + 60, start.y, { steps: 6 })
+    await page.mouse.move(start.x + 120, start.y, { steps: 6 })
+
+    // Something else (an agent, another window) changes the carried node while the drag is in progress.
+    await execute(page, { type: 'updateNode', nodeId: await nodeIdByTitle(page, 'Twig'), patch: { title: 'Twig renamed' } })
+    await expect(canvasNode(page, 'Twig renamed')).toBeVisible()
+    await page.waitForTimeout(100)
+    const carried = (await canvasNode(page, 'Twig renamed').boundingBox())!
+    expect(carried.x - twigBefore.x).toBeGreaterThan(100)
+
+    await page.mouse.move(start.x + 130, start.y, { steps: 2 })
+    await page.mouse.up()
+    await page.keyboard.up('Alt')
+    await expect
+      .poll(async () => (await readCanvas(page)).nodes.map((node) => node.position.x))
+      .toEqual([expect.any(Number), expect.any(Number)])
+    const [trunkRecord, twigRecord] = (await readCanvas(page)).nodes
+    expect(trunkRecord.position.x).toBeGreaterThan(0)
+    expect(twigRecord.position.x).toBe(trunkRecord.position.x)
+    await expectNoNotice(page)
+  } finally {
+    await spade.app.close()
+  }
+})
+
 test('zooms the canvas over chrome and inactive bodies, and gives an activated body its own input', async () => {
   const spade = await launchWithProject()
   const { page } = spade
@@ -300,7 +347,7 @@ test('reparents, collapses, renames and removes through node chrome, surfacing a
     // Move to… a picked node.
     await nodeMenu(page, 'Loose', 'Move to…')
     let move = page.getByRole('dialog', { name: 'Move Loose' })
-    await move.getByLabel('Node', { exact: true }).selectOption(await nodeIdByTitle(page, 'Leaf'))
+    await move.getByRole('treeitem', { name: 'Leaf', exact: true }).click()
     await move.getByRole('button', { name: 'Move' }).click()
     await expect(move).toBeHidden()
     await expect.poll(() => parentTitleOf(page, 'Loose')).toBe('Leaf')
@@ -308,7 +355,7 @@ test('reparents, collapses, renames and removes through node chrome, surfacing a
     // A cycle is rejected by the main process and shown as a dismissible error.
     await nodeMenu(page, 'Root', 'Move to…')
     move = page.getByRole('dialog', { name: 'Move Root' })
-    await move.getByLabel('Node', { exact: true }).selectOption(await nodeIdByTitle(page, 'Leaf'))
+    await move.getByRole('treeitem', { name: 'Leaf', exact: true }).click()
     await move.getByRole('button', { name: 'Move' }).click()
     const notice = page.getByRole('region', { name: 'Notices' }).getByRole('alert')
     await expect(notice).toContainText(/cycle|descendant/i)

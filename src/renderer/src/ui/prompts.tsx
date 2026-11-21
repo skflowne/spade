@@ -14,6 +14,9 @@ export type TextPromptOptions = {
   label: string
   initialValue: string
   confirmLabel: string
+  // The field may be left empty; the prompt then resolves with ''.
+  optional?: boolean
+  hint?: string
 }
 
 type Prompts = {
@@ -119,7 +122,12 @@ function TextPromptDialog({
           <button type="button" className="cr-button" onClick={() => onDone(null)}>
             Cancel
           </button>
-          <button type="submit" form={formId} className="cr-button cr-button--primary" disabled={!value.trim()}>
+          <button
+            type="submit"
+            form={formId}
+            className="cr-button cr-button--primary"
+            disabled={!options.optional && !value.trim()}
+          >
             {options.confirmLabel}
           </button>
         </>
@@ -129,10 +137,17 @@ function TextPromptDialog({
         id={formId}
         onSubmit={(event) => {
           event.preventDefault()
-          if (value.trim()) onDone(value.trim())
+          if (options.optional || value.trim()) onDone(value.trim())
         }}
       >
-        <TextField label={options.label} value={value} onChange={setValue} required autoFocus />
+        <TextField
+          label={options.label}
+          value={value}
+          onChange={setValue}
+          required={!options.optional}
+          hint={options.hint}
+          autoFocus
+        />
       </form>
     </Dialog>
   )

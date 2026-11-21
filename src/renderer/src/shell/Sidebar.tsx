@@ -4,12 +4,14 @@ import { useAppState, useProjectActivity, useSpadeStore } from '../store/hooks'
 import { MenuButton } from '../ui/Menu'
 import { usePrompts } from '../ui/prompts'
 import { PaseoStatus } from './PaseoStatus'
+import { SettingsDialog } from './SettingsDialog'
 
 // Switches between project canvases. Everything it shows comes from AppState and agent runtimes.
 export function Sidebar(): React.JSX.Element {
   const store = useSpadeStore()
   const app = useAppState()
   const listLabel = useId()
+  const [settingsOpen, setSettingsOpen] = useState(false)
   return (
     <nav className="sidebar" aria-label="Projects">
       <div className="sidebar__brand">
@@ -29,7 +31,18 @@ export function Sidebar(): React.JSX.Element {
           <ProjectRow key={project.id} project={project} selected={project.id === app.selectedProjectId} />
         ))}
       </ul>
-      <PaseoStatus />
+      <div className="sidebar__footer">
+        <PaseoStatus />
+        <button
+          type="button"
+          className="cr-button cr-button--ghost sidebar__settings"
+          disabled={!app}
+          onClick={() => setSettingsOpen(true)}
+        >
+          <span aria-hidden="true">⚙</span> Settings
+        </button>
+      </div>
+      {settingsOpen && app ? <SettingsDialog app={app} onDone={() => setSettingsOpen(false)} /> : null}
     </nav>
   )
 }

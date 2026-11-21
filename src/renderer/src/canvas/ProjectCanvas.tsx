@@ -3,10 +3,14 @@ import {
   applyNodeChanges,
   Background,
   BackgroundVariant,
+  MarkerType,
   ReactFlow,
   ReactFlowProvider,
   useReactFlow,
+  useStoreApi,
   type Edge,
+  type EdgeChange,
+  type EdgeTypes,
   type NodeChange,
   type NodeTypes,
   type OnNodeDrag
@@ -16,15 +20,29 @@ import type { Canvas, CanvasNode, Point, Project, Rect, Size, Viewport } from '@
 import { entities } from '../entities'
 import type { SpawnRequest } from '../entities/types'
 import { useCanvas, useSpadeStore } from '../store/hooks'
+import { usePrompts } from '../ui/prompts'
 import {
+  AgentChangeContext,
   CanvasActionsContext,
   CanvasDataContext,
   CanvasInteractionContext,
+  CanvasNavigationContext,
+  CanvasProjectContext,
   type CanvasActions,
-  type CanvasData
+  type CanvasData,
+  type CanvasNavigation,
+  type PanelId
 } from './CanvasContext'
+import { REFERENCE_EDGE_TYPE, ReferenceEdge, type ReferenceEdgeData } from './edges/ReferenceEdge'
 import { DRAG_HANDLE_CLASS, EntityNode, type EntityFlowNode } from './EntityNode'
 import { canvasOverlays, canvasSidePanels } from './extensions'
+import { useAgentChanges } from './markers/useAgentChanges'
+import { canvasIndex } from './model/canvasIndex'
+import { currentFocus, EMPTY_FOCUS_HISTORY, pushFocus, stepFocus, type FocusHistory } from './model/focusHistory'
+import { overviewTitleScale } from './model/levelOfDetail'
+import { relatedTarget } from './model/relatedNodes'
+import { canvasShortcut } from './model/shortcuts'
+import { focusNodeHeader, isOnNodeHeader } from './nodeFocus'
 import { MoveDialog } from './spawn/MoveDialog'
 import { SpawnDialog, type SpawnDialogMode } from './spawn/SpawnDialog'
 import { Toolbar } from './Toolbar'
@@ -34,6 +52,7 @@ import { focusViewport, type FocusMode } from './viewportMath'
 const ZOOM_LIMITS = { minZoom: 0.1, maxZoom: 2 }
 const VIEWPORT_SAVE_DELAY_MS = 400
 const nodeTypes: NodeTypes = { entity: EntityNode }
+const edgeTypes: EdgeTypes = { [REFERENCE_EDGE_TYPE]: ReferenceEdge }
 
 export function ProjectCanvas({ project }: { project: Project }): React.JSX.Element {
   const canvas = useCanvas(project.id)
@@ -53,20 +72,52 @@ export function ProjectCanvas({ project }: { project: Project }): React.JSX.Elem
 
 type SpawnState = { mode: SpawnDialogMode; resolve?: (nodeId: string | null) => void }
 type Picking = { prompt: string; resolve(nodeId: string | null): void }
+type PanelState = { id: PanelId; highlight: string | null }
+
+function isFocusable(canvas: Canvas, nodeId: string): boolean {
+  const node = canvasIndex(canvas).byId.get(nodeId)
+  return node !== undefined && !node.archived
+}
+
+function isEditable(target: EventTarget | null): boolean {
+  if (!(target instanceof HTMLElement)) return false
+  return target.isContentEditable || target.closest('input, textarea, select, [contenteditable="true"]') !== null
+}
 
 function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }): React.JSX.Element {
   const store = useSpadeStore()
+  const prompts = usePrompts()
   const flow = useReactFlow()
+  const flowStore = useStoreApi()
   const container = useRef<HTMLDivElement>(null)
   const view = useMemo(() => canvasView(canvas, entities), [canvas])
-  const records = useMemo(() => new Map(canvas.nodes.map((node) => [node.id, node])), [canvas])
+  const records = useMemo(() => canvasIndex(canvas).byId, [canvas])
 
+  // Alt+drag moves the whole branch: the node and every descendant.
+  const branchDrag = useRef<{ nodeId: string; origins: Map<string, Point> } | null>(null)
   // Positions and sizes the user just changed, shown until the record catches up or the command fails.
   const pending = useRef({ positions: new Map<string, Point>(), sizes: new Map<string, Size>() })
-  const [nodes, setNodes] = useState<EntityFlowNode[]>(() => syncNodes([], view, records, pending.current))
+  const [nodes, setNodes] = useState<EntityFlowNode[]>(() => syncNodes([], view, records, pending.current, null))
   const [resync, setResync] = useState(0)
-  useEffect(() => setNodes((previous) => syncNodes(previous, view, records, pending.current)), [view, records, resync])
-  const edges = useMemo(() => view.edges.map(toFlowEdge), [view])
+  useEffect(
+    () => setNodes((previous) => syncNodes(previous, view, records, pending.current, branchDrag.current?.origins ?? null)),
+    [view, records, resync]
+  )
+  // Only reference edges are selectable; the selection is the one piece of edge state React Flow changes.
+  const [selectedEdges, setSelectedEdges] = useState<ReadonlySet<string>>(() => new Set())
+  const edges = useMemo(() => view.edges.map((edge) => toFlowEdge(edge, selectedEdges.has(edge.id))), [view, selectedEdges])
+  const onEdgesChange = useCallback((changes: EdgeChange<Edge>[]) => {
+    const selections = changes.filter((change) => change.type === 'select')
+    if (selections.length === 0) return
+    setSelectedEdges((current) => {
+      const next = new Set(current)
+      for (const change of selections) {
+        if (change.selected) next.add(change.id)
+        else next.delete(change.id)
+      }
+      return next
+    })
+  }, [])
 
   const [initialViewport] = useState(canvas.viewport)
   const [activeNodeId, setActiveNodeId] = useState<string | null>(null)
@@ -81,13 +132,30 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
     if (previous && previous !== next) previous.resolve?.(null)
   }, [])
   const [moving, setMoving] = useState<string | null>(null)
+  const [history, setHistory] = useState<FocusHistory>(EMPTY_FOCUS_HISTORY)
+  const [currentNodeId, setCurrentNodeId] = useState<string | null>(null)
+  const [panel, setPanel] = useState<PanelState | null>(null)
 
-  const latest = useRef({ view, canvas, picking })
-  latest.current = { view, canvas, picking }
+  const latest = useRef({ view, canvas, picking, history, activeNodeId, currentNodeId })
+  latest.current = { view, canvas, picking, history, activeNodeId, currentNodeId }
 
   useEffect(() => {
     if (activeNodeId !== null && !view.nodes.some((node) => node.id === activeNodeId)) setActiveNodeId(null)
   }, [view, activeNodeId])
+
+  const agentChanges = useAgentChanges(canvas)
+
+  // The overview title scale follows the zoom through a CSS variable, so zooming never re-renders nodes.
+  useEffect(() => {
+    let zoom = flowStore.getState().transform[2]
+    const apply = (): void => container.current?.style.setProperty('--spade-overview-scale', String(overviewTitleScale(zoom)))
+    apply()
+    return flowStore.subscribe((state) => {
+      if (state.transform[2] === zoom) return
+      zoom = state.transform[2]
+      apply()
+    })
+  }, [flowStore])
 
   // --- Commands ---
 
@@ -102,10 +170,11 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
   }
 
   const commitMoves = async (moves: Array<{ nodeId: string; position: Point }>): Promise<void> => {
+    const byId = canvasIndex(latest.current.canvas).byId
     const changed = moves
       .map((move) => ({ nodeId: move.nodeId, position: { x: Math.round(move.position.x), y: Math.round(move.position.y) } }))
       .filter((move) => {
-        const record = latest.current.canvas.nodes.find((node) => node.id === move.nodeId)
+        const record = byId.get(move.nodeId)
         return record && (record.position.x !== move.position.x || record.position.y !== move.position.y)
       })
     if (changed.length === 0) return
@@ -129,6 +198,12 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
   }, [store, project.id])
   useEffect(() => flushViewport, [flushViewport])
 
+  const selectNode = useCallback((nodeId: string) => {
+    setNodes((current) =>
+      current.map((node) => ((node.id === nodeId) === Boolean(node.selected) ? node : { ...node, selected: node.id === nodeId }))
+    )
+  }, [])
+
   const pendingFocus = useRef<{ nodeId: string; mode: FocusMode } | null>(null)
   const focusRect = useCallback(
     (rect: Rect, mode: FocusMode = 'readable') => {
@@ -146,40 +221,126 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
     if (!node) return
     pendingFocus.current = null
     focusRect({ ...node.position, ...node.size }, target.mode)
-  }, [focusRect])
+    selectNode(node.id)
+  }, [focusRect, selectNode])
   useEffect(tryFocus, [view, tryFocus])
 
-  // --- Picking and activation ---
+  // Every focus move goes through here; only explicit moves (not back/forward) are recorded in the history.
+  const navigate = useCallback(
+    (nodeId: string, mode: FocusMode, record: boolean) => {
+      const index = canvasIndex(latest.current.canvas)
+      const node = index.byId.get(nodeId)
+      if (node?.archived) return
+      if (node) {
+        for (const ancestor of index.collapsingAncestorsOf(nodeId)) void execute({ type: 'expandBranch', nodeId: ancestor })
+      }
+      pendingFocus.current = { nodeId, mode }
+      setCurrentNodeId(nodeId)
+      if (record) setHistory((current) => pushFocus(current, nodeId))
+      tryFocus()
+    },
+    [execute, tryFocus]
+  )
+
+  const stepHistory = useCallback(
+    (step: -1 | 1) => {
+      const next = stepFocus(latest.current.history, step, (id) => isFocusable(latest.current.canvas, id))
+      if (!next) return
+      latest.current.history = next
+      setHistory(next)
+      navigate(currentFocus(next)!, 'readable', false)
+    },
+    [navigate]
+  )
+
+  // --- Picking, activation, and keyboard navigation ---
 
   useEffect(() => {
     const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape' || event.defaultPrevented) return
-      const current = latest.current.picking
-      if (current) {
-        // Otherwise the same Escape would also cancel the dialog that reopens when picking ends.
-        event.preventDefault()
-        setPicking(null)
-        current.resolve(null)
-      } else {
-        setActiveNodeId(null)
+      if (event.defaultPrevented) return
+      if (event.key === 'Escape') {
+        const current = latest.current.picking
+        if (current) {
+          // Otherwise the same Escape would also cancel the dialog that reopens when picking ends.
+          event.preventDefault()
+          setPicking(null)
+          current.resolve(null)
+        } else if (latest.current.activeNodeId !== null) {
+          const nodeId = latest.current.activeNodeId
+          setActiveNodeId(null)
+          focusNodeHeader(nodeId)
+        }
+        return
       }
+      const shortcut = canvasShortcut(event)
+      if (!shortcut || shortcut.kind === 'search') return
+      if (latest.current.picking || latest.current.activeNodeId !== null || isEditable(event.target)) return
+      if (document.querySelector('dialog[open]')) return
+      event.preventDefault()
+      if (shortcut.kind === 'history') {
+        stepHistory(shortcut.step)
+        return
+      }
+      const from = latest.current.currentNodeId
+      if (from === null) return
+      const target = relatedTarget(canvasIndex(latest.current.canvas), from, shortcut.direction)
+      if (target === null) return
+      const onHeader = isOnNodeHeader(document.activeElement)
+      navigate(target, 'readable', true)
+      if (onHeader) focusNodeHeader(target)
     }
     window.addEventListener('keydown', onKeyDown)
     return () => window.removeEventListener('keydown', onKeyDown)
-  }, [])
+  }, [navigate, stepHistory])
 
   // --- Actions shared with nodes, dialogs, the toolbar, and extensions ---
 
-  const actions = useMemo<CanvasActions>(
-    () => ({
+  const actions = useMemo<CanvasActions>(() => {
+    const pickNode = (prompt: string): Promise<string | null> =>
+      new Promise<string | null>((resolve) => {
+        latest.current.picking?.resolve(null)
+        setPicking({ prompt, resolve })
+      })
+    return {
+      getCanvas: () => latest.current.canvas,
       execute,
       focusNode(nodeId, mode = 'readable') {
-        pendingFocus.current = { nodeId, mode }
-        tryFocus()
+        navigate(nodeId, mode, true)
       },
       focusRect,
       fitAll() {
         void flow.fitView({ padding: 0.08, maxZoom: 1, minZoom: ZOOM_LIMITS.minZoom })
+      },
+      goBack: () => stepHistory(-1),
+      goForward: () => stepHistory(1),
+      setCurrentNode: setCurrentNodeId,
+      togglePanel(id) {
+        setPanel((current) => (current?.id === id ? null : { id, highlight: null }))
+      },
+      openPanel(id, highlight) {
+        setPanel({ id, highlight: highlight ?? null })
+      },
+      closePanel: () => setPanel(null),
+      async connectExisting(nodeId) {
+        const from = canvasIndex(latest.current.canvas).byId.get(nodeId)
+        if (!from) return
+        const target = await pickNode(`Click the node ${from.title} should reference.`)
+        if (target === null) return
+        if (target === nodeId) {
+          store.notify('A node cannot reference itself.')
+          return
+        }
+        const to = canvasIndex(latest.current.canvas).byId.get(target)
+        const label = await prompts.promptText({
+          title: `Reference ${to?.title ?? 'node'} from ${from.title}`,
+          label: 'Label',
+          initialValue: '',
+          confirmLabel: 'Connect',
+          optional: true,
+          hint: 'Optional. Says what the reference is for, e.g. "spec" or "uses".'
+        })
+        if (label === null) return
+        await execute({ type: 'connectNodes', fromNodeId: nodeId, toNodeId: target, ...(label ? { label } : {}) })
       },
       openCreate({ entityType, sourceNodeId }) {
         setSpawn({ mode: { kind: 'create', entityType: entityType ?? null, sourceNodeId: sourceNodeId ?? null } })
@@ -188,15 +349,10 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
         return new Promise<string | null>((resolve) => setSpawn({ mode: { kind: 'seeded', request }, resolve }))
       },
       openMove: setMoving,
-      pickNode(prompt) {
-        return new Promise<string | null>((resolve) => {
-          latest.current.picking?.resolve(null)
-          setPicking({ prompt, resolve })
-        })
-      },
+      pickNode,
       setActiveNode: setActiveNodeId,
       finishResize(nodeId, rect) {
-        const record = latest.current.canvas.nodes.find((node) => node.id === nodeId)
+        const record = canvasIndex(latest.current.canvas).byId.get(nodeId)
         if (!record) return
         const size = { width: Math.round(rect.width), height: Math.round(rect.height) }
         pending.current.sizes.set(nodeId, size)
@@ -205,10 +361,9 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
         })
         void commitMoves([{ nodeId, position: { x: rect.x, y: rect.y } }])
       }
-    }),
+    }
     // commitMoves and clearPending only touch refs and stable setters.
-    [execute, focusRect, tryFocus, flow, setSpawn]
-  )
+  }, [execute, focusRect, navigate, stepHistory, flow, setSpawn, store, prompts])
 
   const finishSpawn = (nodeId: string | null): void => {
     const current = spawnRef.current
@@ -220,14 +375,13 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
 
   // --- Dragging ---
 
-  // Alt+drag moves the whole branch: the node and every descendant.
-  const branchDrag = useRef<{ nodeId: string; origins: Map<string, Point> } | null>(null)
-
   const onNodeDragStart: OnNodeDrag<EntityFlowNode> = (event, node, dragged) => {
     setActiveNodeId(null)
     branchDrag.current = null
     if (!event.altKey || dragged.length !== 1) return
-    const moves = branchMoves(latest.current.canvas, node.id, latest.current.canvas.nodes.find((n) => n.id === node.id)!.position)
+    const record = canvasIndex(latest.current.canvas).byId.get(node.id)
+    if (!record) return
+    const moves = branchMoves(latest.current.canvas, node.id, record.position)
     branchDrag.current = { nodeId: node.id, origins: new Map(moves.map((move) => [move.nodeId, move.position])) }
   }
 
@@ -261,83 +415,104 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
 
   const data = useMemo<CanvasData>(() => ({ project, canvas }), [project, canvas])
   const interaction = useMemo(() => ({ activeNodeId, picking: picking !== null }), [activeNodeId, picking])
+  const navigation = useMemo<CanvasNavigation>(() => {
+    const available = (id: string): boolean => isFocusable(canvas, id)
+    return {
+      panel: panel?.id ?? null,
+      panelHighlight: panel?.highlight ?? null,
+      currentNodeId: currentNodeId !== null && canvasIndex(canvas).byId.has(currentNodeId) ? currentNodeId : null,
+      canGoBack: stepFocus(history, -1, available) !== null,
+      canGoForward: stepFocus(history, 1, available) !== null
+    }
+  }, [panel, currentNodeId, history, canvas])
+
+  const OpenPanel = panel ? canvasSidePanels.find((candidate) => candidate.id === panel.id)?.Panel : undefined
 
   return (
-    <CanvasDataContext.Provider value={data}>
-      <CanvasActionsContext.Provider value={actions}>
-        <CanvasInteractionContext.Provider value={interaction}>
-          <div className="canvas-frame">
-            <Toolbar />
-            <div className="canvas-stage">
-              <div
-                ref={container}
-                className={picking ? 'canvas canvas--picking' : 'canvas'}
-                data-testid="canvas"
-                aria-label={`Canvas of ${project.name}`}
-                role="region"
-              >
-                <ReactFlow<EntityFlowNode, Edge>
-                  nodes={nodes}
-                  edges={edges}
-                  nodeTypes={nodeTypes}
-                  onNodesChange={onNodesChange}
-                  onNodeDragStart={onNodeDragStart}
-                  onNodeDrag={onNodeDrag}
-                  onNodeDragStop={onNodeDragStop}
-                  onNodeClick={(_event, node) => {
-                    const current = latest.current.picking
-                    if (!current) return
-                    setPicking(null)
-                    current.resolve(node.id)
-                  }}
-                  onPaneClick={() => {
-                    if (!latest.current.picking) setActiveNodeId(null)
-                  }}
-                  onMoveEnd={(_event, viewport) => {
-                    if (pendingViewport.current) clearTimeout(pendingViewport.current.timer)
-                    pendingViewport.current = { viewport, timer: setTimeout(flushViewport, VIEWPORT_SAVE_DELAY_MS) }
-                  }}
-                  defaultViewport={initialViewport ?? undefined}
-                  fitView={initialViewport === null && canvas.nodes.length > 0}
-                  fitViewOptions={{ padding: 0.08, maxZoom: 1 }}
-                  minZoom={ZOOM_LIMITS.minZoom}
-                  maxZoom={ZOOM_LIMITS.maxZoom}
-                  nodesConnectable={false}
-                  nodesFocusable={false}
-                  edgesFocusable={false}
-                  deleteKeyCode={null}
-                  zoomOnDoubleClick={false}
-                  onlyRenderVisibleElements={false}
-                  proOptions={{ hideAttribution: true }}
-                  colorMode="dark"
-                >
-                  <Background variant={BackgroundVariant.Dots} gap={19} size={1} />
-                  {canvasOverlays.map((Overlay, index) => (
-                    <Overlay key={index} />
-                  ))}
-                </ReactFlow>
-                {picking ? (
-                  <div className="picking-banner" data-testid="picking-banner" role="status">
-                    <span>{picking.prompt}</span>
-                    <kbd>Esc</kbd>
-                    <span>to cancel</span>
+    <CanvasProjectContext.Provider value={project}>
+      <CanvasDataContext.Provider value={data}>
+        <CanvasActionsContext.Provider value={actions}>
+          <CanvasNavigationContext.Provider value={navigation}>
+            <AgentChangeContext.Provider value={agentChanges}>
+              <CanvasInteractionContext.Provider value={interaction}>
+                <div className="canvas-frame">
+                  <Toolbar />
+                  <div className="canvas-stage">
+                    <div
+                      ref={container}
+                      className={picking ? 'canvas canvas--picking' : 'canvas'}
+                      data-testid="canvas"
+                      aria-label={`Canvas of ${project.name}`}
+                      role="region"
+                    >
+                      <ReactFlow<EntityFlowNode, Edge>
+                        nodes={nodes}
+                        edges={edges}
+                        nodeTypes={nodeTypes}
+                        edgeTypes={edgeTypes}
+                        onNodesChange={onNodesChange}
+                        onEdgesChange={onEdgesChange}
+                        onNodeDragStart={onNodeDragStart}
+                        onNodeDrag={onNodeDrag}
+                        onNodeDragStop={onNodeDragStop}
+                        onNodeClick={(_event, node) => {
+                          const current = latest.current.picking
+                          if (!current) {
+                            setCurrentNodeId(node.id)
+                            return
+                          }
+                          setPicking(null)
+                          current.resolve(node.id)
+                        }}
+                        onPaneClick={() => {
+                          if (!latest.current.picking) setActiveNodeId(null)
+                        }}
+                        onMoveEnd={(_event, viewport) => {
+                          if (pendingViewport.current) clearTimeout(pendingViewport.current.timer)
+                          pendingViewport.current = { viewport, timer: setTimeout(flushViewport, VIEWPORT_SAVE_DELAY_MS) }
+                        }}
+                        defaultViewport={initialViewport ?? undefined}
+                        fitView={initialViewport === null && canvas.nodes.length > 0}
+                        fitViewOptions={{ padding: 0.08, maxZoom: 1 }}
+                        minZoom={ZOOM_LIMITS.minZoom}
+                        maxZoom={ZOOM_LIMITS.maxZoom}
+                        nodesConnectable={false}
+                        nodesFocusable={false}
+                        edgesFocusable={false}
+                        deleteKeyCode={null}
+                        zoomOnDoubleClick={false}
+                        onlyRenderVisibleElements={false}
+                        proOptions={{ hideAttribution: true }}
+                        colorMode="dark"
+                      >
+                        <Background variant={BackgroundVariant.Dots} gap={19} size={1} />
+                        {canvasOverlays.map((Overlay, index) => (
+                          <Overlay key={index} />
+                        ))}
+                      </ReactFlow>
+                      {picking ? (
+                        <div className="picking-banner" data-testid="picking-banner" role="status">
+                          <span>{picking.prompt}</span>
+                          <kbd>Esc</kbd>
+                          <span>to cancel</span>
+                        </div>
+                      ) : null}
+                    </div>
+                    {OpenPanel ? (
+                      <aside className="canvas-side-panels" aria-label="Canvas panels">
+                        <OpenPanel />
+                      </aside>
+                    ) : null}
                   </div>
-                ) : null}
-              </div>
-              {canvasSidePanels.length > 0 ? (
-                <aside className="canvas-side-panels" aria-label="Canvas panels">
-                  {canvasSidePanels.map((Panel, index) => (
-                    <Panel key={index} />
-                  ))}
-                </aside>
-              ) : null}
-            </div>
-          </div>
-          {spawn ? <SpawnDialog key={spawnKey(spawn)} mode={spawn.mode} open={picking === null} onDone={finishSpawn} /> : null}
-          {moving ? <MoveDialog key={moving} nodeId={moving} open={picking === null} onDone={() => setMoving(null)} /> : null}
-        </CanvasInteractionContext.Provider>
-      </CanvasActionsContext.Provider>
-    </CanvasDataContext.Provider>
+                </div>
+                {spawn ? <SpawnDialog key={spawnKey(spawn)} mode={spawn.mode} open={picking === null} onDone={finishSpawn} /> : null}
+                {moving ? <MoveDialog key={moving} nodeId={moving} open={picking === null} onDone={() => setMoving(null)} /> : null}
+              </CanvasInteractionContext.Provider>
+            </AgentChangeContext.Provider>
+          </CanvasNavigationContext.Provider>
+        </CanvasActionsContext.Provider>
+      </CanvasDataContext.Provider>
+    </CanvasProjectContext.Provider>
   )
 }
 
@@ -354,17 +529,21 @@ function sameNodeView(a: NodeView, b: NodeView): boolean {
     a.size.width === b.size.width &&
     a.size.height === b.size.height &&
     a.hiddenDescendantCount === b.hiddenDescendantCount &&
-    a.childCount === b.childCount
+    a.childCount === b.childCount &&
+    a.parentArchived === b.parentArchived &&
+    a.referenceCount === b.referenceCount
   )
 }
 
 // Rebuilds React Flow's nodes from the records, keeping what React Flow owns (selection, measurements) and
-// what the user is changing right now (a drag or resize in progress, or one whose command has not landed).
+// what the user is changing right now (a drag or resize in progress, a branch carried along by an Alt+drag,
+// or a change whose command has not landed).
 function syncNodes(
   previous: EntityFlowNode[],
   view: CanvasView,
-  records: Map<string, CanvasNode>,
-  pending: { positions: Map<string, Point>; sizes: Map<string, Size> }
+  records: ReadonlyMap<string, CanvasNode>,
+  pending: { positions: Map<string, Point>; sizes: Map<string, Size> },
+  carried: ReadonlyMap<string, Point> | null
 ): EntityFlowNode[] {
   const before = new Map(previous.map((node) => [node.id, node]))
   return view.nodes.map((entry) => {
@@ -380,7 +559,7 @@ function syncNodes(
       pending.sizes.delete(entry.id)
     }
 
-    if (old && (old.dragging || old.resizing)) return { ...old, data: { record, view: entry } }
+    if (old && (old.dragging || old.resizing || carried?.has(entry.id))) return { ...old, data: { record, view: entry } }
     if (old && old.data.record === record && sameNodeView(old.data.view, entry) && !pending.positions.has(entry.id)) {
       return old
     }
@@ -399,15 +578,26 @@ function syncNodes(
   })
 }
 
-function toFlowEdge(edge: EdgeView): Edge {
+function toFlowEdge(edge: EdgeView, selected: boolean): Edge {
+  const shared = { id: edge.id, source: edge.source, target: edge.target, className: `spade-edge spade-edge--${edge.relation}` }
+  if (edge.relation === 'references') {
+    const data: ReferenceEdgeData = { label: edge.label ?? null }
+    return {
+      ...shared,
+      type: REFERENCE_EDGE_TYPE,
+      selectable: true,
+      focusable: true,
+      selected,
+      ariaLabel: edge.label === undefined ? 'Reference' : `Reference: ${edge.label}`,
+      data
+    }
+  }
   return {
-    id: edge.id,
-    source: edge.source,
-    target: edge.target,
+    ...shared,
     type: 'default',
-    className: `spade-edge spade-edge--${edge.relation}`,
     selectable: false,
     focusable: false,
+    markerEnd: { type: MarkerType.ArrowClosed, color: 'var(--faint)', width: 18, height: 18 },
     ...(edge.label === undefined ? {} : { label: edge.label })
   }
 }

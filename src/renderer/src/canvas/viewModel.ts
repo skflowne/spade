@@ -3,6 +3,7 @@ import type { Canvas, CanvasEdgeRelation, Point, Size } from '../../../shared/do
 import type { EntityRegistry } from '../../../shared/entities'
 import { presentedSize } from '../../../shared/layout'
 import { indexTree } from '../../../shared/tree'
+import { canvasIndex } from './model/canvasIndex'
 
 export type NodeView = {
   id: string
@@ -11,6 +12,10 @@ export type NodeView = {
   // Non-archived descendants hidden by this node's collapsed branch; 0 when the branch is expanded.
   hiddenDescendantCount: number
   childCount: number
+  // The node's parent is archived: no edge leads to it, so the chrome says so.
+  parentArchived: boolean
+  // `references` edges in either direction (plan §6, context-sharing indicator).
+  referenceCount: number
 }
 
 export type EdgeView = {
@@ -25,8 +30,8 @@ export type CanvasView = { nodes: NodeView[]; edges: EdgeView[] }
 
 // What the canvas draws: visible nodes at their presented size, and edges whose endpoints are both visible.
 export function canvasView(canvas: Canvas, entities: EntityRegistry): CanvasView {
-  const tree = indexTree(canvas)
-  const hidden = tree.hiddenNodeIds()
+  const index = canvasIndex(canvas)
+  const { tree, hidden } = index
 
   const nodes = canvas.nodes
     .filter((node) => !hidden.has(node.id))
@@ -35,7 +40,9 @@ export function canvasView(canvas: Canvas, entities: EntityRegistry): CanvasView
       position: node.position,
       size: presentedSize(node, entities.has(node.entityType) ? entities.resolve(node.entityType) : null),
       hiddenDescendantCount: node.branchCollapsed ? tree.descendantCount(node.id) : 0,
-      childCount: tree.childrenOf(node.id).length
+      childCount: tree.childrenOf(node.id).length,
+      parentArchived: isArchived(index.byId.get(tree.parentOf(node.id) ?? '')),
+      referenceCount: index.referencesOf(node.id).length
     }))
 
   const edges = canvas.edges
@@ -50,6 +57,10 @@ export function canvasView(canvas: Canvas, entities: EntityRegistry): CanvasView
     }))
 
   return { nodes, edges }
+}
+
+function isArchived(node: { archived: boolean } | undefined): boolean {
+  return node?.archived === true
 }
 
 // Moves a node to `position` and every descendant, hidden or not, by the same offset: a branch moves as a unit.

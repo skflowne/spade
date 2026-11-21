@@ -7,7 +7,13 @@ export type MenuItem =
       onSelect(): void
       disabled?: boolean
       danger?: boolean
+      // Secondary text after the label, e.g. a node's type.
+      detail?: string
+      // A short glyph before the label.
+      icon?: ReactNode
     }
+  // A non-interactive label for the items that follow it.
+  | { heading: string }
   | 'separator'
 
 type MenuButtonProps = {
@@ -19,6 +25,8 @@ type MenuButtonProps = {
   children: ReactNode
   className?: string
   title?: string
+  // Extra attributes for the trigger button.
+  testId?: string
 }
 
 const MENU_GAP = 4
@@ -38,6 +46,7 @@ export function MenuButton(props: MenuButtonProps): React.JSX.Element {
         title={props.title ?? props.label}
         aria-haspopup="menu"
         aria-expanded={open}
+        data-testid={props.testId}
         onClick={(event) => {
           event.stopPropagation()
           setOpen((current) => !current)
@@ -128,9 +137,13 @@ function MenuPopup(props: {
       {props.items.map((item, index) =>
         item === 'separator' ? (
           <div key={`separator-${index}`} role="separator" className="cr-menu__separator" />
+        ) : 'heading' in item ? (
+          <div key={`heading-${index}`} role="presentation" className="cr-menu__heading">
+            {item.heading}
+          </div>
         ) : (
           <button
-            key={item.label}
+            key={`${index}-${item.label}`}
             type="button"
             role="menuitem"
             disabled={item.disabled}
@@ -140,7 +153,13 @@ function MenuPopup(props: {
               item.onSelect()
             }}
           >
-            {item.label}
+            {item.icon !== undefined ? (
+              <span className="cr-menu__icon" aria-hidden="true">
+                {item.icon}
+              </span>
+            ) : null}
+            <span className="cr-menu__label">{item.label}</span>
+            {item.detail ? <span className="cr-menu__detail">{item.detail}</span> : null}
           </button>
         )
       )}

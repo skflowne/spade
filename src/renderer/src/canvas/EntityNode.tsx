@@ -1,14 +1,18 @@
 import { Component, useEffect, useId, useMemo, useState, type ErrorInfo, type ReactNode } from 'react'
-import { Handle, NodeResizer, Position, type Node, type NodeProps } from '@xyflow/react'
+import { Handle, NodeResizer, Position, useReactFlow, useStore, type Node, type NodeProps } from '@xyflow/react'
 import type { CanvasNode } from '@shared/domain'
-import { indexTree } from '@shared/tree'
 import { entityRenderers, resolveEntity } from '../entities'
 import type { EntityHost, NodeStatus } from '../entities/types'
+import { useSpadeStore } from '../store/hooks'
 import { DetailList } from '../ui/fields'
 import { MenuButton, type MenuItem } from '../ui/Menu'
 import { usePrompts } from '../ui/prompts'
 import { StatusBadge } from '../ui/StatusBadge'
-import { useCanvasActions, useCanvasData, useCanvasInteraction } from './CanvasContext'
+import { useAgentChange, useCanvasActions, useCanvasInteraction, useCanvasProject } from './CanvasContext'
+import { archivedEntryOf } from './model/archivedNodes'
+import { canvasIndex } from './model/canvasIndex'
+import { detailForZoom } from './model/levelOfDetail'
+import { RelatedMenu } from './RelatedMenu'
 import type { NodeView } from './viewModel'
 
 export type EntityNodeData = { record: CanvasNode; view: NodeView }
@@ -21,12 +25,17 @@ const MIN_SIZE = { width: 240, height: 140 }
 // The generic node wrapper (plan §6, container-owned behavior) around every entity body.
 export function EntityNode({ id, data, selected }: NodeProps<EntityFlowNode>): React.JSX.Element {
   const { record, view } = data
-  const { project } = useCanvasData()
+  const project = useCanvasProject()
   const actions = useCanvasActions()
   const { activeNodeId, picking } = useCanvasInteraction()
   const resolved = useMemo(() => resolveEntity(entityRenderers, record), [record])
   const [status, setStatus] = useState<NodeStatus | null>(null)
+  // A primitive selector: the node re-renders when the zoom crosses the threshold, not on every zoom frame.
+  const detail = useStore((state) => detailForZoom(state.transform[2]))
+  const agentChange = useAgentChange(id)
   const titleId = useId()
+  const revealOnScreen = useRevealOnScreen()
+  const typeName = resolved.definition?.displayName ?? record.entityType
   const active = activeNodeId === id && !record.collapsed
   // A body's status describes the mounted body; collapsing unmounts it.
   useEffect(() => {
@@ -49,13 +58,15 @@ export function EntityNode({ id, data, selected }: NodeProps<EntityFlowNode>): R
     selected ? 'spade-node--selected' : '',
     active ? 'spade-node--active' : '',
     record.collapsed ? 'spade-node--collapsed' : '',
-    picking ? 'spade-node--pickable' : ''
+    picking ? 'spade-node--pickable' : '',
+    detail === 'preview' ? 'spade-node--preview' : '',
+    agentChange ? 'spade-node--agent-changed' : ''
   ]
     .filter(Boolean)
     .join(' ')
 
   return (
-    <article className={className} data-testid="canvas-node" data-node-id={id} aria-labelledby={titleId}>
+    <article className={className} data-testid="canvas-node" data-node-id={id} data-detail={detail} aria-labelledby={titleId}>
       <NodeResizer
         isVisible={!record.collapsed && !picking}
         minWidth={MIN_SIZE.width}
@@ -68,8 +79,22 @@ export function EntityNode({ id, data, selected }: NodeProps<EntityFlowNode>): R
       <header
         className={`spade-node__header ${DRAG_HANDLE_CLASS}`}
         data-testid="node-header"
+        role="group"
+        aria-label={`${record.title}, ${typeName}`}
+        aria-describedby={record.collapsed ? undefined : `${titleId}-hint`}
+        tabIndex={0}
         onClick={() => {
           if (!picking) actions.setActiveNode(null)
+        }}
+        onFocus={(event) => {
+          if (event.target !== event.currentTarget) return
+          actions.setCurrentNode(id)
+          if (event.currentTarget.matches(':focus-visible')) revealOnScreen(event.currentTarget)
+        }}
+        onKeyDown={(event) => {
+          if (event.target !== event.currentTarget || event.key !== 'Enter' || record.collapsed || picking) return
+          event.preventDefault()
+          actions.setActiveNode(id)
         }}
       >
         <span className="spade-node__icon" aria-hidden="true">
@@ -78,9 +103,23 @@ export function EntityNode({ id, data, selected }: NodeProps<EntityFlowNode>): R
         <div className="spade-node__titles">
           <NodeTitle id={titleId} record={record} />
           <p className="spade-node__meta">
-            <span className="spade-node__type">{resolved.definition?.displayName ?? record.entityType}</span>
+            <span className="spade-node__type">{typeName}</span>
+            {agentChange ? (
+              <span
+                className="spade-node__agent-change"
+                data-testid="agent-change-marker"
+                title={`${agentChange.summary} (${new Date(agentChange.at).toLocaleTimeString()})`}
+              >
+                Changed by {agentChange.agentLabel}
+              </span>
+            ) : null}
             {record.shortDescription ? <span className="spade-node__description"> · {record.shortDescription}</span> : null}
           </p>
+          {record.collapsed ? null : (
+            <span id={`${titleId}-hint`} hidden>
+              Press Enter to use its content, Escape to return.
+            </span>
+          )}
         </div>
         <div className="spade-node__status">
           {Status && resolved.kind === 'ready' ? <Status node={record} config={resolved.config} project={project} /> : null}
@@ -88,11 +127,13 @@ export function EntityNode({ id, data, selected }: NodeProps<EntityFlowNode>): R
         </div>
         <NodeControls record={record} view={view} host={host} resolved={resolved} />
       </header>
+      {view.parentArchived ? <ParentArchived nodeId={id} /> : null}
       {record.collapsed ? null : (
         <div
           className={active ? 'spade-node__body nodrag nowheel nopan' : 'spade-node__body'}
           data-testid="node-body"
           data-active={active}
+          data-detail={detail}
           onClick={() => {
             if (!picking && !active) actions.setActiveNode(id)
           }}
@@ -105,7 +146,7 @@ export function EntityNode({ id, data, selected }: NodeProps<EntityFlowNode>): R
                   config={resolved.config}
                   project={project}
                   active={active}
-                  detail="full"
+                  detail={detail}
                   host={host}
                 />
               ) : (
@@ -168,16 +209,30 @@ function NodeControls({
   host: EntityHost
   resolved: ReturnType<typeof resolveEntity>
 }): React.JSX.Element {
-  const { canvas, project } = useCanvasData()
+  const project = useCanvasProject()
   const actions = useCanvasActions()
+  const store = useSpadeStore()
   const prompts = usePrompts()
   const nodeId = record.id
   const hasChildren = view.childCount > 0
   const branchHidden = record.branchCollapsed
   const run = (command: Parameters<typeof actions.execute>[0]): void => void actions.execute(command)
 
+  // Archiving is undoable from the confirmation it shows.
+  const archive = async (branch: boolean): Promise<void> => {
+    const count = branch ? canvasIndex(actions.getCanvas()).tree.branchOf(nodeId).length : 1
+    const response = await actions.execute({ type: branch ? 'archiveBranch' : 'archiveNode', nodeId })
+    if (!response.ok) return
+    const what = branch ? `the branch “${record.title}” (${count} ${count === 1 ? 'node' : 'nodes'})` : `“${record.title}”`
+    store.inform(`Archived ${what}.`, {
+      label: 'Undo',
+      run: () => void actions.execute({ type: 'restoreNode', nodeId, ...(branch ? { branch: true } : {}) })
+    })
+  }
+
   const removeNode = async (): Promise<void> => {
-    const tree = indexTree(canvas)
+    const canvas = actions.getCanvas()
+    const tree = canvasIndex(canvas).tree
     const children = tree.childrenOf(nodeId).length
     const parentId = tree.parentOf(nodeId)
     const parentTitle = canvas.nodes.find((node) => node.id === parentId)?.title
@@ -200,7 +255,7 @@ function NodeControls({
   }
 
   const removeBranch = async (): Promise<void> => {
-    const count = indexTree(canvas).branchOf(nodeId).length
+    const count = canvasIndex(actions.getCanvas()).tree.branchOf(nodeId).length
     const confirmed = await prompts.confirm({
       title: `Remove the branch ${record.title}?`,
       message: (
@@ -228,6 +283,7 @@ function NodeControls({
       ...entityItems,
       ...(entityItems.length > 0 ? (['separator'] as const) : []),
       { label: 'Spawn connected…', onSelect: () => actions.openCreate({ sourceNodeId: nodeId }) },
+      { label: 'Connect existing…', onSelect: () => void actions.connectExisting(nodeId) },
       { label: 'Move to…', onSelect: () => actions.openMove(nodeId) },
       'separator',
       { label: 'Fit', onSelect: () => actions.focusNode(nodeId, 'fit') },
@@ -244,8 +300,8 @@ function NodeControls({
           ]
         : []),
       'separator',
-      { label: 'Archive node', onSelect: () => run({ type: 'archiveNode', nodeId }) },
-      ...(hasChildren ? [{ label: 'Archive branch', onSelect: () => run({ type: 'archiveBranch', nodeId }) }] : []),
+      { label: 'Archive node', onSelect: () => void archive(false) },
+      ...(hasChildren ? [{ label: 'Archive branch', onSelect: () => void archive(true) }] : []),
       { label: 'Remove node…', onSelect: () => void removeNode(), danger: true },
       ...(hasChildren ? [{ label: 'Remove branch…', onSelect: () => void removeBranch(), danger: true }] : [])
     ]
@@ -253,6 +309,7 @@ function NodeControls({
 
   return (
     <div className="spade-node__controls nodrag">
+      <RelatedMenu record={record} referenceCount={view.referenceCount} />
       {hasChildren ? (
         <button
           type="button"
@@ -284,6 +341,44 @@ function NodeControls({
       </MenuButton>
     </div>
   )
+}
+
+// A node whose parent is archived has no edge to it; this says why and leads to the archived parent.
+function ParentArchived({ nodeId }: { nodeId: string }): React.JSX.Element {
+  const actions = useCanvasActions()
+  return (
+    <button
+      type="button"
+      className="spade-node__orphan nodrag"
+      data-testid="parent-archived"
+      onClick={(event) => {
+        event.stopPropagation()
+        const index = canvasIndex(actions.getCanvas())
+        const parent = index.tree.parentOf(nodeId)
+        actions.openPanel('archived', (parent && archivedEntryOf(index, parent)) ?? undefined)
+      }}
+    >
+      Parent archived · Show
+    </button>
+  )
+}
+
+// Keyboard focus on a node outside the screen pans the canvas to it, at the current zoom.
+function useRevealOnScreen(): (element: HTMLElement) => void {
+  const flow = useReactFlow()
+  return (element) => {
+    const pane = element.closest('.react-flow')?.getBoundingClientRect()
+    const node = element.closest('.react-flow__node')?.getBoundingClientRect()
+    if (!pane || !node) return
+    const inside = node.left >= pane.left && node.top >= pane.top && node.left < pane.right && node.top < pane.bottom
+    if (inside) return
+    const { x, y, zoom } = flow.getViewport()
+    void flow.setViewport({
+      zoom,
+      x: x + (pane.left + pane.width / 2) - (node.left + Math.min(node.width, pane.width) / 2),
+      y: y + (pane.top + pane.height / 2) - (node.top + Math.min(node.height, pane.height) / 2)
+    })
+  }
 }
 
 function FallbackBody({ record, problem }: { record: CanvasNode; problem: string }): React.JSX.Element {
