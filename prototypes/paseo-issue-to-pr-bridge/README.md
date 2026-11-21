@@ -21,12 +21,13 @@ Configuration:
 | `SPADE_P3_LEDGER_PATH` | Prototype ledger path | Electron user-data `p3-ledger.json` |
 | `SPADE_P3_DISABLE_PASEO=1` | Deterministic test opt-out | unset |
 
-The renderer exposes generic controls to select/open a checkout, create or attach a workspace, spawn or attach a root agent, and request an authoritative refresh. Provider, model, prompt, cwd, WorkItem, agent ID, and workspace ID are caller input. The bridge does not classify prompt content or infer workflow roles.
+The renderer exposes generic controls to select/open a checkout, create or attach a workspace, spawn or attach a root agent, and request an authoritative refresh. Provider, model, permission mode, prompt, cwd, WorkItem, agent ID, and workspace ID are caller input. The Mode field defaults to Claude's `bypassPermissions` because P3 has no surface to show or answer pending permissions; clear it to use the provider default. Agents that the root launches itself get their mode from the root's own `paseo run --mode` flags, not from SPADE. The bridge does not classify prompt content or infer workflow roles.
 
 ## Architecture and invariants
 
-- `main/SpadePaseoAdapter.ts` is the only `@getpaseo/client` boundary. It owns one exported internal `DaemonClient` because checkout RPCs are absent from the public 0.9 facade; lifecycle and checkout operations share that one connection.
+- `main/SpadePaseoAdapter.ts` is the only `@getpaseo/client` boundary. It owns one exported internal `DaemonClient` because checkout RPCs are absent from the public facade (still true in 0.14.0); lifecycle and checkout operations share that one connection.
 - `main/commandService.ts` serializes commands, persistence, adapter notifications, startup restoration, reconnect refetch, and publication. Refresh notifications are buffered/coalesced through initialization and reconnect; a reconnect snapshot completes before one pending post-authoritative refresh.
+- `main/pullRequestDiscovery.ts` links pull requests opened outside SPADE: after each snapshot it runs the generic `checkout-pull-request-status` integration for connected, bound, unlinked workspaces with a branch, rate-limited per workspace/branch. It never infers PRs from titles or branch names.
 - A successful external spawn or attach persists its exact opaque identity and root binding before the fallible authoritative fetch.
 - One opaque root belongs to at most one WorkItem. Rebinding transfers ownership; persisted duplicate roots are rejected.
 - `shared/paseoReconciliation.ts` owns recursive explicit-parent closure, actual-parent `delegated` edges, workspace dedupe, missing-resource preservation, managed/provider-native identity separation, and bounded timeline normalization.
@@ -35,24 +36,25 @@ The renderer exposes generic controls to select/open a checkout, create or attac
 
 External identity is always `provider + kind + opaque ID`. Titles, cwd segments, branches, prompt text, skill names, and creation order never determine identity or presentation type.
 
-## Paseo 0.9.2 capability inventory
+## Paseo 0.14.0 capability inventory
 
-`package.json` pins `@getpaseo/client` to exactly `0.9.2` (upgraded from `0.4.0` on 2026-09-24). The persisted inventory in `shared/model.ts` is the prototype authority.
+`package.json` pins `@getpaseo/client` to exactly `0.14.0` (upgraded from `0.4.0` to `0.9.2` on 2026-09-24 and to `0.14.0` on 2026-11-01). The persisted inventory in `shared/model.ts` is the prototype authority.
 
-| Capability | Prototype state | Paseo 0.9.2 driver operation |
+| Capability | Prototype state | Paseo 0.14.0 driver operation |
 |---|---|---|
 | Agents | Available | paginated `fetchAgents`, exact `fetchAgent`, `createAgent`, `archiveAgent`, `agent_update` |
 | Workspaces | Available | paginated `fetchWorkspaces`, `openProject`, `createWorkspace`, `workspace_update` |
 | Providers | Available | `getProvidersSnapshot` polled until the requested provider leaves `loading`; other providers do not gate spawn |
 | Timeline fetch | Available | `fetchAgentTimeline` with projected tail and limit 40 |
 | Agent/workspace subscriptions | Available | host-owned `observeAgents`/`observeWorkspaces`/`observeEvents` subscriptions opened on connect; driver update events trigger serialized authoritative refreshes, and paged reads carry no subscription |
-| Provider-native subagent discovery | Unavailable | the bounded prototype does not project the driver's provider-subagent RPC |
+| Provider-native subagent discovery | Available | `listProviderSubagents` and bounded `fetchProviderSubagentTimeline` for loaded, unarchived agents; `agent.provider_subagents.update` triggers refresh. Closed or archived parents are skipped because the read resumes the agent or is rejected, and their rows stay `stale` |
+| Pending permissions | Available | agent `pendingPermissions` projected onto the managed-agent node; `respondToPermission` through the generic `respond-paseo-permission` command; `agent_permission_request`/`resolved` trigger refresh |
 | Live timeline activation | Unavailable | the bounded prototype uses authoritative timeline tails rather than activating a live stream |
 | Server info/version | Unavailable | server-info is used only as a provider-readiness feature gate, not persisted as runtime state |
 
 Checkout reads/mutations use status, diff, commit, push, PR create, and PR status on that same connection; they are not a separate persisted capability record.
 
-Direct internal imports: **one**, confined to `main/SpadePaseoAdapter.ts`. `@getpaseo/client/internal/daemon-client` is an explicit package export and is required because the public 0.9 facade still closes over an inaccessible driver and exposes none of the checkout RPCs. Constructing a second client for checkout would create a prohibited second daemon connection. The unavailable states remain explicit; authoritative bounded timeline fetches replace unsupported live delivery.
+Direct internal imports: **one**, confined to `main/SpadePaseoAdapter.ts`. `@getpaseo/client/internal/daemon-client` is an explicit package export and is required because the public 0.14 facade still closes over an inaccessible driver and exposes none of the checkout RPCs. Constructing a second client for checkout would create a prohibited second daemon connection. The unavailable states remain explicit; authoritative bounded timeline fetches replace unsupported live delivery.
 
 ## Deterministic coverage
 
@@ -84,6 +86,24 @@ xvfb-run -a npx playwright test \
 ```
 
 ## Isolated real Paseo validation
+
+### Paseo 0.14.0 revalidation and full-run attempt (2026-11-01)
+
+The 0.14.0 upgrade needed no RPC-shape change: every driver method the adapter uses kept its signature, the client now sends `all_providers` and owned-subscription capabilities by default, and only the `appVersion` constant changed. Against an isolated CLI/daemon 0.14.0 home (`127.0.0.1:17714`, relay/MCP injection/browser tools disabled; the user daemon was stopped and untouched), the bundled validator passed with `claude/claude-haiku-4-5`: root and explicit child reached `idle` in one workspace, the child reported the root as exact parent, both timelines returned two events, repeated refetch was stable, and both were archived.
+
+A full `paseo-issue-to-pr` re-run with Claude agents was then started through the shell UI against fixture issue [`skflowne/spade-fixture#9`](https://github.com/skflowne/spade-fixture/issues/9) (same scope as #1, created to avoid colliding with open PR #7). The shell loaded the native Issue, created WorkItem `work-item-6`, opened workspace `wks_7aacd46489973a82`, and spawned root `f472fe87-73dc-4026-a0cc-a25ea73e3fce` (`claude/claude-opus-5-5`). Authoritative refresh succeeded with no `Agent not found` or connection error. The run produced no descendants: Paseo started the root in Claude's `default` (always ask) permission mode, its first preflight `Bash` request waited for approval, and P3 can neither choose a mode at spawn nor show or answer a pending permission. The UI showed one managed agent (`running`), one workspace (`needs_input`), no provider-native rows, and the Issue node overlapping the workspace node. That run was abandoned.
+
+**Re-run with `bypassPermissions` (fixture [#9](https://github.com/skflowne/spade-fixture/issues/9)).** The root `60208ecc-67ab-4f89-a814-2eb4fc9fa5ad` was spawned through the shell in `bypassPermissions`. Its prompt also told it to launch every agent with `--provider claude --mode bypassPermissions`, because Paseo has no daemon-wide default mode and agents the root launches take their mode only from its own `paseo run` flags. The workflow completed with no permission prompts. Implementation agent `b93ea938-…` opened [PR #10](https://github.com/skflowne/spade-fixture/pull/10), drift-review agent `42138925-…` found nothing, and the root posted its final report and archived both children. The shell driver stopped observing midway. After the run, a relaunch against the same ledger reconciled root, both descendants (exact `delegated` edges), and three workspaces (`main`, `feature/issue-9-vue-scaffold`, `review/pr-10-r1-…`) with no error. Archived children still showed `idle`. PR #10 had no PullRequest node because the skill created it outside the generic checkout action, and the Issue node still overlapped the root workspace node.
+
+**Default-mode run and background workspaces (fixture [#11](https://github.com/skflowne/spade-fixture/issues/11)).** The shell's Mode field now defaults to `bypassPermissions`. Root `154b3700-c6d9-4ab6-8c22-c0241cdd941c` was spawned with no mode override and started in `bypassPermissions`. Children `a16a31ee-…` (implementation, opened [PR #12](https://github.com/skflowne/spade-fixture/pull/12)) and `6d72c9d0-…` (review) also ran in `bypassPermissions` with no pending permissions. This time the root created the child workspaces as Paseo *background* workspaces. Paseo 0.14 omits those workspaces and their agents from `fetchAgents`/`fetchWorkspaces` and their update subscriptions unless the request sets `includeBackground`, so the live shell showed only the root for seven minutes. The CLI's `ls` and `archive` hide them in the same way. The adapter now sets `includeBackground: true` on every agent/workspace list and observation. A relaunch of the rebuilt shell against the same ledger, while the agents were running, immediately reconciled the root, both children with exact `delegated` edges, and all three workspaces. The run was stopped deliberately after that check, and its agents were archived. PR #12 remains open and unreviewed.
+
+**Remaining gaps closed (2026-11-01).** All against the same isolated 0.14.0 daemon.
+- *Archived status:* archived agents report their last lifecycle status (`idle`) plus `archivedAt`, so the adapter now presents them as `archived`.
+- *Pending permissions:* a `claude/claude-haiku-4-5` root was spawned in `default` mode and asked to `touch` a `/tmp` file. Its Bash request appeared on the agent node with the request input and Allow/Deny controls. Allow, clicked in the shell, reached Paseo through `respond-paseo-permission`, and the agent ran the command and replied `DONE` 2 s later.
+- *Provider-native subagents:* a Claude sub-agent started through the Task tool appeared as a provider-subagent node (`completed`, two timeline events) with an exact `delegated` edge.
+- *PR discovery:* `main/pullRequestDiscovery.ts` asks every connected, bound workspace with a branch and no linked PullRequest for its pull request after each snapshot, using the existing `checkout-pull-request-status` integration, and retries at most once a minute per workspace/branch. Relaunching against the #9 ledger linked PR #10 to the implementation workspace with a `derived` edge within 5 s.
+- *Placement:* new nodes take the first two-column slot whose presented rectangle clears every member by 24 px. Placeholder-only groups keep the original 244 × 140 grid. A fresh Issue → three workspaces/agents → PR sequence placed eight nodes with no overlap. Existing ledgers keep their persisted positions.
+- *Node layout fix:* agent node bodies now pin their single grid column to the node width; a wide conversation `<pre>` had been pushing content off the right edge.
 
 ### Paseo 0.9.2 revalidation (2026-09-24)
 
@@ -253,7 +273,7 @@ The unchanged `/skill:paseo-issue-to-pr` run against `skflowne/spade-fixture#1` 
 | Question | Evidence-backed answer |
 |---|---|
 | Is explicit parent-agent identity sufficient? | Paseo exposed five managed agents: one root and four descendants with the root's exact durable parent ID. Those facts are sufficient to relate the managed tree externally to one WorkItem without stage inference. Integrated SPADE presentation failed because exact-root refresh repeatedly returned `Agent not found` before descendant reconciliation (cause below). |
-| Which resources cannot be related durably? | Provider-native descendants remain unresolved because P3 exposes that capability as unavailable. Managed agent/workspace relations were durable in Paseo, but the integrated failure prevented descendant agent nodes and delegated edges. |
+| Which resources cannot be related durably? | Provider-native descendants were unavailable in this run; on Paseo 0.14 they are read from loaded, unarchived agents (see the 0.14.0 revalidation). Managed agent/workspace relations were durable in Paseo, but the integrated failure prevented descendant agent nodes and delegated edges. |
 | Are multiple opaque workspaces understandable? | All five exact workspace identities, branches, and referencing agents were preserved without role/lanes. The final canvas was not fully understandable: workspace `node-13` and PullRequest `node-14` shared one position, hiding the fifth workspace behind the PR. The identity survived; the presentation did not. |
 | Which Paseo operations required internal APIs? | One confined `DaemonClient` boundary handled connection, readiness, agent/workspace reads, subscriptions, timeline tails, and checkout RPCs. The run supports requesting stable public connection/readiness, exact-agent reconciliation diagnostics, provider-native identity, normalized restart-stable timeline semantics, selected-workspace checkout, and typed PR-status APIs. The exact-agent failure was not a call-shape problem: Paseo 0.4 shows agents from providers other than claude/codex/opencode only to sessions whose `appVersion` parses as semver ≥ 0.1.45 (`isProviderVisibleToClient` in the daemon's `session.js`). The adapter sent `spade-p3-paseo-bridge`, so the `pi` root and descendants were absent from SPADE's listing, exact fetch, and subscriptions, while spawn replies and the Paseo CLI still saw them. The adapter now sends `0.4.0`. |
 | What future SPADE command contract is needed? | Keep typed commands separate: create a WorkItem with task/source/status, then spawn or attach an agent into an explicit stable WorkItem ID with caller-selected workspace/cwd/provider/model/prompt. Persist the returned opaque agent/workspace identities before refresh and bind one root to one WorkItem. Do not let prompts, titles, branches, skill names, paths, or ordering choose membership or role. |
@@ -264,7 +284,7 @@ The unchanged `/skill:paseo-issue-to-pr` run against `skflowne/spade-fixture#1` 
 
 Observed facts select native GitHub Issue and PullRequest entities with an `Open on GitHub` escape hatch, and a WorkItem Group specialization whose explicit semantic membership can contain many opaque agents/workspaces. Ordinary Groups remain visual hulls. SPADE does not understand or require `paseo-issue-to-pr` stages.
 
-Provider-native discovery, bounded timeline identity across daemon restart, complete managed-descendant presentation, canvas collision avoidance, and fixture workflow/scope result remain unresolved prototype findings—not production guarantees.
+Bounded timeline identity across daemon restart, provider-native coverage under closed or archived agents, and the fixture workflow/scope result remain unresolved prototype findings—not production guarantees. Managed-descendant presentation, provider-native discovery for live agents, and size-aware placement were later demonstrated on Paseo 0.14.0.
 
 ## Scope and residual limitations
 
@@ -273,7 +293,7 @@ Provider-native discovery, bounded timeline identity across daemon restart, comp
 - There is no file list/diff viewer, file node, editor, preview, or terminal.
 - Checkout actions are generic selected-workspace operations and contain no `paseo-issue-to-pr` stage names.
 - Concrete checkout mutations stay behind the single Paseo adapter; the renderer cannot bypass it with direct Git commands.
-- Provider-native live discovery and activated timeline streaming remain outside this bounded prototype.
+- Activated timeline streaming remains outside this bounded prototype; provider-native subagents are refreshed authoritatively, not streamed.
 - Server/feature version facts are validation evidence from the CLI status command, not runtime facts claimed by the adapter.
 - Node dragging remains presentation-only; no move command is persisted.
 - Edges communicate provenance and context only; they do not execute or schedule work.

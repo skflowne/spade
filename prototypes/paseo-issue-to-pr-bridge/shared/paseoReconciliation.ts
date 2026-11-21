@@ -8,6 +8,7 @@ import {
   type NormalizedConversationEventKind,
   type PaseoManagedAgentRuntime,
   type PaseoNodeRuntime,
+  type PaseoPendingPermission,
   type PaseoProviderSubagentRuntime,
   type PaseoWorkspaceRuntime,
   type PrototypeLedger,
@@ -24,6 +25,7 @@ export type PaseoAgentSnapshot = {
   status: string
   cwd: string
   updatedAt: string
+  pendingPermissions?: PaseoPendingPermission[]
 }
 
 export type PaseoWorkspaceSnapshot = {
@@ -52,6 +54,7 @@ export type PaseoTimelineSnapshot = {
 export type PaseoProviderSubagentSnapshot = {
   id: string
   parentAgentId: string
+  parentSubagentId?: string | null
   provider: string
   title: string | null
   status: string
@@ -66,6 +69,8 @@ export type PaseoAuthoritativeSnapshot = {
   agentPages: PaseoAgentSnapshot[][]
   workspacePages: PaseoWorkspaceSnapshot[][]
   providerSubagents: PaseoProviderSubagentSnapshot[]
+  // Parents whose provider subagents were read; when absent, every managed agent counts as observed.
+  observedSubagentParentIds?: string[]
   timelines: PaseoTimelineSnapshot[]
   refreshedAt: string
 }
@@ -100,7 +105,8 @@ export function reconcilePaseoWorkItem(
       cwd: agent.cwd,
       timeline: timeline
         ? normalizeTimelineEvents(timeline.entries, timeline.epoch)
-        : existingTimeline(next, managedAgentReference(agent.id))
+        : existingTimeline(next, managedAgentReference(agent.id)),
+      pendingPermissions: agent.pendingPermissions ?? []
     }
     const result = putPaseoResourceNode(
       next,
@@ -155,6 +161,7 @@ export function reconcilePaseoWorkItem(
       type: 'provider-subagent',
       state: 'connected',
       parentAgentId: subagent.parentAgentId,
+      parentSubagentId: subagent.parentSubagentId ?? null,
       provider: subagent.provider,
       status: subagent.status,
       cwd: subagent.cwd,
@@ -185,11 +192,22 @@ export function reconcilePaseoWorkItem(
     if (parent && child) desiredDelegatedEdges.push([parent.id, child.id])
   }
   for (const subagent of snapshot.providerSubagents) {
-    const parent = managedNodeByAgentId.get(subagent.parentAgentId)
+    const parent = subagent.parentSubagentId
+      ? providerNodeByKey.get(`${subagent.parentAgentId}\u0000${subagent.parentSubagentId}`) ??
+        managedNodeByAgentId.get(subagent.parentAgentId)
+      : managedNodeByAgentId.get(subagent.parentAgentId)
     const child = providerNodeByKey.get(`${subagent.parentAgentId}\u0000${subagent.id}`)
     if (parent && child) desiredDelegatedEdges.push([parent.id, child.id])
   }
 
+  if (snapshot.observedSubagentParentIds) {
+    next = markUnobservedProviderSubagentsStale(
+      next,
+      workItemId,
+      new Set(managedNodeByAgentId.keys()),
+      new Set(snapshot.observedSubagentParentIds)
+    )
+  }
   next = reconcileDelegatedEdges(next, workItemId, desiredDelegatedEdges)
   return {
     ...next,
@@ -348,6 +366,31 @@ function markExistingPaseoResourcesMissing(
   }
 }
 
+// A row under a present but unobservable parent (closed, archived, or list error) is retained, not missing.
+function markUnobservedProviderSubagentsStale(
+  ledger: PrototypeLedger,
+  workItemId: string,
+  presentParentIds: ReadonlySet<string>,
+  observedParentIds: ReadonlySet<string>
+): PrototypeLedger {
+  return {
+    ...ledger,
+    nodes: ledger.nodes.map((node) => {
+      const runtime = node.paseo
+      if (
+        node.workItemId !== workItemId ||
+        runtime?.type !== 'provider-subagent' ||
+        runtime.state !== 'missing' ||
+        !presentParentIds.has(runtime.parentAgentId) ||
+        observedParentIds.has(runtime.parentAgentId)
+      ) {
+        return node
+      }
+      return { ...node, paseo: { ...runtime, state: 'stale' } }
+    })
+  }
+}
+
 export function putPaseoResourceNode(
   ledger: PrototypeLedger,
   workItemId: string,
@@ -389,7 +432,7 @@ function reconcileDelegatedEdges(
       if (edge.relation !== 'delegated') return true
       const target = nodeById.get(edge.toNodeId)
       if (target?.workItemId !== workItemId) return true
-      if (target.paseo?.state === 'missing') return true
+      if (target.paseo?.state === 'missing' || target.paseo?.state === 'stale') return true
       return desired.has(`${edge.fromNodeId}\u0000${edge.toNodeId}`)
     })
   }

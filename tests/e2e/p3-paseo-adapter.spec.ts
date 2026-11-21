@@ -352,6 +352,12 @@ test('uses listed agent snapshots when exact lookup disagrees and probes absent 
       calls.agentArchives.push(id)
       return { archivedAt: '2026-08-20T10:02:00Z' }
     },
+    listProviderSubagents: async (parentAgentId: string) => ({
+      requestId: 'subagents',
+      parentAgentId,
+      subagents: [],
+      error: null
+    }),
     fetchAgentTimeline: async (id: string) => {
       calls.timelines.push(id)
       return {
@@ -394,6 +400,7 @@ test('uses listed agent snapshots when exact lookup disagrees and probes absent 
     cwd: '/ignored/by/opaque-workspace',
     provider: 'claude',
     model: 'model-1',
+    mode: 'bypassPermissions',
     prompt: 'Caller prompt',
     title: 'Caller title'
   })).toMatchObject({ id: 'created', workspaceId: 'workspace-a' })
@@ -411,9 +418,16 @@ test('uses listed agent snapshots when exact lookup disagrees and probes absent 
   expect(calls.connect).toBe(1)
   expect(calls.close).toBe(1)
   expect(calls.observations).toEqual([
-    { agents: { filter: { includeArchived: true }, page: { limit: 1 } } },
-    { workspaces: { page: { limit: 1 } } },
-    { events: ['providers_snapshot_update'] }
+    { agents: { filter: { includeArchived: true }, includeBackground: true, page: { limit: 1 } } },
+    { workspaces: { includeBackground: true, page: { limit: 1 } } },
+    {
+      events: [
+        'providers_snapshot_update',
+        'agent.provider_subagents.update',
+        'agent_permission_request',
+        'agent_permission_resolved'
+      ]
+    }
   ])
   expect(calls.releasedObservations).toBe(3)
   expect(calls.agentLists.every((options) => !('subscribe' in (options as object)))).toBe(true)
@@ -429,6 +443,7 @@ test('uses listed agent snapshots when exact lookup disagrees and probes absent 
       provider: 'claude',
       model: 'model-1',
       cwd: '/opaque/workspace-a',
+      modeId: 'bypassPermissions',
       title: 'Caller title'
     },
     cwd: '/opaque/workspace-a',
@@ -866,6 +881,7 @@ class FakeAdapter implements PaseoAdapterPort {
   async spawnAgent(): Promise<PaseoAgentSnapshot> {
     return agent('root', null, 'workspace-root')
   }
+  async respondToPermission(): Promise<void> {}
   async attachAgent(id: string): Promise<PaseoAgentSnapshot | null> {
     return this.missingAgentIds.has(id) ? null : agent(id, null, 'workspace-root')
   }

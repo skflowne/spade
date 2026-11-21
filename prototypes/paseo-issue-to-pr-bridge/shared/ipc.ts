@@ -1,4 +1,4 @@
-import type { PrototypeCommand } from './commands'
+import { isPaseoPermissionBehavior, type PrototypeCommand } from './commands'
 import type { P3IntegrationRequest, P3IntegrationResult } from './integration'
 import {
   isProvenanceRelation,
@@ -83,6 +83,7 @@ export function isPrototypeCommand(value: unknown): value is PrototypeCommand {
           'cwd',
           'provider',
           'model',
+          'mode',
           'prompt',
           'title'
         ]) &&
@@ -91,6 +92,7 @@ export function isPrototypeCommand(value: unknown): value is PrototypeCommand {
         hasText(value.cwd) &&
         hasText(value.provider) &&
         hasText(value.model) &&
+        (value.mode === undefined || hasText(value.mode)) &&
         hasText(value.prompt) &&
         (value.title === undefined || hasText(value.title))
       )
@@ -104,6 +106,13 @@ export function isPrototypeCommand(value: unknown): value is PrototypeCommand {
       return (
         hasOnlyKeys(value, ['type', 'workItemId']) &&
         hasText(value.workItemId)
+      )
+    case 'respond-paseo-permission':
+      return (
+        hasOnlyKeys(value, ['type', 'agentId', 'requestId', 'behavior']) &&
+        hasText(value.agentId) &&
+        hasText(value.requestId) &&
+        isPaseoPermissionBehavior(value.behavior)
       )
     default:
       return false

@@ -13,12 +13,24 @@ import { PASEO_TIMELINE_LIMIT, type PaseoConnectionState } from '../shared/model
 import {
   type PaseoAgentSnapshot,
   type PaseoAuthoritativeSnapshot,
+  type PaseoProviderSubagentSnapshot,
   type PaseoTimelineSnapshot,
   type PaseoWorkspaceSnapshot
 } from '../shared/paseoReconciliation'
+import type { PaseoPermissionBehavior } from '../shared/commands'
 
 const PAGE_LIMIT = 200
 const PARENT_AGENT_ID_LABEL = 'paseo.parent-agent-id'
+const ARCHIVED_AGENT_STATUS = 'archived'
+// Provider-subagent reads resume unloaded agents from storage, and Paseo rejects archived parents.
+const UNOBSERVABLE_SUBAGENT_PARENT_STATUSES = new Set([ARCHIVED_AGENT_STATUS, 'closed'])
+// Session events that change provider-subagent rows or pending permissions without an agent_update.
+const REFRESH_EVENTS = [
+  'providers_snapshot_update',
+  'agent.provider_subagents.update',
+  'agent_permission_request',
+  'agent_permission_resolved'
+] as const
 
 type DriverMethod =
   | 'connect'
@@ -31,6 +43,9 @@ type DriverMethod =
   | 'observeEvents'
   | 'fetchAgent'
   | 'fetchAgentTimeline'
+  | 'listProviderSubagents'
+  | 'fetchProviderSubagentTimeline'
+  | 'respondToPermission'
   | 'createAgent'
   | 'archiveAgent'
   | 'fetchWorkspaces'
@@ -62,6 +77,7 @@ export type SpawnAgentInput = {
   cwd: string
   provider: string
   model: string
+  mode?: string
   prompt: string
   title?: string
   parentAgentId?: string
@@ -77,7 +93,7 @@ export type SpadePaseoAdapterOptions = {
 // Daemons hide agents from providers other than claude/codex/opencode unless the session
 // sends the all_providers capability (client >= 0.9) or an appVersion parsing as semver
 // >= 0.1.45, so appVersion must stay a version, not a name.
-export const PASEO_CLIENT_APP_VERSION = '0.9.2'
+export const PASEO_CLIENT_APP_VERSION = '0.14.0'
 const PROVIDER_READY_TIMEOUT_MS = 60_000
 const PROVIDER_READY_POLL_MS = 250
 
@@ -118,21 +134,24 @@ export class SpadePaseoAdapter {
     if (!this.cleanupDriverSubscriptions) {
       const unsubscribeAgent = this.driver.on('agent_update', () => this.emit({ type: 'refresh' }))
       const unsubscribeWorkspace = this.driver.on('workspace_update', () => this.emit({ type: 'refresh' }))
-      const unsubscribeProvider = this.driver.on('providers_snapshot_update', () => this.emit({ type: 'refresh' }))
+      const unsubscribeEvents = REFRESH_EVENTS.map((type) =>
+        this.driver.on(type, () => this.emit({ type: 'refresh' }))
+      )
       this.cleanupDriverSubscriptions = () => {
         unsubscribeAgent()
         unsubscribeWorkspace()
-        unsubscribeProvider()
+        for (const unsubscribe of unsubscribeEvents) unsubscribe()
       }
     }
 
     await this.driver.connect()
     if (this.observations.length === 0) {
       // Daemons send agent, workspace, and provider updates only while an owned subscription is open.
+      // Paseo >= 0.14 hides agent-created background workspaces and their agents unless includeBackground is set.
       this.observations = [
-        this.driver.observeAgents({ filter: { includeArchived: true }, page: { limit: 1 } }),
-        this.driver.observeWorkspaces({ page: { limit: 1 } }),
-        this.driver.observeEvents(['providers_snapshot_update'])
+        this.driver.observeAgents({ filter: { includeArchived: true }, includeBackground: true, page: { limit: 1 } }),
+        this.driver.observeWorkspaces({ includeBackground: true, page: { limit: 1 } }),
+        this.driver.observeEvents([...REFRESH_EVENTS])
       ]
       await Promise.all(this.observations.map(({ ready }) => ready))
     }
@@ -199,6 +218,7 @@ export class SpadePaseoAdapter {
         provider: input.provider,
         model: input.model,
         cwd,
+        ...(input.mode ? { modeId: input.mode } : {}),
         ...(input.title ? { title: input.title } : {})
       },
       cwd,
@@ -216,6 +236,14 @@ export class SpadePaseoAdapter {
 
   async archiveAgent(agentId: string): Promise<string> {
     return (await this.driver.archiveAgent(agentId)).archivedAt
+  }
+
+  async respondToPermission(agentId: string, requestId: string, behavior: PaseoPermissionBehavior): Promise<void> {
+    await this.driver.respondToPermission(
+      agentId,
+      requestId,
+      behavior === 'allow' ? { behavior: 'allow' } : { behavior: 'deny', message: 'Denied in SPADE.' }
+    )
   }
 
   async fetchAuthoritative(
@@ -263,14 +291,57 @@ export class SpadePaseoAdapter {
       })
     }
 
+    const providerSubagents: PaseoProviderSubagentSnapshot[] = []
+    const observedSubagentParentIds: string[] = []
+    for (const agentId of timelineAgentIds) {
+      const status = agentById.get(agentId)?.status
+      if (!status || UNOBSERVABLE_SUBAGENT_PARENT_STATUSES.has(status)) continue
+      const subagents = await this.fetchProviderSubagents(agentId)
+      if (!subagents) continue
+      observedSubagentParentIds.push(agentId)
+      providerSubagents.push(...subagents)
+    }
+
     return {
       rootAgentId,
       agentPages: [allAgents],
       workspacePages: [[...workspaceById.values()]],
-      providerSubagents: [],
+      providerSubagents,
+      observedSubagentParentIds,
       timelines,
       refreshedAt: this.now()
     }
+  }
+
+  // Returns null when the parent's provider subagents cannot be observed; existing rows then stay stale.
+  private async fetchProviderSubagents(parentAgentId: string): Promise<PaseoProviderSubagentSnapshot[] | null> {
+    const listed = await this.driver.listProviderSubagents(parentAgentId)
+    if (listed.error) return null
+    const result: PaseoProviderSubagentSnapshot[] = []
+    for (const subagent of listed.subagents) {
+      const timeline = await this.driver.fetchProviderSubagentTimeline(parentAgentId, subagent.id, {
+        direction: 'tail',
+        limit: PASEO_TIMELINE_LIMIT
+      })
+      result.push({
+        id: subagent.id,
+        parentAgentId,
+        parentSubagentId: subagent.parentSubagentId ?? null,
+        provider: subagent.provider,
+        title: subagent.title ?? subagent.description,
+        status: subagent.status,
+        cwd: subagent.cwd ?? null,
+        updatedAt: subagent.updatedAt,
+        timelineEpoch: timeline.epoch,
+        timeline: timeline.rows.map((row) => ({
+          timestamp: row.timestamp,
+          seqStart: row.seq,
+          seqEnd: row.seq,
+          item: row.item
+        }))
+      })
+    }
+    return result
   }
 
   async checkoutStatus(workspaceId: string): Promise<CheckoutStatus> {
@@ -383,6 +454,7 @@ export class SpadePaseoAdapter {
     do {
       const result = await this.driver.fetchAgents({
         filter: { includeArchived: true },
+        includeBackground: true,
         page: { limit: PAGE_LIMIT, ...(cursor ? { cursor } : {}) }
       })
       pages.push(result.entries.map(({ agent }) => toAgentSnapshot(agent)))
@@ -396,6 +468,7 @@ export class SpadePaseoAdapter {
     let cursor: string | undefined
     do {
       const result = await this.driver.fetchWorkspaces({
+        includeBackground: true,
         page: { limit: PAGE_LIMIT, ...(cursor ? { cursor } : {}) }
       })
       pages.push(result.entries.map((workspace) => toWorkspaceSnapshot(workspace, this.now())))
@@ -408,6 +481,7 @@ export class SpadePaseoAdapter {
     let cursor: string | undefined
     do {
       const result = await this.driver.fetchWorkspaces({
+        includeBackground: true,
         page: { limit: PAGE_LIMIT, ...(cursor ? { cursor } : {}) }
       })
       const workspace = result.entries.find(({ id }) => id === workspaceId)
@@ -442,10 +516,29 @@ function toAgentSnapshot(agent: PaseoAgent): PaseoAgentSnapshot {
     title: agent.title,
     provider: agent.provider,
     model: agent.model,
-    status: agent.status,
+    // Archived agents keep their last lifecycle status; archival is the fact SPADE must show.
+    status: agent.archivedAt ? ARCHIVED_AGENT_STATUS : agent.status,
     cwd: agent.cwd,
-    updatedAt: agent.updatedAt
+    updatedAt: agent.updatedAt,
+    pendingPermissions: (agent.pendingPermissions ?? []).map((request) => ({
+      id: request.id,
+      kind: request.kind,
+      name: request.name,
+      title: request.title ?? null,
+      description: request.description ?? permissionInputSummary(request.input)
+    }))
   }
+}
+
+const PERMISSION_INPUT_SUMMARY_LIMIT = 240
+
+// Without a provider description, the raw request input is the only evidence of what is being approved.
+function permissionInputSummary(input: unknown): string | null {
+  if (input === undefined || input === null) return null
+  const text = JSON.stringify(input)
+  return text.length > PERMISSION_INPUT_SUMMARY_LIMIT
+    ? `${text.slice(0, PERMISSION_INPUT_SUMMARY_LIMIT - 1)}…`
+    : text
 }
 
 function toWorkspaceSnapshot(workspace: PaseoWorkspace, fallbackUpdatedAt: string): PaseoWorkspaceSnapshot {
@@ -500,7 +593,7 @@ function mapConnectionState(connection: ConnectionState): {
   }
 }
 
-// Client 0.9 routes providers_snapshot_update only to owned subscriptions, so readiness is
+// Clients >= 0.9 route providers_snapshot_update only to owned subscriptions, so readiness is
 // polled; only the provider being spawned has to finish discovery.
 async function waitForProviderReady(driver: PaseoDaemonDriver, cwd: string, provider: string): Promise<void> {
   if (driver.getLastServerInfoMessage()?.features?.providersSnapshotCwd !== true) {

@@ -4,11 +4,14 @@ import {
   type ExternalResourceReference,
   type PlaceholderKind,
   sameResourceIdentity,
+  type Point,
   type PrototypeGroup,
   type PrototypeLedger,
+  type PrototypeNode,
   type ProvenanceRelation,
   type WorkItemStatus
 } from './model'
+import { nodePresentationSize, presentationSizeForKind } from './projection'
 
 export type PrototypeCommand =
   | { type: 'create-group'; name: string }
@@ -43,11 +46,24 @@ export type PrototypeCommand =
       cwd: string
       provider: string
       model: string
+      mode?: string
       prompt: string
       title?: string
     }
   | { type: 'attach-agent'; targetGroup: string; agentId: string }
   | { type: 'refresh-paseo'; workItemId: string }
+  | {
+      type: 'respond-paseo-permission'
+      agentId: string
+      requestId: string
+      behavior: PaseoPermissionBehavior
+    }
+
+export type PaseoPermissionBehavior = 'allow' | 'deny'
+
+export function isPaseoPermissionBehavior(value: unknown): value is PaseoPermissionBehavior {
+  return value === 'allow' || value === 'deny'
+}
 
 export type PaseoCommand = Extract<
   PrototypeCommand,
@@ -59,6 +75,7 @@ export type PaseoCommand = Extract<
       | 'spawn-agent'
       | 'attach-agent'
       | 'refresh-paseo'
+      | 'respond-paseo-permission'
   }
 >
 
@@ -69,7 +86,8 @@ export function isPaseoCommand(command: PrototypeCommand): command is PaseoComma
     'attach-workspace',
     'spawn-agent',
     'attach-agent',
-    'refresh-paseo'
+    'refresh-paseo',
+    'respond-paseo-permission'
   ].includes(command.type)
 }
 
@@ -125,6 +143,7 @@ export function applyPrototypeCommand(
     case 'spawn-agent':
     case 'attach-agent':
     case 'refresh-paseo':
+    case 'respond-paseo-permission':
       throw new Error(`Command “${command.type}” requires the Paseo adapter service.`)
   }
 }
@@ -193,7 +212,6 @@ function putPlaceholder(
         `Resource “${command.resourceRef.provider}:${command.resourceRef.kind}:${command.resourceRef.id}” is already attached as ${existing.kind}, not ${command.nodeKind}.`
       )
     }
-    const members = ledger.nodes.filter(({ id, groupId }) => id !== existing.id && groupId === group.id).length
     const updated = {
       ...existing,
       groupId: group.id,
@@ -202,7 +220,7 @@ function putPlaceholder(
       position:
         existing.groupId === group.id
           ? existing.position
-          : groupMemberPosition(group, members),
+          : freeGroupMemberPosition(ledger, group, existing.kind, existing.id),
       resourceRef: command.resourceRef
     }
     return {
@@ -216,7 +234,6 @@ function putPlaceholder(
 
   const sequence = ledger.nextSequence
   const id = `node-${sequence}`
-  const members = ledger.nodes.filter(({ groupId }) => groupId === group.id).length
   return {
     ledger: {
       ...ledger,
@@ -230,7 +247,7 @@ function putPlaceholder(
           workItemId: group.kind === 'work-item' ? group.id : null,
           kind: command.nodeKind,
           title: requiredText(command.title, 'Placeholder title'),
-          position: groupMemberPosition(group, members),
+          position: freeGroupMemberPosition(ledger, group, command.nodeKind),
           resourceRef: command.resourceRef,
           paseo: null
         }
@@ -294,11 +311,43 @@ function requireNode(ledger: PrototypeLedger, id: string): void {
   if (!ledger.nodes.some((node) => node.id === id)) throw new Error(`No node has stable ID “${id}”.`)
 }
 
-export function groupMemberPosition(group: PrototypeGroup, memberIndex: number): { x: number; y: number } {
-  return {
-    x: group.position.x + 36 + (memberIndex % 2) * 244,
-    y: group.position.y + 76 + Math.floor(memberIndex / 2) * 140
+const MEMBER_INSET: Point = { x: 36, y: 76 }
+const MEMBER_COLUMN_WIDTH = 244
+const MEMBER_ROW_WIDTH = 2 * MEMBER_COLUMN_WIDTH
+const MEMBER_GAP = 24
+const MEMBER_SCAN_STEP = 20
+
+// First top-to-bottom, left-to-right slot whose presented rectangle clears every member by MEMBER_GAP.
+// Placeholder-only groups land on the original two-column 244 × 140 grid.
+export function freeGroupMemberPosition(
+  ledger: PrototypeLedger,
+  group: PrototypeGroup,
+  kind: PrototypeNode['kind'],
+  excludeNodeId?: string
+): Point {
+  const size = presentationSizeForKind(kind)
+  const occupied = ledger.nodes
+    .filter(({ id, groupId }) => groupId === group.id && id !== excludeNodeId)
+    .map((node) => ({ ...node.position, ...nodePresentationSize(node) }))
+  const rowWidth = Math.max(MEMBER_ROW_WIDTH, size.width)
+  for (let y = group.position.y + MEMBER_INSET.y; ; y += MEMBER_SCAN_STEP) {
+    for (let offset = 0; offset + size.width <= rowWidth; offset += MEMBER_COLUMN_WIDTH) {
+      const candidate = { x: group.position.x + MEMBER_INSET.x + offset, y, ...size }
+      if (occupied.every((rectangle) => !rectanglesTouch(candidate, rectangle))) return { x: candidate.x, y }
+    }
   }
+}
+
+function rectanglesTouch(
+  left: Point & { width: number; height: number },
+  right: Point & { width: number; height: number }
+): boolean {
+  return (
+    left.x < right.x + right.width + MEMBER_GAP &&
+    right.x < left.x + left.width + MEMBER_GAP &&
+    left.y < right.y + right.height + MEMBER_GAP &&
+    right.y < left.y + left.height + MEMBER_GAP
+  )
 }
 
 function groupPosition(index: number): { x: number; y: number } {

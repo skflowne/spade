@@ -13,6 +13,7 @@ import {
   type PaseoWorkspaceSnapshot
 } from '../shared/paseoReconciliation'
 import {
+  createInitialPaseoState,
   type PaseoConnectionState,
   type PaseoNodeRuntime,
   type PaseoWorkItemBinding,
@@ -43,6 +44,7 @@ export type PaseoAdapterPort = Pick<
   | 'spawnAgent'
   | 'attachAgent'
   | 'fetchAuthoritative'
+  | 'respondToPermission'
 >
 
 export class PrototypeCommandService {
@@ -67,6 +69,11 @@ export class PrototypeCommandService {
     this.ledger = initial
 
     if (this.adapter) {
+      // Capabilities describe this adapter build, not persisted facts.
+      this.ledger = {
+        ...this.ledger,
+        paseo: { ...this.ledger.paseo, capabilities: createInitialPaseoState().capabilities }
+      }
       this.initializingAdapter = true
       this.unsubscribeAdapter = this.adapter.subscribe((notification) => {
         if (notification.type === 'refresh') this.requestAuthoritativeRefresh()
@@ -160,6 +167,7 @@ export class PrototypeCommandService {
           cwd: command.cwd,
           provider: command.provider,
           model: command.model,
+          mode: command.mode,
           prompt: command.prompt,
           title: command.title
         })
@@ -186,6 +194,19 @@ export class PrototypeCommandService {
       case 'refresh-paseo': {
         const binding = requireBinding(ledger, command.workItemId)
         return this.refreshBinding(ledger, binding)
+      }
+      case 'respond-paseo-permission': {
+        const agent = ledger.nodes.find(
+          ({ paseo, resourceRef }) => paseo?.type === 'managed-agent' && resourceRef.id === command.agentId
+        )
+        if (agent?.paseo?.type !== 'managed-agent') {
+          throw new Error(`Paseo agent ${command.agentId} is not presented by SPADE.`)
+        }
+        if (!agent.paseo.pendingPermissions?.some(({ id }) => id === command.requestId)) {
+          throw new Error(`Paseo agent ${command.agentId} has no pending permission ${command.requestId}.`)
+        }
+        await this.adapter.respondToPermission(command.agentId, command.requestId, command.behavior)
+        return this.refreshAllBindings(ledger)
       }
     }
   }
@@ -403,7 +424,8 @@ function managedAgentRuntime(
     model: agent.model,
     status: agent.status,
     cwd: agent.cwd,
-    timeline
+    timeline,
+    pendingPermissions: agent.pendingPermissions ?? []
   }
 }
 

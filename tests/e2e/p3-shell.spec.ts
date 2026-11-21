@@ -259,7 +259,7 @@ test('renders live Paseo resource states and bounded conversation expansion defa
     const window = await application.firstWindow()
     await expect(window.getByTestId('paseo-connection')).toContainText('CONNECTED')
     await expect(window.getByTestId('paseo-capabilities')).toContainText(
-      'provider-subagents · UNAVAILABLE'
+      'provider-subagents · AVAILABLE'
     )
 
     const managed = window.locator('[data-paseo-type="managed-agent"]')

@@ -20,7 +20,7 @@ import {
   type CheckoutStatus,
   type SelectedCheckoutStatus
 } from '../../shared/checkout'
-import type { PrototypeCommand } from '../../shared/commands'
+import type { PaseoPermissionBehavior, PrototypeCommand } from '../../shared/commands'
 import type { GitHubIssue, GitHubPullRequest } from '../../shared/github'
 import type {
   P3IntegrationRequest,
@@ -29,6 +29,7 @@ import type {
 import type {
   NormalizedConversationEvent,
   PaseoNodeRuntime,
+  PaseoPendingPermission,
   PrototypeLedger,
   PrototypeNode,
   WorkItemStatus
@@ -48,6 +49,7 @@ type HullData = Record<string, unknown> & {
 }
 type PlaceholderData = Record<string, unknown> & {
   node: Extract<PrototypeNode, { kind: 'agent' | 'workspace' }>
+  onRespondPermission: (requestId: string, behavior: PaseoPermissionBehavior) => void
 }
 type GitHubIssueData = Record<string, unknown> & {
   issue: GitHubIssue
@@ -68,6 +70,7 @@ type P3FlowNode = HullNode | PlaceholderNode | GitHubIssueFlowNode | GitHubPullR
 type NodeActions = {
   openGitHub(repository: string, resource: 'issues' | 'pull', number: number): void
   refreshPullRequest(nodeId: string): void
+  respondPermission(agentId: string, requestId: string, behavior: PaseoPermissionBehavior): void
 }
 
 function GroupHull({ data }: NodeProps<HullNode>): React.JSX.Element {
@@ -124,6 +127,7 @@ function NodeFrame({
 
 function GenericNode({ data }: NodeProps<PlaceholderNode>): React.JSX.Element {
   const { node } = data
+  const pending = node.paseo?.type === 'managed-agent' ? node.paseo.pendingPermissions ?? [] : []
   return (
     <NodeFrame
       icon={node.kind === 'agent' ? 'A' : 'W'}
@@ -132,6 +136,9 @@ function GenericNode({ data }: NodeProps<PlaceholderNode>): React.JSX.Element {
       resourceState={node.paseo?.state}
       paseoType={node.paseo?.type ?? 'placeholder'}
     >
+      {pending.length > 0 && (
+        <PendingPermissions requests={pending} onRespond={data.onRespondPermission} />
+      )}
       {node.paseo ? <PaseoResource runtime={node.paseo} /> : (
         <>
           <span>Semantic work item</span>
@@ -139,6 +146,27 @@ function GenericNode({ data }: NodeProps<PlaceholderNode>): React.JSX.Element {
         </>
       )}
     </NodeFrame>
+  )
+}
+
+function PendingPermissions({
+  requests,
+  onRespond
+}: {
+  requests: readonly PaseoPendingPermission[]
+  onRespond: (requestId: string, behavior: PaseoPermissionBehavior) => void
+}): React.JSX.Element {
+  return (
+    <ul className="pending-permissions" aria-label="Pending permissions">
+      {requests.map((request) => (
+        <li key={request.id}>
+          <b title={`Permission requested: ${request.title ?? request.name}`}>{request.title ?? request.name}</b>
+          <button type="button" className="primary" onClick={() => onRespond(request.id, 'allow')}>Allow</button>
+          <button type="button" onClick={() => onRespond(request.id, 'deny')}>Deny</button>
+          {request.description && <span>{request.description}</span>}
+        </li>
+      ))}
+    </ul>
   )
 }
 
@@ -350,7 +378,10 @@ function toFlowNodes(
       position: node.position,
       dragHandle: '.generic-node__chrome',
       style: { width: size.width, zIndex: 2 },
-      data: { node }
+      data: {
+        node,
+        onRespondPermission: (requestId, behavior) => actions.respondPermission(node.resourceRef.id, requestId, behavior)
+      }
     }
   })
   return [...hulls, ...resources]
@@ -384,6 +415,8 @@ export function App(): React.JSX.Element {
   const [agentId, setAgentId] = useState('')
   const [provider, setProvider] = useState('')
   const [model, setModel] = useState('')
+  // P3 has no permission surface, so unattended runs start without approval prompts unless the caller clears this.
+  const [mode, setMode] = useState('bypassPermissions')
   const [prompt, setPrompt] = useState('')
   const [workItemId, setWorkItemId] = useState('work-item-1')
   const [repository, setRepository] = useState('skflowne/spade-fixture')
@@ -439,15 +472,6 @@ export function App(): React.JSX.Element {
     void integrate({ type: 'github-pull-request-refresh', nodeId })
   }, [integrate])
 
-  const nodeActions = useMemo<NodeActions>(() => ({ openGitHub, refreshPullRequest }), [
-    openGitHub,
-    refreshPullRequest
-  ])
-
-  useEffect(() => {
-    if (ledger) setFlowNodes(toFlowNodes(ledger, focusedGroupId, nodeActions))
-  }, [focusedGroupId, ledger, nodeActions])
-
   useEffect(() => {
     if (!ledger?.nodes.length) return
     if (!fromNodeId) setFromNodeId(ledger.nodes[0].id)
@@ -470,6 +494,23 @@ export function App(): React.JSX.Element {
       setError(String(reason))
     }
   }, [])
+
+  const respondPermission = useCallback(
+    (agentId: string, requestId: string, behavior: PaseoPermissionBehavior): void => {
+      void run({ type: 'respond-paseo-permission', agentId, requestId, behavior })
+    },
+    [run]
+  )
+
+  const nodeActions = useMemo<NodeActions>(() => ({ openGitHub, refreshPullRequest, respondPermission }), [
+    openGitHub,
+    refreshPullRequest,
+    respondPermission
+  ])
+
+  useEffect(() => {
+    if (ledger) setFlowNodes(toFlowNodes(ledger, focusedGroupId, nodeActions))
+  }, [focusedGroupId, ledger, nodeActions])
 
   const onNodesChange = useCallback((changes: NodeChange<P3FlowNode>[]) => {
     setFlowNodes((current) => applyNodeChanges(changes, current))
@@ -698,6 +739,10 @@ export function App(): React.JSX.Element {
             <input value={model} onChange={(event) => setModel(event.target.value)} />
           </label>
           <label>
+            Mode
+            <input value={mode} onChange={(event) => setMode(event.target.value)} />
+          </label>
+          <label>
             Caller prompt
             <textarea value={prompt} onChange={(event) => setPrompt(event.target.value)} />
           </label>
@@ -711,6 +756,7 @@ export function App(): React.JSX.Element {
               cwd: paseoCwd,
               provider,
               model,
+              ...(mode.trim() ? { mode: mode.trim() } : {}),
               prompt
             })}
           >
