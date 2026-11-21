@@ -106,6 +106,14 @@ class FakePaseo implements PaseoPort {
     return agent
   }
 
+  async archiveAgent(agentId: string): Promise<string> {
+    this.require(`archiveAgent ${agentId}`)
+    const agent = this.agents.get(agentId)
+    if (!agent) throw new Error(`Agent ${agentId} not found`)
+    this.agents.set(agentId, { ...agent, archivedAt: OLD, status: 'closed' })
+    return OLD
+  }
+
   async getAgent(agentId: string): Promise<PaseoAgentSnapshot | null> {
     this.require(`getAgent ${agentId}`)
     return this.agents.get(agentId) ?? null
@@ -382,6 +390,40 @@ test('a spawn Paseo cannot serve fails with a clear error and creates no node', 
     expect(error.code).toBe('entity-create-failed')
     expect(error.message).toContain('Paseo is not connected')
     expect((await canvasOf(session, project)).nodes).toHaveLength(0)
+  })
+})
+
+test('a spawn whose node cannot be created archives the agent it just created, which is then never adopted', async () => {
+  await withFixture(async ({ project, open }) => {
+    const session = await open(new FakePaseo())
+    const rootNodeId = await spawnRoot(session, project)
+    const { nodeId: planNodeId } = await session.gateway.execute(
+      project.id,
+      { type: 'spawnChild', sourceNodeId: rootNodeId, node: { entityType: 'note', config: { body: 'plan' } }, origin: 'spawned' },
+      user
+    )
+    // The source node is removed while Paseo creates the agent.
+    session.paseo.onSpawn = async () => {
+      await session.gateway.execute(project.id, { type: 'removeNode', nodeId: planNodeId! }, user)
+    }
+    const actor: Actor = { kind: 'agent', nodeId: rootNodeId, agentId: 'spawned-1' }
+
+    const error = await rejection(
+      session.gateway.execute(project.id, { type: 'spawnChild', sourceNodeId: planNodeId!, node: agentSeed('Orphan'), origin: 'spawned' }, actor)
+    )
+    expect(error.code).toBe('unknown-node')
+    expect(session.paseo.calls.filter((call) => call.startsWith('archiveAgent'))).toEqual(['archiveAgent spawned-2'])
+
+    // Paseo still lists it as a child of the root agent; reconciliation must not give it a node.
+    session.paseo.updated('spawned-2')
+    session.paseo.updated('spawned-1')
+    await session.service.whenIdle()
+    const canvas = await canvasOf(session, project)
+    expect(nodesFor(canvas, 'agent', 'spawned-2')).toHaveLength(0)
+    expect(canvas.nodes.map((node) => node.id)).toEqual([rootNodeId])
+    // Only the agent created by the failed call was archived.
+    expect(session.paseo.count('archiveAgent')).toBe(1)
+    expect(session.paseo.agents.get('spawned-1')?.archivedAt).toBeNull()
   })
 })
 

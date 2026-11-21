@@ -20,7 +20,7 @@ import type {
   PermissionBehavior,
   ProviderSubagentInfo
 } from '../../shared/agents'
-import { AGENT_ENTITY, agentEntity, type AgentConfig } from '../../shared/builtinEntities'
+import { AGENT_ENTITY, PASEO_AGENT_KIND, agentEntity, type AgentConfig } from '../../shared/builtinEntities'
 import { CanvasCommandError } from '../../shared/commands'
 import type { Actor, Canvas, CanvasNode, Project, ResourceRef } from '../../shared/domain'
 import type { EntityRegistry } from '../../shared/entities'
@@ -134,6 +134,8 @@ class PaseoAgentService implements SpadeAgentService {
   private readonly inFlight = new Map<string, ReturnType<typeof setTimeout>>()
   private pendingSpawns = 0
   private readonly deferredAdoptions = new Map<string, PaseoAgentSnapshot>()
+  // Agents archived because their spawn command failed; never adopted.
+  private readonly discarded = new Set<string>()
 
   private pending = emptyPending()
   private readonly presentationDirty = new Set<string>()
@@ -152,7 +154,11 @@ class PaseoAgentService implements SpadeAgentService {
     this.agentInstructions = options.agentInstructions
     this.now = options.now ?? (() => new Date())
     this.timing = { ...DEFAULT_TIMING, ...options.timing }
-    this.entityAdapter = { type: AGENT_ENTITY, create: (input) => this.spawn(input) }
+    this.entityAdapter = {
+      type: AGENT_ENTITY,
+      create: (input) => this.spawn(input),
+      discard: (_input, created) => this.discardSpawn(created)
+    }
   }
 
   // Lifecycle
@@ -270,6 +276,18 @@ class PaseoAgentService implements SpadeAgentService {
     }
   }
 
+  // The spawn command failed after Paseo created the agent: archive it rather than leave it running without a node.
+  private async discardSpawn(created: EntityCreateResult): Promise<void> {
+    const ref = created.resourceRef
+    const agentId = ref?.provider === 'paseo' && ref.kind === PASEO_AGENT_KIND ? ref.id : null
+    if (agentId === null) return
+    this.clearInFlight(agentId)
+    this.discarded.add(agentId)
+    this.deferredAdoptions.delete(agentId)
+    this.pending.adopt.delete(agentId)
+    await callPaseo('archive the agent', () => this.paseo.archiveAgent(agentId))
+  }
+
   // One workspace per project: its root directory, with Paseo's opaque workspace id once known.
   private async ensureRootWorkspace(project: Project, paseoWorkspaceId: string | null): Promise<string> {
     const canvas = await this.gateway.getCanvas(project.id)
@@ -296,7 +314,7 @@ class PaseoAgentService implements SpadeAgentService {
     if (previous) clearTimeout(previous)
     const timer = setTimeout(() => {
       this.inFlight.delete(agentId)
-      // The node never appeared (the command failed after the spawn); the agent may still belong under its parent.
+      // The node never appeared and the agent was not rolled back; it may still belong under its parent.
       const snapshot = this.snapshots.get(agentId)
       if (snapshot && !this.nodesByAgent.has(agentId)) this.request((pending) => pending.adopt.set(agentId, snapshot))
     }, this.timing.inFlightTimeoutMs)
@@ -642,7 +660,7 @@ class PaseoAgentService implements SpadeAgentService {
   // that has the parent and not the child. Returns whether a node now exists for it.
   private async adopt(snapshot: PaseoAgentSnapshot): Promise<boolean> {
     const parentAgentId = snapshot.parentAgentId
-    if (!parentAgentId) return false
+    if (!parentAgentId || this.discarded.has(snapshot.id)) return false
     if (this.inFlight.has(snapshot.id)) return true
     // A spawn still waiting for Paseo may be this very agent; decide once every pending spawn is known.
     if (this.pendingSpawns > 0) {
