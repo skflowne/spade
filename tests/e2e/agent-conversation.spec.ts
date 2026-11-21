@@ -520,13 +520,14 @@ test('an agent message with a path, an image, and a URL offers every action', as
     await page.getByRole('dialog', { name: 'Image actions' }).getByRole('button', { name: 'Spawn as Image node…' }).click()
     let spawn = page.getByRole('dialog', { name: 'Spawn image from Agent' })
     await spawn.getByRole('radio', { name: 'Pick a tree or node' }).check()
-    await spawn.getByLabel('Node', { exact: true }).selectOption({ label: '   Other leaf' })
+    await spawn.getByRole('treeitem', { name: 'Other leaf', exact: true }).click()
     await spawn.getByRole('radio', { name: 'Attach to its tree\'s root' }).check()
     await spawn.getByRole('button', { name: 'Create' }).click()
     await expect(spawn).toBeHidden()
 
-    // Spawning centers the new node; bring the conversation back.
+    // Spawning centers the new node; bring the conversation back at a zoom that shows its full body.
     await fitAll(page)
+    await nodeMenu(page, 'Agent', 'Fit')
     await activate(page, 'Agent')
     await image.click()
     await page.getByRole('dialog', { name: 'Image actions' }).getByRole('button', { name: 'Spawn as Image node…' }).click()
@@ -547,6 +548,7 @@ test('an agent message with a path, an image, and a URL offers every action', as
 
     // The link: browser, copy, and a Web page node (child of the conversation by default).
     await fitAll(page)
+    await nodeMenu(page, 'Agent', 'Fit')
     await activate(page, 'Agent')
     const link = log.locator('button[data-artifact-kind="url"]', { hasText: 'https://example.com/page' })
     await link.click()
