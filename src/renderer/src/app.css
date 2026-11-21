@@ -379,7 +379,7 @@ textarea.cr-input {
 }
 
 .cr-dialog::backdrop {
-  background: rgb(0 0 0 / 45%);
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
 }
 
 .cr-dialog__header {
@@ -1768,7 +1768,7 @@ kbd {
 
 .react-flow.dark {
   --xy-minimap-background-color: var(--panel);
-  --xy-minimap-mask-background-color: rgb(12 15 20 / 62%);
+  --xy-minimap-mask-background-color: color-mix(in srgb, var(--bg) 62%, transparent);
   --xy-minimap-mask-stroke-color: var(--accent);
   --xy-minimap-mask-stroke-width: 1;
   --xy-minimap-node-background-color: var(--cr-ink-500);

@@ -20,7 +20,9 @@ export type EntityFlowNode = Node<EntityNodeData, 'entity'>
 
 // React Flow starts node drags only from elements matching this selector: the header (plan §6).
 export const DRAG_HANDLE_CLASS = 'spade-node__drag'
-const MIN_SIZE = { width: 240, height: 140 }
+// The smallest size the resize grips allow. A UI constraint on resizing by hand, not a rule on node records:
+// commands from agents or the CLI may store any positive size.
+const MIN_RESIZE_SIZE = { width: 240, height: 140 }
 
 // The generic node wrapper (plan §6, container-owned behavior) around every entity body. Memoized: React Flow
 // re-renders its node wrappers whenever the canvas's handlers or other nodes change; this node and its body
@@ -77,8 +79,8 @@ function EntityNodeView({ id, data, selected }: NodeProps<EntityFlowNode>): Reac
     <article className={className} data-testid="canvas-node" data-node-id={id} data-detail={detail} aria-labelledby={titleId}>
       <NodeResizer
         isVisible={!record.collapsed && !picking}
-        minWidth={MIN_SIZE.width}
-        minHeight={MIN_SIZE.height}
+        minWidth={MIN_RESIZE_SIZE.width}
+        minHeight={MIN_RESIZE_SIZE.height}
         lineClassName="spade-node__resize-line"
         handleClassName="spade-node__resize-handle"
         onResizeEnd={(_event, params) => actions.finishResize(id, params)}
