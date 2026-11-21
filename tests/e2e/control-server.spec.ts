@@ -8,6 +8,8 @@ import { expect, test } from '@playwright/test'
 import {
   createControlServer,
   formatAgentInstructions,
+  posixShimScript,
+  powershellShimScript,
   windowsShimScript,
   type ControlServer,
   type ControlServerInfo
@@ -525,7 +527,7 @@ test.describe('discovery and launcher shims', () => {
     expect(discovery).toEqual({ version: 1, url: info.url, token: info.token, pid: process.pid, startedAt: expect.any(String) })
     if (process.platform !== 'win32') expect((await stat(controlFile)).mode & 0o777).toBe(0o600)
     expect((await readdir(dataDirectory)).sort()).toEqual(['bin', 'control.json'])
-    expect((await readdir(join(dataDirectory, 'bin'))).sort()).toEqual(['spade', 'spade.cmd'])
+    expect((await readdir(join(dataDirectory, 'bin'))).sort()).toEqual(['spade', 'spade.cmd', 'spade.ps1'])
 
     await server.stop()
     expect(await readdir(dataDirectory)).toEqual(['bin'])
@@ -575,7 +577,7 @@ test.describe('discovery and launcher shims', () => {
   test('the Windows shim quotes every path and keeps its environment local', () => {
     const script = windowsShimScript({
       controlFile: 'C:\\Users\\A B\\AppData\\Roaming\\SPADE\\control.json',
-      executablePath: 'C:\\Program Files\\SPADE\\SPADE.exe',
+      executablePath: 'C:\\Program Files\\R&D ^1\\SPADE.exe',
       cliScriptPath: 'C:\\Program Files\\SPADE\\resources\\app 100%\\out\\main\\cli.js'
     })
     expect(script.split('\r\n')).toEqual([
@@ -583,10 +585,59 @@ test.describe('discovery and launcher shims', () => {
       'setlocal',
       'set "SPADE_CONTROL_FILE=C:\\Users\\A B\\AppData\\Roaming\\SPADE\\control.json"',
       'set "ELECTRON_RUN_AS_NODE=1"',
-      '"C:\\Program Files\\SPADE\\SPADE.exe" "C:\\Program Files\\SPADE\\resources\\app 100%%\\out\\main\\cli.js" %*',
+      // Inside double quotes `&` and `^` are literal in a batch file; only `%` needs doubling.
+      '"C:\\Program Files\\R&D ^1\\SPADE.exe" "C:\\Program Files\\SPADE\\resources\\app 100%%\\out\\main\\cli.js" %*',
       'exit /b %ERRORLEVEL%',
       ''
     ])
+  })
+
+  test('the PowerShell launcher passes every path literally and restores the caller’s environment', () => {
+    const script = powershellShimScript({
+      controlFile: "C:\\Users\\O'Neil\\AppData\\Roaming\\SPADE\\control.json",
+      executablePath: 'C:\\Program Files\\R&D ^1 $env:X `n\\SPADE.exe',
+      cliScriptPath: 'C:\\Users\\Ann’s 100% "app"\\out\\main\\cli.js'
+    })
+    // A UTF-8 byte order mark, so Windows PowerShell 5.1 reads non-ASCII paths correctly.
+    expect(script.startsWith('\uFEFF')).toBe(true)
+    expect(script.slice(1).split('\r\n')).toEqual([
+      '# Written by SPADE at every start.',
+      '$spadePrevious = @($env:SPADE_CONTROL_FILE, $env:ELECTRON_RUN_AS_NODE)',
+      'try {',
+      "  $env:SPADE_CONTROL_FILE = 'C:\\Users\\O''Neil\\AppData\\Roaming\\SPADE\\control.json'",
+      "  $env:ELECTRON_RUN_AS_NODE = '1'",
+      // Single-quoted strings expand nothing; every quote character PowerShell accepts is doubled.
+      "  & 'C:\\Program Files\\R&D ^1 $env:X `n\\SPADE.exe' 'C:\\Users\\Ann’’s 100% \"app\"\\out\\main\\cli.js' @args",
+      '  $spadeExit = $LASTEXITCODE',
+      '} finally {',
+      '  $env:SPADE_CONTROL_FILE = $spadePrevious[0]',
+      '  $env:ELECTRON_RUN_AS_NODE = $spadePrevious[1]',
+      '}',
+      'exit $spadeExit',
+      ''
+    ])
+  })
+
+  test('the POSIX launcher uses forward slashes for Windows paths, so Git Bash can run it', () => {
+    const script = posixShimScript({
+      controlFile: "C:\\Users\\O'Neil\\AppData\\Roaming\\SPADE\\control.json",
+      executablePath: 'C:\\Program Files\\R&D 100% $HOME\\SPADE.exe',
+      cliScriptPath: '\\\\server\\share\\SPADE\\cli.js'
+    })
+    expect(script.split('\n')).toEqual([
+      '#!/bin/sh',
+      '# Written by SPADE at every start.',
+      "SPADE_CONTROL_FILE='C:/Users/O'\\''Neil/AppData/Roaming/SPADE/control.json'",
+      'export SPADE_CONTROL_FILE',
+      'ELECTRON_RUN_AS_NODE=1',
+      'export ELECTRON_RUN_AS_NODE',
+      "exec 'C:/Program Files/R&D 100% $HOME/SPADE.exe' '//server/share/SPADE/cli.js' \"$@\"",
+      ''
+    ])
+    // POSIX paths, whose names may legally contain backslashes, are left alone.
+    expect(posixShimScript({ controlFile: '/data/a\\b.json', executablePath: '/opt/spade', cliScriptPath: '/opt/cli.js' })).toContain(
+      "SPADE_CONTROL_FILE='/data/a\\b.json'"
+    )
   })
 })
 
@@ -595,7 +646,11 @@ test.describe('agent instructions', () => {
     const posix = formatAgentInstructions({
       nodeId: 'node-7',
       projectName: 'Alpha\nBeta',
-      shimPath: "/home/me/.config/SPADE data/bin/spade",
+      shims: {
+        posixShim: '/home/me/.config/SPADE data/bin/spade',
+        powershellShim: '/home/me/.config/SPADE data/bin/spade.ps1',
+        windowsShim: '/home/me/.config/SPADE data/bin/spade.cmd'
+      },
       platform: 'linux'
     })
     expect(posix).toContain('node-7')
@@ -607,10 +662,24 @@ test.describe('agent instructions', () => {
     const windows = formatAgentInstructions({
       nodeId: 'node-7',
       projectName: 'Alpha',
-      shimPath: 'C:\\Users\\A B\\AppData\\Roaming\\SPADE\\bin\\spade.cmd',
+      shims: {
+        posixShim: "C:\\Users\\O'Neil B\\AppData\\Roaming\\SPADE\\bin\\spade",
+        powershellShim: "C:\\Users\\O'Neil B\\AppData\\Roaming\\SPADE\\bin\\spade.ps1",
+        windowsShim: "C:\\Users\\O'Neil B\\AppData\\Roaming\\SPADE\\bin\\spade.cmd"
+      },
       platform: 'win32'
     })
-    expect(windows).toContain('`"C:\\Users\\A B\\AppData\\Roaming\\SPADE\\bin\\spade.cmd" skill`')
-    expect(windows).toContain('& "C:\\Users')
+    const bash = "'C:/Users/O'\\''Neil B/AppData/Roaming/SPADE/bin/spade'"
+    const powershell = "& 'C:\\Users\\O''Neil B\\AppData\\Roaming\\SPADE\\bin\\spade.ps1'"
+    const cmd = '"C:\\Users\\O\'Neil B\\AppData\\Roaming\\SPADE\\bin\\spade.cmd"'
+    expect(windows).toContain('node-7')
+    expect(windows).toContain(`\`${bash} skill\``)
+    // Recommended in this order: bash-like shells, PowerShell, then cmd.exe with its warning.
+    const order = [bash, powershell, cmd].map((command) => windows.indexOf(command))
+    expect(order.every((index) => index >= 0)).toBe(true)
+    expect([...order].sort((a, b) => a - b)).toEqual(order)
+    const cmdLine = windows.split('\n').find((line) => line.includes(cmd))!
+    expect(cmdLine).toContain('cmd.exe')
+    expect(cmdLine).toContain('stdin')
   })
 })

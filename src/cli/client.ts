@@ -30,7 +30,7 @@ export async function readDiscovery(env: Record<string, string | undefined>): Pr
   const file = env[CONTROL_FILE_ENV]
   if (!file) {
     throw notRunning(
-      `${CONTROL_FILE_ENV} is not set. Run the CLI through the launcher SPADE writes at startup into its data directory (bin/spade, or bin\\spade.cmd on Windows).`
+      `${CONTROL_FILE_ENV} is not set. Run the CLI through a launcher SPADE writes at startup into its data directory: bin/spade (POSIX shells, Git Bash), bin\\spade.ps1 (PowerShell), or bin\\spade.cmd (cmd.exe).`
     )
   }
   let text: string

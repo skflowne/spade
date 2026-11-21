@@ -22,6 +22,8 @@ export type CliIo = {
   cwd: string
   // The bundled skill text, printed by `spade skill`.
   skill: string
+  // The whole of standard input, read when an argument is `-`.
+  readStdin(): Promise<string>
 }
 
 type Options = Record<string, string | boolean | undefined>
@@ -37,6 +39,9 @@ type Command = {
   positionals: [min: number, max: number]
   // Runs without contacting SPADE.
   offline?: boolean
+  // Free-text arguments that accept `-` for "read this value from stdin": these flags, and the words from
+  // positional `rest` on when they are a single `-`.
+  stdinText?: { flags?: readonly string[]; rest?: number }
   run(context: Context): Promise<void>
 }
 
@@ -193,6 +198,7 @@ const COMMANDS: Record<string, Command> = {
       '  agent    --prompt <text> [--provider <id>] [--model <id>] [--mode <id>]  (unset ones follow yours)',
       '  any      --config <json>'
     ].join('\n'),
+    stdinText: { flags: ['body', 'prompt', 'caption', 'title', 'description', 'config'] },
     options: {
       ...Object.fromEntries(CONFIG_FLAGS.map((flag) => [flag, true])),
       config: true,
@@ -249,19 +255,21 @@ const COMMANDS: Record<string, Command> = {
     }
   },
   rename: {
-    usage: 'spade rename <node> <title…>',
+    usage: 'spade rename <node> (<title…> | -)',
     summary: 'Set a node’s title',
     positionals: [2, Infinity],
+    stdinText: { rest: 1 },
     async run(context) {
       const [nodeId, ...words] = context.args.positionals
       await execute(context, 'renamed', { type: 'updateNode', nodeId, patch: { title: words.join(' ') } })
     }
   },
   describe: {
-    usage: 'spade describe <node> (<description…> | --clear)',
+    usage: 'spade describe <node> (<description…> | - | --clear)',
     summary: 'Set or clear a node’s short description',
     options: { clear: false },
     positionals: [1, Infinity],
+    stdinText: { rest: 1 },
     async run(context) {
       const [nodeId, ...words] = context.args.positionals
       if ((words.length === 0) === (context.args.options.clear !== true)) {
@@ -275,6 +283,7 @@ const COMMANDS: Record<string, Command> = {
     usage: 'spade edit <node> (--body <text> | --config <json>)',
     summary: 'Replace a node’s config: a note’s body, or any type’s full config',
     options: { body: true, config: true },
+    stdinText: { flags: ['body', 'config'] },
     positionals: [1, 1],
     async run(context) {
       const { options } = context.args
@@ -312,6 +321,7 @@ const COMMANDS: Record<string, Command> = {
     usage: 'spade connect <from> <to> [--label <text>]',
     summary: 'Add a references edge (never changes the tree)',
     options: { label: true },
+    stdinText: { flags: ['label'] },
     positionals: [2, 2],
     async run(context) {
       const [fromNodeId, toNodeId] = context.args.positionals
@@ -332,9 +342,11 @@ const COMMANDS: Record<string, Command> = {
     }
   },
   prompt: {
-    usage: 'spade prompt <agent-node> <text…>',
+    usage: 'spade prompt <agent-node> (<text…> | -)',
     summary: 'Send a prompt to an agent node',
+    details: 'With "-" as the text, the prompt is read from stdin: the safe way to send arbitrary text.',
     positionals: [2, Infinity],
+    stdinText: { rest: 1 },
     async run({ args, rpc, print }) {
       const [nodeId, ...words] = args.positionals
       const result = await rpc('prompt', { nodeId, text: words.join(' ') })
@@ -393,6 +405,12 @@ export async function runCli(argv: readonly string[], env: Record<string, string
     return 0
   }
   const asJson = args.options.json === true
+
+  try {
+    args = await readStdinText(args, command, io)
+  } catch (error) {
+    return usageFailure(io, name, error)
+  }
 
   try {
     const rpc: RpcClient = command.offline
@@ -471,6 +489,19 @@ function parseArgs(tokens: readonly string[], command: Command): Args {
     if (positionals.length > max) throw new UsageError(`unexpected argument "${positionals[max]}"`)
   }
   return { positionals, options }
+}
+
+// One free-text value per invocation may be `-`; it is replaced by stdin without its final line break.
+async function readStdinText(args: Args, command: Command, io: CliIo): Promise<Args> {
+  const flags = (command.stdinText?.flags ?? []).filter((flag) => args.options[flag] === '-')
+  const rest = command.stdinText?.rest
+  const restFromStdin = rest !== undefined && args.positionals.length === rest + 1 && args.positionals[rest] === '-'
+  const count = flags.length + (restFromStdin ? 1 : 0)
+  if (count === 0) return args
+  if (count > 1) throw new UsageError('only one value per command can come from stdin ("-")')
+  const value = (await io.readStdin()).replace(/\r?\n$/, '')
+  if (restFromStdin) return { ...args, positionals: [...args.positionals.slice(0, rest), value] }
+  return { ...args, options: { ...args.options, [flags[0]]: value } }
 }
 
 function text(args: Args, flag: string): string {
@@ -574,6 +605,9 @@ function overview(): string {
     ...lines,
     '',
     'Every command accepts --json for structured output and --help for details.',
+    'Free text (prompt, rename, describe, edit, spawn --body/--prompt/--title/--description/--caption/--config,',
+    'connect --label) can be "-" to read that one value from stdin: the safe way to pass arbitrary text,',
+    'since no shell or cmd.exe re-reads it. Example: spade prompt <node> - < message.txt',
     'Agents act as their own canvas node (from PASEO_AGENT_ID); every change is attributed to them.',
     'Without PASEO_AGENT_ID, changes are refused unless a person at a terminal passes --as-user to act as the',
     'user. Agents never pass --as-user.'

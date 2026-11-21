@@ -6,7 +6,7 @@ import type { EntityRegistry } from '../../shared/entities'
 import { removeDiscoveryFile, writeDiscoveryFile, writeFileAtomic } from './files'
 import { createControlMethods, toControlError } from './methods'
 import { CONTROL_PROTOCOL_VERSION, RPC_PATH, type ControlErrorCode, type RpcResponse } from './protocol'
-import { controlPaths, posixShimScript, windowsShimScript, type ControlPaths } from './shims'
+import { controlPaths, posixShimScript, powershellShimScript, windowsShimScript, type ControlPaths } from './shims'
 
 export type ControlServerOptions = {
   gateway: WorkspaceGateway
@@ -162,6 +162,7 @@ export function createControlServer(options: ControlServerOptions): ControlServe
           cliScriptPath: options.cliScriptPath
         }
         await writeFileAtomic(paths.posixShim, posixShimScript(target), 0o755)
+        await writeFileAtomic(paths.powershellShim, powershellShimScript(target), 0o755)
         await writeFileAtomic(paths.windowsShim, windowsShimScript(target), 0o755)
         await writeDiscoveryFile(paths.controlFile, {
           version: CONTROL_PROTOCOL_VERSION,

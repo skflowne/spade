@@ -70,6 +70,18 @@ spade prompt <agent-node> Please summarize your result
 Spawning an agent starts a real Paseo agent in the project root as your sub-agent; do it only when the work
 needs a separate agent. The viewport belongs to the user: there is no viewport or focus command.
 
+**Pass arbitrary text through stdin.** Any free-text value (the text of `prompt`, `rename`, `describe`;
+`--body`, `--prompt`, `--title`, `--description`, `--caption`, `--config`, `--label`) can be a single `-`,
+which reads that value from stdin (one per command; a final line break is dropped). Shells, and above all
+`cmd.exe` on Windows, re-read quotes, `&`, `|`, `>`, `$`, and `%VAR%` in arguments; stdin is passed as is:
+
+```sh
+spade prompt <agent-node> - <<'EOF'
+Text with "quotes", & | > $HOME %PATH%, and several lines.
+EOF
+spade spawn note --title "Findings" --body - < findings.md
+```
+
 ## Failure
 
 A command naming a missing node or edge, an invalid config, or a cycle fails with a code and message on

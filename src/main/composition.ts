@@ -39,7 +39,7 @@ export function createServices(dependencies: ServiceDependencies): Services {
       formatAgentInstructions({
         nodeId,
         projectName: project.name,
-        shimPath: control.shimPath,
+        shims: control.paths,
         platform: process.platform
       })
   })
