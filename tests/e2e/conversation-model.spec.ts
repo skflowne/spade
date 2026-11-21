@@ -8,7 +8,8 @@ import { presentArtifact } from '../../src/renderer/src/entities/agent/artifactA
 import { effectiveExpansion, paneKindOf, withOverride } from '../../src/renderer/src/entities/agent/expansion'
 import { splitMessage } from '../../src/renderer/src/entities/agent/messageSegments'
 import { agentStatusOf, lastAssistantExcerpt } from '../../src/renderer/src/entities/agent/status'
-import { formatSubmission } from '../../src/renderer/src/entities/agent/submission'
+import { AnnotationStore } from '../../src/renderer/src/entities/agent/annotations'
+import { createAnswerSubmitter, formatSubmission } from '../../src/renderer/src/entities/agent/submission'
 import { mergeNewestPage, mergeOlderPage, type TimelineState } from '../../src/renderer/src/entities/agent/timeline'
 import type { AgentRuntime } from '../../src/shared/agents'
 
@@ -165,6 +166,66 @@ test.describe('HTML answer submissions', () => {
     const cyclic: Record<string, unknown> = {}
     cyclic.self = cyclic
     expect(formatSubmission({ title: null, message: 'm', data: cyclic, annotations: [] })).toContain('Data: [object Object]')
+  })
+
+  function scripted(): {
+    annotations: AnnotationStore
+    sent: string[]
+    settle(problem: string | null): void
+    submit: ReturnType<typeof createAnswerSubmitter>
+  } {
+    const annotations = new AnnotationStore()
+    const sent: string[] = []
+    const replies: Array<(problem: string | null) => void> = []
+    const submit = createAnswerSubmitter({
+      annotations,
+      blocked: () => null,
+      prompt: (text) => {
+        sent.push(text)
+        return new Promise((resolve) => replies.push(resolve))
+      }
+    })
+    return { annotations, sent, settle: (problem) => replies.shift()!(problem), submit }
+  }
+
+  test('a second submission from the same answer while one is in flight is refused, so annotations go out once', async () => {
+    const { annotations, sent, settle, submit } = scripted()
+    annotations.add('a#0', { text: 'Too vague' })
+    const first = submit('a#0', 'Plan', { message: 'Approved' })
+    await expect(submit('a#0', 'Plan', { message: 'Approved' })).rejects.toThrow(/still being sent/)
+    expect(sent).toHaveLength(1)
+    expect(sent[0]).toContain('- Too vague')
+    // The annotations left with the submission; one made meanwhile waits for the next one.
+    expect(annotations.get('a#0')).toEqual([])
+    annotations.add('a#0', { text: 'Later' })
+    settle(null)
+    await first
+    expect(annotations.get('a#0').map((annotation) => annotation.text)).toEqual(['Later'])
+    // Other answers are independent, and the answer can submit again once the first one settled.
+    const other = submit('a#1', null, { message: 'x' })
+    const again = submit('a#0', 'Plan', { message: 'Again' })
+    expect(sent).toHaveLength(3)
+    settle(null)
+    settle(null)
+    await Promise.all([other, again])
+  })
+
+  test('a failed submission puts its annotations back ahead of ones made meanwhile', async () => {
+    const { annotations, settle, submit } = scripted()
+    annotations.add('a#0', { text: 'First' })
+    const attempt = submit('a#0', null, { message: 'Go' })
+    annotations.add('a#0', { text: 'Second' })
+    settle('The agent is busy')
+    await expect(attempt).rejects.toThrow('The agent is busy')
+    expect(annotations.get('a#0').map((annotation) => annotation.text)).toEqual(['First', 'Second'])
+  })
+
+  test('a blocked agent refuses the submission without taking the annotations', async () => {
+    const annotations = new AnnotationStore()
+    annotations.add('a#0', { text: 'Kept' })
+    const submit = createAnswerSubmitter({ annotations, blocked: () => 'Paseo is unreachable.', prompt: async () => null })
+    await expect(submit('a#0', null, { message: 'Go' })).rejects.toThrow('Paseo is unreachable.')
+    expect(annotations.get('a#0')).toHaveLength(1)
   })
 })
 

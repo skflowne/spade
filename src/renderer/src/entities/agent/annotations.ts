@@ -29,13 +29,16 @@ export class AnnotationStore {
     )
   }
 
-  // Removes exactly the annotations a submission carried; ones added meanwhile stay pending.
-  clear(answerKey: string, sent: readonly PendingAnnotation[]): void {
-    const ids = new Set(sent.map((annotation) => annotation.id))
-    this.set(
-      answerKey,
-      this.get(answerKey).filter((annotation) => !ids.has(annotation.id))
-    )
+  // Removes and returns an answer's annotations, so a submission carries them exactly once.
+  take(answerKey: string): readonly PendingAnnotation[] {
+    const taken = this.get(answerKey)
+    if (taken.length > 0) this.set(answerKey, NONE)
+    return taken
+  }
+
+  // Puts back the annotations of a submission that failed, ahead of any added meanwhile.
+  restore(answerKey: string, taken: readonly PendingAnnotation[]): void {
+    if (taken.length > 0) this.set(answerKey, [...taken, ...this.get(answerKey)])
   }
 
   private set(answerKey: string, annotations: readonly PendingAnnotation[]): void {

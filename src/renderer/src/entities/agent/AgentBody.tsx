@@ -16,7 +16,7 @@ import { ExpansionControl } from './ExpansionControl'
 import { Permissions } from './Permissions'
 import { agentStatusOf, lastAssistantExcerpt, promptBlockReason, runtimeIdentity } from './status'
 import { Subagents } from './Subagents'
-import { formatSubmission } from './submission'
+import { createAnswerSubmitter } from './submission'
 import { useTimeline } from './useTimeline'
 
 const PREVIEW_PAGE_LIMIT = 12
@@ -60,6 +60,9 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
     return result.ok ? null : result.error.message
   }, [])
 
+  const [submitAnswer] = useState(() =>
+    createAnswerSubmitter({ annotations, blocked: () => latest.current.blocked, prompt: (text) => prompt(text) })
+  )
   const handlers = useRef(new Map<string, { onSubmit: SubmitHandler; onAnnotate: AnnotateHandler }>())
   const answerHandlers = useCallback(
     (answerKey: string, title: string | null) => {
@@ -67,14 +70,7 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
       if (!entry) {
         entry = {
           // Settles the answer script's promise: resolves once the agent accepted the prompt.
-          async onSubmit(input) {
-            const reason = latest.current.blocked
-            if (reason) throw new Error(reason)
-            const sent = annotations.get(answerKey)
-            const problem = await prompt(formatSubmission({ title, ...input, annotations: sent }))
-            if (problem !== null) throw new Error(problem)
-            annotations.clear(answerKey, sent)
-          },
+          onSubmit: (input) => submitAnswer(answerKey, title, input),
           onAnnotate(input) {
             annotations.add(answerKey, input)
           }
@@ -83,7 +79,7 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
       }
       return entry
     },
-    [annotations, prompt]
+    [annotations, submitAnswer]
   )
 
   const openSubagent = useCallback(
