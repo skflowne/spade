@@ -1,5 +1,6 @@
 import { useEffect, useId, useRef, useState } from 'react'
 import { SHORTCUT_HELP } from '../model/shortcuts'
+import { icons } from '../../ui/icons'
 
 // A small popover listing the canvas keyboard shortcuts.
 export function ShortcutsHelp(): React.JSX.Element {
@@ -39,7 +40,7 @@ export function ShortcutsHelp(): React.JSX.Element {
         aria-controls={popoverId}
         onClick={() => setOpen((current) => !current)}
       >
-        ?
+        <icons.shortcuts />
       </button>
       {open ? (
         <div id={popoverId} className="shortcuts-help__popover" role="dialog" aria-labelledby={titleId}>

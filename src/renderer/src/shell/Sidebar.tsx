@@ -5,6 +5,7 @@ import { MenuButton } from '../ui/Menu'
 import { usePrompts } from '../ui/prompts'
 import { PaseoStatus } from './PaseoStatus'
 import { SettingsDialog } from './SettingsDialog'
+import { icons } from '../ui/icons'
 
 // Switches between project canvases. Everything it shows comes from AppState and agent runtimes.
 export function Sidebar(): React.JSX.Element {
@@ -39,7 +40,7 @@ export function Sidebar(): React.JSX.Element {
           disabled={!app}
           onClick={() => setSettingsOpen(true)}
         >
-          <span aria-hidden="true">⚙</span> Settings
+          <icons.settings aria-hidden="true" /> Settings
         </button>
       </div>
       {settingsOpen && app ? <SettingsDialog app={app} onDone={() => setSettingsOpen(false)} /> : null}
@@ -115,7 +116,7 @@ function ProjectRow({ project, selected }: { project: Project; selected: boolean
           { label: 'Remove…', onSelect: () => void remove(), danger: true }
         ]}
       >
-        ⋯
+        <icons.more />
       </MenuButton>
     </li>
   )

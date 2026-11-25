@@ -1,13 +1,15 @@
 import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import type { AgentRuntime } from '@shared/agents'
 import type { Canvas } from '@shared/domain'
-import { entities, entityRenderers } from '../../entities'
+import { entities } from '../../entities'
 import { useStoreState } from '../../store/hooks'
 import { useCanvasActions, useCanvasData } from '../CanvasContext'
 import { focusNodeHeader } from '../nodeFocus'
 import { canvasIndex } from '../model/canvasIndex'
 import { searchNodes, type SearchCandidate } from '../model/search'
 import { canvasShortcut } from '../model/shortcuts'
+import { icons } from '../../ui/icons'
+import { EntityTypeIcon } from '../../entities/EntityTypeIcon'
 
 type Candidate = SearchCandidate & { icon: React.ReactNode; inCollapsedBranch: boolean }
 
@@ -21,7 +23,7 @@ function candidatesOf(canvas: Canvas, runtimes: ReadonlyMap<string, AgentRuntime
       title: node.title,
       typeLabel: entities.has(node.entityType) ? entities.resolve(node.entityType).displayName : node.entityType,
       status: runtimes.get(node.id)?.activity ?? null,
-      icon: entityRenderers.get(node.entityType)?.icon ?? '?',
+      icon: <EntityTypeIcon type={node.entityType} />,
       inCollapsedBranch: index.hidden.has(node.id)
     }))
 }
@@ -66,7 +68,7 @@ export function SearchBox(): React.JSX.Element {
   return (
     <div className="search-box">
       <span className="search-box__glyph" aria-hidden="true">
-        ⌕
+        <icons.search />
       </span>
       <input
         ref={input}

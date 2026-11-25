@@ -1,6 +1,7 @@
 import { useId, useState } from 'react'
 import type { PaseoConnection, PaseoConnectionState } from '@shared/agents'
 import { useAppState } from '../store/hooks'
+import { icons } from '../ui/icons'
 
 const LABELS: Record<PaseoConnectionState, string> = {
   connected: 'Connected',
@@ -69,7 +70,7 @@ export function PaseoStatus(): React.JSX.Element | null {
           disabled={refreshing}
           onClick={() => void refresh()}
         >
-          <span aria-hidden="true">↻</span>
+          <icons.reload aria-hidden="true" />
         </button>
       </div>
       {open && hasDetails ? (

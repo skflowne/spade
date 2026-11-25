@@ -1,9 +1,10 @@
 import { useId, useMemo, useState } from 'react'
-import { entityRenderers } from '../../entities'
 import { useAgentDirectory } from '../../store/hooks'
 import { useCanvasActions, useCanvasData } from '../CanvasContext'
 import { activityItems, relativeTime, type ActivityActorView } from '../model/activityView'
 import { SidePanel, useNow } from './SidePanel'
+import { icons } from '../../ui/icons'
+import { EntityTypeIcon } from '../../entities/EntityTypeIcon'
 
 // Who changed what (plan §4.6): the canvas's activity log, newest first.
 export function ActivityPanel(): React.JSX.Element {
@@ -60,7 +61,15 @@ export function ActivityPanel(): React.JSX.Element {
 
 function Actor({ actor }: { actor: ActivityActorView }): React.JSX.Element {
   const icon =
-    actor.kind === 'agent' ? (actor.entityType ? (entityRenderers.get(actor.entityType)?.icon ?? 'A') : 'A') : actor.kind === 'system' ? 'S' : null
+    actor.kind === 'agent' ? (
+      actor.entityType ? (
+        <EntityTypeIcon type={actor.entityType} />
+      ) : (
+        <icons.agent />
+      )
+    ) : actor.kind === 'system' ? (
+      <icons.system />
+    ) : null
   return (
     <span className="activity-entry__actor" data-testid="activity-actor">
       {icon !== null ? (

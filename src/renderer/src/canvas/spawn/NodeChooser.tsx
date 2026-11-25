@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useRef } from 'react'
 import type { Canvas } from '@shared/domain'
-import { entityRenderers } from '../../entities'
 import { canvasIndex } from '../model/canvasIndex'
+import { EntityTypeIcon } from '../../entities/EntityTypeIcon'
 
 type NodeChooserProps = {
   canvas: Canvas
@@ -28,7 +28,7 @@ export function NodeChooser(props: NodeChooserProps): React.JSX.Element {
           {
             nodeId,
             title: node.title,
-            icon: entityRenderers.get(node.entityType)?.icon ?? '?',
+            icon: <EntityTypeIcon type={node.entityType} />,
             depth: index.pathTo(nodeId).length - 1,
             root: nodeId === rootId
           }

@@ -4,6 +4,7 @@ import { TextField } from '../../ui/fields'
 import { defineEntityRenderer } from '../registry'
 import type { EntityBodyProps, EntityCreateFormProps } from '../types'
 import { initialNoteDraft, noteDraft, textToSave, type NoteDraft, type NoteDraftEvent } from './noteDraft'
+import { icons } from '../../ui/icons'
 
 const SAVE_DELAY_MS = 600
 
@@ -111,7 +112,7 @@ function NoteCreateForm({ formId, onSubmit }: EntityCreateFormProps): React.JSX.
 
 export const noteRenderer = defineEntityRenderer<NoteConfig>({
   type: NOTE_ENTITY,
-  icon: 'N',
+  icon: icons.note,
   Body: NoteBody,
   CreateForm: NoteCreateForm
 })

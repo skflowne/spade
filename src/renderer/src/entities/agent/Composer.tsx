@@ -6,6 +6,7 @@ import { useCanvasActions, useCanvasData } from '../../canvas/CanvasContext'
 import { entities } from '../registry'
 import { conversationState, remainingDraft } from './conversationState'
 import { Popover } from './Popover'
+import { icons } from '../../ui/icons'
 
 type ComposerProps = {
   nodeId: string
@@ -91,7 +92,7 @@ export function Composer({ nodeId, blocked, running, send, interrupt }: Composer
                   title="Stop sharing"
                   onClick={() => setContext(context.filter((candidate) => candidate !== id))}
                 >
-                  ×
+                  <icons.remove />
                 </button>
               </li>
             )

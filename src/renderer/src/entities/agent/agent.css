@@ -245,6 +245,7 @@
 }
 
 .agent-pane__chevron {
+  display: inline-flex;
   flex: none;
   width: 12px;
   color: var(--muted);
