@@ -1,21 +1,22 @@
 import { useEffect, useState } from 'react'
 import type { Canvas } from '@shared/domain'
 import type { AgentChangeSource } from '../CanvasContext'
-import { recentAgentChanges, type AgentChange } from '../model/activityView'
+import { recentAgentChanges, type AgentChange, type AgentDirectory } from '../model/activityView'
 
-// Keeps the recent agent changes of a canvas current: on every canvas push, and when the oldest marker expires.
-export function useAgentChanges(canvas: Canvas): AgentChangeSource {
+// Keeps the recent agent changes of a canvas current: on every canvas push, when what is known of collapsed
+// agents changes, and when the oldest marker expires.
+export function useAgentChanges(canvas: Canvas, agents: AgentDirectory): AgentChangeSource {
   const [source] = useState(createSource)
   useEffect(() => {
     let timer: ReturnType<typeof setTimeout> | undefined
     const refresh = (): void => {
-      const { changes, expiresAt } = recentAgentChanges(canvas, Date.now())
+      const { changes, expiresAt } = recentAgentChanges(canvas, Date.now(), agents)
       source.replace(changes)
       if (expiresAt !== null) timer = setTimeout(refresh, Math.max(0, expiresAt - Date.now()) + 50)
     }
     refresh()
     return () => clearTimeout(timer)
-  }, [canvas, source])
+  }, [canvas, agents, source])
   return source
 }
 
@@ -23,7 +24,12 @@ function createSource(): AgentChangeSource & { replace(next: Map<string, AgentCh
   let changes = new Map<string, AgentChange>()
   const listeners = new Set<() => void>()
   const same = (a: AgentChange | undefined, b: AgentChange): boolean =>
-    a !== undefined && a.at === b.at && a.agentNodeId === b.agentNodeId && a.agentLabel === b.agentLabel && a.summary === b.summary
+    a !== undefined &&
+    a.at === b.at &&
+    a.agentId === b.agentId &&
+    a.agentNodeId === b.agentNodeId &&
+    a.agentLabel === b.agentLabel &&
+    a.summary === b.summary
   return {
     subscribe(listener) {
       listeners.add(listener)

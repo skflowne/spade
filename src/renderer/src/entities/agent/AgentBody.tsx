@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { AgentConfig } from '@shared/builtinEntities'
+import { PASEO_PROVIDER_SUBAGENT_KIND, type AgentConfig } from '@shared/builtinEntities'
+import type { PermissionBehavior } from '@shared/agents'
 import { DEFAULT_CONVERSATION_EXPANSION } from '@shared/domain'
 import { useCanvasActions } from '../../canvas/CanvasContext'
 import { focusNodeHeader } from '../../canvas/nodeFocus'
@@ -7,12 +8,14 @@ import type { AnnotateHandler, SubmitHandler } from '../../rich'
 import { useAgentRuntime, useAppState } from '../../store/hooks'
 import type { EntityBodyProps } from '../types'
 import { ArtifactLayer } from './ArtifactLayer'
+import { ChildAgents } from './ChildAgents'
 import { Composer } from './Composer'
 import { ConversationContext, type ConversationServices } from './ConversationContext'
 import { ConversationView } from './ConversationView'
 import { conversationState } from './conversationState'
 import { effectiveExpansion, type ExpansionOverride } from './expansion'
 import { ExpansionControl } from './ExpansionControl'
+import { ModeSelect } from './ModeSelect'
 import { Permissions } from './Permissions'
 import { agentStatusOf, lastAssistantExcerpt, promptBlockReason, runtimeIdentity } from './status'
 import { Subagents } from './Subagents'
@@ -128,6 +131,13 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
 
   const running = runtime?.activity === 'running' || runtime?.activity === 'starting'
   const items = timeline.state?.items ?? []
+  // Provider-native sub-agents have no mode in Paseo.
+  const modeRuntime = runtime !== null && node.resourceRef?.kind !== PASEO_PROVIDER_SUBAGENT_KIND ? runtime : null
+  const respondToPermission = useCallback(
+    (requestId: string, behavior: PermissionBehavior) =>
+      window.spadeHost.agents.respondToPermission(latest.current.nodeId, requestId, behavior),
+    []
+  )
 
   return (
     <ArtifactLayer projectId={project.id} projectRoot={project.rootPath} nodeId={node.id} host={host} revision={timeline.state}>
@@ -135,8 +145,18 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
         <div className="agent-body">
           <div className="agent-toolbar">
             <span className="agent-toolbar__identity mono" title={runtime?.cwd ?? project.rootPath}>
-              {runtimeIdentity(runtime ?? config) || config.provider}
+              {runtimeIdentity(modeRuntime ? { ...modeRuntime, mode: null } : (runtime ?? config)) || config.provider}
             </span>
+            {modeRuntime ? (
+              <ModeSelect
+                agentId={modeRuntime.agentId}
+                provider={modeRuntime.provider}
+                mode={modeRuntime.mode}
+                label="Mode"
+                blocked={blocked}
+                notify={notify}
+              />
+            ) : null}
             <ExpansionControl global={global} override={override.value} onChange={setOverride} />
           </div>
           <StateBanner
@@ -146,6 +166,7 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
             error={timeline.error}
             onRetry={timeline.reload}
           />
+          {runtime ? <ChildAgents ownerNodeId={node.id} children={runtime.children} host={host} /> : null}
           {subagentList ? <Subagents subagents={subagentList} onOpen={openSubagent} /> : null}
           <ConversationView
             nodeId={node.id}
@@ -163,7 +184,7 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
               </p>
             }
           />
-          <Permissions nodeId={node.id} requests={runtime?.pendingPermissions ?? []} blocked={blocked} />
+          <Permissions requests={runtime?.pendingPermissions ?? []} respond={respondToPermission} blocked={blocked} />
           <Composer
             nodeId={node.id}
             blocked={blocked}

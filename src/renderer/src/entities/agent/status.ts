@@ -24,8 +24,14 @@ export function runtimeIdentity(runtime: Pick<AgentRuntime, 'provider' | 'model'
   return [runtime.provider, runtime.model, runtime.mode].filter(Boolean).join(' · ')
 }
 
+// What the status reads: an agent node's runtime, or a Paseo child as its owner lists it.
+export type AgentStatusSource = Pick<
+  AgentRuntime,
+  'resourceState' | 'pendingPermissions' | 'activity' | 'lastError' | 'status' | 'provider' | 'model' | 'mode'
+>
+
 // The header badge. Reachability and pending permissions outrank Paseo's own activity.
-export function agentStatusOf(runtime: AgentRuntime): AgentStatusView {
+export function agentStatusOf(runtime: AgentStatusSource): AgentStatusView {
   const base =
     runtime.resourceState === 'missing'
       ? { label: 'missing', tone: 'danger' as const }

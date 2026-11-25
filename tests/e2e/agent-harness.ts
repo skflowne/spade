@@ -1,6 +1,6 @@
 import { crc32, deflateSync } from 'node:zlib'
 import type { ElectronApplication } from '@playwright/test'
-import type { AgentProviderInfo, AgentRuntime, AgentTimelinePage, ConversationItem } from '../../src/shared/agents'
+import type { AgentProviderInfo, AgentRuntime, AgentTimelinePage, ChildAgentInfo, ConversationItem } from '../../src/shared/agents'
 import { SPADE_HOST_EVENTS, type PathKind } from '../../src/shared/ipc'
 
 // Scripts the agent side of a real SPADE instance without Paseo: the main-process IPC handlers for agent
@@ -63,7 +63,16 @@ export async function installAgentScript(app: ElectronApplication): Promise<void
         const page = before ? script.older[nodeId as string]?.[before] : (script.newest[nodeId as string] ?? script.newest['*'])
         return page ? { ok: true, page: { nodeId, ...page } } : unreachable
       })
-      for (const method of ['agents.prompt', 'agents.interrupt', 'agents.respondToPermission', 'agents.openProviderSubagent']) {
+      for (const method of [
+        'agents.prompt',
+        'agents.interrupt',
+        'agents.respondToPermission',
+        'agents.openProviderSubagent',
+        'agents.respondToAgentPermission',
+        'agents.setMode',
+        'agents.expandChild',
+        'agents.refreshConnection'
+      ]) {
         handle(method, () => script.replies[method] ?? { ok: true })
       }
 
@@ -206,8 +215,29 @@ export function runtimeFor(projectId: string, nodeId: string, overrides: Partial
     cwd: null,
     pendingPermissions: [],
     providerSubagents: [],
+    children: [],
     lastError: null,
     updatedAt: '2026-01-01T00:00:00.000Z',
+    ...overrides
+  }
+}
+
+// A collapsed Paseo child as its owner's runtime lists it.
+export function childFor(agentId: string, overrides: Partial<ChildAgentInfo> = {}): ChildAgentInfo {
+  return {
+    agentId,
+    title: null,
+    provider: 'claude',
+    model: 'opus',
+    mode: 'default',
+    status: 'idle',
+    activity: 'idle',
+    resourceState: 'live',
+    pendingPermissions: [],
+    lastError: null,
+    updatedAt: '2026-01-01T00:00:00.000Z',
+    nodeId: null,
+    children: [],
     ...overrides
   }
 }
