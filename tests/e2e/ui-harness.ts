@@ -282,16 +282,22 @@ export async function bodyRenders(page: Page, nodeId: string): Promise<number> {
   return page.evaluate((id) => (window as unknown as RenderGlobal).__spadeBodyRenders[id] ?? 0, nodeId)
 }
 
-// Fits every node and waits for React Flow to apply the new viewport.
+// Fits every node and waits for React Flow to apply the new viewport. React Flow applies a fit a few frames after
+// the click, so an unchanged viewport is only trusted once it has held long enough for a fit to have landed.
 export async function fitAll(page: Page): Promise<void> {
+  const before = JSON.stringify(await renderedViewport(page))
   await page.getByRole('toolbar', { name: 'Canvas' }).getByRole('button', { name: 'Fit all' }).click()
-  let previous = JSON.stringify(await renderedViewport(page))
+  let previous = before
+  let since = Date.now()
   await expect
     .poll(async () => {
       const current = JSON.stringify(await renderedViewport(page))
-      const stable = current === previous
-      previous = current
-      return stable
-    }, { intervals: [50, 50, 100] })
+      if (current !== previous) {
+        previous = current
+        since = Date.now()
+        return false
+      }
+      return Date.now() - since >= (current === before ? 300 : 50)
+    }, { intervals: [20, 20, 50] })
     .toBe(true)
 }

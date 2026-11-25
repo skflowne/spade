@@ -4,6 +4,7 @@ import { useAgentRuntime } from '../../store/hooks'
 import type { EntityDrawerProps } from '../types'
 import { ChildAgents } from './ChildAgents'
 import { openSubagentNode, Subagents } from './Subagents'
+import { icons } from '../../ui/icons'
 
 // The agent node's side drawer: the agents it owns, Paseo children and provider sub-agents, a section per kind.
 // The node body stays the conversation.
@@ -17,7 +18,7 @@ export function AgentsPane({ node, host, close }: EntityDrawerProps<AgentConfig>
       <header className="agents-pane__header">
         <h3 className="agents-pane__title">Agents</h3>
         <button type="button" className="cr-icon-button" aria-label="Close the agents pane" title="Close" onClick={close}>
-          <span aria-hidden="true">×</span>
+          <icons.close aria-hidden="true" />
         </button>
       </header>
       <div className="agents-pane__content">

@@ -1,6 +1,7 @@
-import type { ComponentType, ReactNode } from 'react'
+import type { ComponentType } from 'react'
 import type { CanvasCommand, CanvasCommandResponse, NodeSeed } from '@shared/commands'
 import type { CanvasNode, ChildOrigin, Project, SourceArtifact } from '@shared/domain'
+import type { Icon } from '../ui/icons'
 
 // The contract between SPADE's generic node wrapper and an entity's renderer (plan §5.5, §6).
 // The wrapper owns chrome, dragging, sizing, menus, and activation; the renderer owns only the body.
@@ -97,8 +98,8 @@ export type EntityMenuContext<Config = unknown> = {
 export type EntityRendererDefinition<Config = unknown> = {
   // Matches the shared EntityDefinition.type; display name and sizes come from the shared definition.
   type: string
-  // A short monogram or glyph shown in the header's icon box.
-  icon: ReactNode
+  // The type's icon from the SPADE icon set, shown in the header and wherever the type is listed.
+  icon: Icon
   Body: ComponentType<EntityBodyProps<Config>>
   // Omitted: the entity cannot be created from the New node menu or Spawn connected….
   CreateForm?: ComponentType<EntityCreateFormProps>

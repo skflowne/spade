@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef } from 'react'
-import { entities, entityRenderers } from '../../entities'
+import { entities } from '../../entities'
 import { useSpadeStore } from '../../store/hooks'
 import { MenuButton } from '../../ui/Menu'
 import { usePrompts } from '../../ui/prompts'
@@ -8,6 +8,8 @@ import { archivedEntries, type ArchivedEntry } from '../model/archivedNodes'
 import { canvasIndex } from '../model/canvasIndex'
 import { relativeTime } from '../model/activityView'
 import { SidePanel, useNow } from './SidePanel'
+import { icons } from '../../ui/icons'
+import { EntityTypeIcon } from '../../entities/EntityTypeIcon'
 
 // Archived nodes stay hidden on the canvas; this is where they come back from (plan §4.6).
 export function ArchivedPanel(): React.JSX.Element {
@@ -86,7 +88,7 @@ function ArchivedRow({ entry, now, highlighted }: { entry: ArchivedEntry; now: n
       data-node-id={entry.nodeId}
     >
       <span className="archived-entry__icon" aria-hidden="true">
-        {entityRenderers.get(entry.entityType)?.icon ?? '?'}
+        <EntityTypeIcon type={entry.entityType} />
       </span>
       <div className="archived-entry__text">
         <strong className="archived-entry__title">{entry.title}</strong>
@@ -113,7 +115,7 @@ function ArchivedRow({ entry, now, highlighted }: { entry: ArchivedEntry; now: n
           ...(entry.descendantCount > 0 ? [{ label: 'Remove branch…', onSelect: () => void remove(true), danger: true }] : [])
         ]}
       >
-        ⋯
+        <icons.more />
       </MenuButton>
     </li>
   )

@@ -9,6 +9,7 @@ import { AgentStatus } from './AgentStatus'
 import { agentNodeHandles } from './nodeHandles'
 import { promptBlockReason } from './status'
 import './agent.css'
+import { icons } from '../../ui/icons'
 
 // The agent conversation entity (plan §7.1): spawn form, header status, conversation, composer,
 // permissions, provider sub-agents, and rich conversation artifacts.
@@ -62,7 +63,7 @@ function menuActions({ node, host }: EntityMenuContext<AgentConfig>): EntityMenu
 
 export const agentRenderer = defineEntityRenderer<AgentConfig>({
   type: AGENT_ENTITY,
-  icon: 'A',
+  icon: icons.agent,
   Body: AgentBody,
   Status: AgentStatus,
   CreateForm: AgentCreateForm,

@@ -20,6 +20,7 @@ import {
   type WebviewTitleEvent
 } from './webviewElement'
 import './webpage.css'
+import { icons } from '../../ui/icons'
 
 const LOCATOR_SAVE_DELAY_MS = 750
 const STATUS_TITLE_LENGTH = 28
@@ -377,7 +378,7 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
             disabled={!usable || !page.canGoBack}
             onClick={() => attached?.goBack()}
           >
-            ←
+            <icons.back />
           </button>
           <button
             type="button"
@@ -387,11 +388,11 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
             disabled={!usable || !page.canGoForward}
             onClick={() => attached?.goForward()}
           >
-            →
+            <icons.forward />
           </button>
           {page.loading ? (
             <button type="button" className="cr-icon-button" aria-label="Stop" title="Stop" disabled={!usable} onClick={() => attached?.stop()}>
-              ✕
+              <icons.stop />
             </button>
           ) : (
             <button
@@ -402,7 +403,7 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
               disabled={!usable}
               onClick={() => reload?.()}
             >
-              ↻
+              <icons.reload />
             </button>
           )}
           <input
@@ -432,7 +433,7 @@ export function WebPageBody({ node, config, project, active, detail, host }: Ent
             title="Open in default browser"
             onClick={() => void window.spadeHost.files.openExternal(page.url)}
           >
-            ↗
+            <icons.openExternal />
           </button>
         </form>
       ) : null}

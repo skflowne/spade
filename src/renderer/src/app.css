@@ -244,7 +244,7 @@ textarea.cr-input {
   border: var(--cr-border);
   border-radius: var(--cr-radius-compact);
   color: var(--accent);
-  font: 700 var(--cr-text-xs) var(--mono);
+  font-size: var(--cr-text-md);
 }
 
 .cr-badge {
@@ -771,14 +771,12 @@ legend {
   width: 18px;
   height: 18px;
   margin-top: var(--cr-space-1);
-  border-radius: var(--cr-radius-round);
-  background: var(--danger);
-  color: var(--cr-ink-950);
-  font: 700 var(--cr-text-xs) var(--mono);
+  color: var(--danger);
+  font-size: var(--cr-text-lg);
 }
 
 .notice--problem .notice__icon {
-  background: var(--warning);
+  color: var(--warning);
 }
 
 .notice__message {
@@ -993,7 +991,7 @@ legend {
   border: var(--cr-border);
   border-radius: var(--cr-radius-control);
   color: var(--accent);
-  font: 700 var(--cr-text-sm) var(--mono);
+  font-size: var(--cr-text-lg);
 }
 
 .spade-node__titles {
@@ -1260,7 +1258,6 @@ legend {
   place-items: center;
   width: 16px;
   color: var(--muted);
-  font-family: var(--mono);
 }
 
 .cr-menu__label {
@@ -1314,7 +1311,7 @@ kbd {
 }
 
 .notice--info .notice__icon {
-  background: var(--accent);
+  color: var(--accent);
 }
 
 .notice__actions {
@@ -1400,6 +1397,7 @@ kbd {
 
 .search-box__glyph {
   position: absolute;
+  display: flex;
   left: var(--cr-space-4);
   color: var(--faint);
   pointer-events: none;
@@ -1472,7 +1470,7 @@ kbd {
   border: var(--cr-border);
   border-radius: var(--cr-radius-compact);
   color: var(--accent);
-  font: 700 var(--cr-text-xs) var(--mono);
+  font-size: var(--cr-text-md);
 }
 
 .search-result__icon {
@@ -1674,6 +1672,7 @@ kbd {
 .activity-entry__icon {
   width: 18px;
   height: 18px;
+  font-size: var(--cr-text-sm);
 }
 
 .activity-entry time {
@@ -1756,6 +1755,7 @@ kbd {
 }
 
 .breadcrumb__separator {
+  display: inline-flex;
   padding: 0 var(--cr-space-1);
   color: var(--faint);
 }

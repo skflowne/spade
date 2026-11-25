@@ -1,5 +1,6 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import { useCanvasActions } from '../CanvasContext'
+import { icons } from '../../ui/icons'
 
 // The frame of a canvas side panel: a labelled region with a title, optional tools, and a close button.
 export function SidePanel(props: { title: string; tools?: ReactNode; children: ReactNode }): React.JSX.Element {
@@ -15,7 +16,7 @@ export function SidePanel(props: { title: string; tools?: ReactNode; children: R
           title={`Close ${props.title}`}
           onClick={actions.closePanel}
         >
-          ×
+          <icons.close />
         </button>
       </header>
       {props.tools ? <div className="side-panel__tools">{props.tools}</div> : null}

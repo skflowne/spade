@@ -5,6 +5,7 @@ import { useArtifacts } from './ArtifactLayer'
 import { useConversation } from './ConversationContext'
 import { splitMessage } from './messageSegments'
 import { describeAnnotation } from './submission'
+import { icons } from '../../ui/icons'
 
 // An assistant message: Markdown through RichMarkdown, with each top-level live HTML answer in its own
 // collapsible frame. Segments keep their index as key, so while a message streams only its tail changes
@@ -82,7 +83,7 @@ function HtmlAnswer({ answerKey, html, title }: { answerKey: string; html: strin
       ) : (
         <button type="button" className="agent-html-answer__collapsed" aria-expanded={false} onClick={() => setToggled(true)}>
           <span className="agent-pane__chevron" aria-hidden="true">
-            ▸
+            <icons.collapsed />
           </span>
           <span className="agent-pane__label">HTML answer</span>
           <span className="agent-pane__summary">{title ?? 'Show the live answer'}</span>
@@ -112,7 +113,7 @@ function AnnotationList({ answerKey }: { answerKey: string }): React.JSX.Element
               title="Remove annotation"
               onClick={() => store.remove(answerKey, annotation.id)}
             >
-              ×
+              <icons.remove />
             </button>
           </li>
         ))}

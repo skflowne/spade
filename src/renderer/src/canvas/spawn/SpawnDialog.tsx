@@ -117,7 +117,7 @@ export function SpawnDialog({ mode, open, onCreate, onCancel }: SpawnDialogProps
                 onChange={() => setEntityType(definition.type)}
               />
               <span className="cr-choice__icon" aria-hidden="true">
-                {renderer.icon}
+                <renderer.icon />
               </span>
               <span>{definition.displayName}</span>
             </label>
