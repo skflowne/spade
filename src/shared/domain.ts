@@ -82,8 +82,9 @@ export type CanvasEdge = {
 
 export type Actor =
   | { kind: 'user' }
-  // A Paseo agent acting through the CLI; `nodeId` is the agent's own canvas node.
-  | { kind: 'agent'; nodeId: string; agentId: string }
+  // A Paseo agent acting through the CLI. Identity is Paseo's `agentId`; `nodeId` is the agent's own
+  // canvas node while it is expanded, null while it is collapsed into its owner's list.
+  | { kind: 'agent'; nodeId: string | null; agentId: string }
   // SPADE itself, for example sub-agent reconciliation.
   | { kind: 'system' }
 
