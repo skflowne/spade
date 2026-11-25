@@ -1,4 +1,4 @@
-export const DOMAIN_RECORD_VERSION = 2 as const
+export const DOMAIN_RECORD_VERSION = 3 as const
 
 export type DomainRecordVersion = typeof DOMAIN_RECORD_VERSION
 
@@ -98,7 +98,6 @@ export type CanvasActivity = {
 }
 
 export const CANVAS_ACTIVITY_LIMIT = 200
-export const CANVAS_DISMISSED_RESOURCE_LIMIT = 500
 
 export type Canvas = {
   version: DomainRecordVersion
@@ -109,10 +108,6 @@ export type Canvas = {
   viewport: Viewport | null
   // Newest last, bounded by CANVAS_ACTIVITY_LIMIT.
   activity: CanvasActivity[]
-  // Resources (provider, kind, id) whose node was removed from this canvas, newest last, bounded by
-  // CANVAS_DISMISSED_RESOURCE_LIMIT. SPADE's own reconciliation never adds a node for them again; a user or
-  // an agent creating one brings the resource back and clears its entry.
-  dismissedResources: ResourceRef[]
 }
 
 export type ConversationExpansionPreferences = {
@@ -159,7 +154,6 @@ export function createEmptyCanvas(projectId: string): Canvas {
     edges: [],
     workspaces: [],
     viewport: null,
-    activity: [],
-    dismissedResources: []
+    activity: []
   }
 }

@@ -4,6 +4,8 @@ export type AgentServiceErrorCode =
   // The node mirrors a provider-native sub-agent, which Paseo cannot prompt, interrupt, or ask for permissions.
   | 'unsupported-agent-action'
   | 'agent-missing'
+  // Paseo does not know the agent, or it is not one SPADE follows (shown on a canvas or owned by one that is).
+  | 'unknown-agent'
   | 'unknown-subagent'
   | 'invalid-argument'
   | 'paseo-unavailable'

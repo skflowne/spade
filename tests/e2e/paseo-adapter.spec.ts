@@ -148,6 +148,7 @@ class FakeDriver {
   }
   sendAgentMessage = async (...args: unknown[]) => { this.record('sendAgentMessage', ...args); return {} }
   cancelAgent = async (...args: unknown[]) => { this.record('cancelAgent', ...args) }
+  setAgentMode = async (...args: unknown[]) => { this.record('setAgentMode', ...args); return null }
   archiveAgent = async (...args: unknown[]) => { this.record('archiveAgent', ...args); return { archivedAt: '2026-11-21T11:00:00.000Z' } }
   respondToPermission = async (...args: unknown[]) => { this.record('respondToPermission', ...args) }
   fetchAgentTimeline = async (...args: unknown[]) => {
@@ -318,6 +319,55 @@ test('keeps retrying an unreachable daemon and distinguishes first connection fr
   ])
   expect(driver.callsOf('observeAgents')).toHaveLength(1)
   await adapter.stop()
+})
+
+test('switches to another daemon URL with a new client, and reconnects only when the URL changed or the connection is down', async () => {
+  const drivers: Array<{ url: string; driver: FakeDriver }> = []
+  const adapter = new PaseoAdapter({
+    url: URL_UNDER_TEST,
+    createDriver: (url) => {
+      const driver = new FakeDriver()
+      drivers.push({ url, driver })
+      return driver as unknown as PaseoDaemonDriver
+    }
+  })
+  const connections: string[] = []
+  adapter.subscribe((event) => {
+    if (event.type === 'connection') connections.push(`${event.connection.state}@${event.connection.url}`)
+  })
+  await adapter.start()
+  await adapter.watchTimelines(['agent-1'])
+
+  await adapter.reconnect(URL_UNDER_TEST)
+  expect(drivers).toHaveLength(1)
+
+  const other = 'ws://127.0.0.1:17999/ws'
+  await adapter.reconnect(other)
+  expect(drivers.map(({ url }) => url)).toEqual([URL_UNDER_TEST, other])
+  expect(drivers[0].driver.callsOf('close')).toHaveLength(1)
+  expect(adapter.url).toBe(other)
+  expect(adapter.connection()).toEqual({ state: 'connected', url: other, error: null })
+  // The new client observes agents, events, and the requested timelines again.
+  expect(drivers[1].driver.callsOf('observeAgents')).toHaveLength(1)
+  expect(drivers[1].driver.callsOf('observeTimeline')).toEqual([[['agent-1']]])
+  expect(connections).toEqual([
+    `connecting@${URL_UNDER_TEST}`,
+    `connected@${URL_UNDER_TEST}`,
+    `disconnected@${URL_UNDER_TEST}`,
+    `connecting@${other}`,
+    `connected@${other}`
+  ])
+
+  // Down on the same URL: a refresh starts over instead of waiting for the client's own retries.
+  drivers[1].driver.setStatus({ status: 'disconnected', reason: 'socket closed' })
+  await adapter.reconnect(other)
+  expect(drivers).toHaveLength(3)
+  expect(adapter.connection().state).toBe('connected')
+  await adapter.stop()
+
+  const disabled = new PaseoAdapter({ url: URL_UNDER_TEST, disabled: true, createDriver: () => { throw new Error('never') } })
+  await disabled.reconnect(other)
+  expect(disabled.connection()).toEqual({ state: 'disabled', url: other, error: null })
 })
 
 test('lists providers for a directory after discovery settles', async () => {
@@ -491,17 +541,19 @@ test('lists managed children only by their durable parent label, across pages an
   await adapter.stop()
 })
 
-test('prompts, interrupts, answers permissions, and archives through the daemon', async () => {
+test('prompts, interrupts, changes the mode, answers permissions, and archives through the daemon', async () => {
   const { adapter, driver } = await connectedAdapter()
 
   await adapter.sendPrompt('agent-1', 'Continue.')
   await adapter.interrupt('agent-1')
+  await adapter.setAgentMode('agent-1', 'acceptEdits')
   await adapter.respondToPermission('agent-1', 'perm-1', 'allow')
   await adapter.respondToPermission('agent-1', 'perm-2', 'deny')
   const archivedAt = await adapter.archiveAgent('agent-1')
 
   expect(driver.callsOf('sendAgentMessage')).toEqual([['agent-1', 'Continue.']])
   expect(driver.callsOf('cancelAgent')).toEqual([['agent-1']])
+  expect(driver.callsOf('setAgentMode')).toEqual([['agent-1', 'acceptEdits']])
   expect(driver.callsOf('respondToPermission')).toEqual([
     ['agent-1', 'perm-1', { behavior: 'allow' }],
     ['agent-1', 'perm-2', { behavior: 'deny', message: 'Denied in SPADE.' }]

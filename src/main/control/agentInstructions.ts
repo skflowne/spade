@@ -9,8 +9,9 @@ export type AgentInstructionsInput = {
   platform: NodeJS.Platform
 }
 
-// The few lines SPADE appends to an agent's initial prompt. The skill itself is fetched on demand with
-// `<shim> skill`, so nothing is written into the project directory or provider-specific configuration.
+// The few lines SPADE appends to the initial prompt of an agent the user creates; agents started by other
+// agents get none. The skill itself is fetched on demand with `<shim> skill`, so nothing is written into the
+// project directory or provider-specific configuration.
 export function formatAgentInstructions(input: AgentInstructionsInput): string {
   const bash = posixCommand(posixPath(input.shims.posixShim))
   const lines = [
@@ -29,7 +30,8 @@ export function formatAgentInstructions(input: AgentInstructionsInput): string {
   }
   lines.push(
     `Before using the canvas, run \`${bash} skill\`${input.platform === 'win32' ? " (or your shell's launcher)" : ''} once and follow it.`,
-    'Canvas changes are attributed to you and visible to the user; they never touch files.'
+    'Change the canvas only when the user asks; changes are attributed to you and visible to the user, and never touch files.',
+    "Agents you start, with `spawn agent` or Paseo's own tools, are owned by you and listed under you; message them with Paseo's tools."
   )
   return lines.join('\n')
 }

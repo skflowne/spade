@@ -11,14 +11,17 @@ import type {
   NodeSummary,
   Page,
   ProjectSummary,
+  SpawnedAgent,
   TreeResult,
   WhoAmIResult
 } from '../main/control/protocol'
 
 // Compact human-readable renderings. `--json` prints the structured results instead.
 
+// Agents are attributed by their Paseo id, with their node while they were expanded.
 export function actorLabel(actor: Actor): string {
-  return actor.kind === 'agent' ? `agent ${actor.nodeId}` : actor.kind
+  if (actor.kind !== 'agent') return actor.kind
+  return actor.nodeId === null ? `agent ${actor.agentId}` : `agent ${actor.agentId} (node ${actor.nodeId})`
 }
 
 function flags(node: NodeFlags): string {
@@ -41,16 +44,25 @@ function more(page: Page<unknown>): string[] {
 }
 
 export function formatWhoAmI(result: WhoAmIResult): string {
-  if (!result.node || result.actor.kind !== 'agent') {
-    return 'You are the user (no PASEO_AGENT_ID). Commands that read a whole canvas need --project <id|name>; changes need --as-user.'
+  if (result.actor.kind !== 'agent') {
+    return 'You are the user (no PASEO_AGENT_ID). You can read the canvas; commands that read a whole canvas need --project <id|name>. Changes are made in SPADE itself.'
   }
-  const lines = [
+  const owner = `Owner: ${result.ownerAgentId ? `Paseo agent ${result.ownerAgentId}` : 'none'}`
+  const project = result.project ? `Project: ${result.project.name} (${result.project.id}) ${result.project.rootPath}` : 'Project: unknown'
+  if (!result.node) {
+    return [
+      `You are Paseo agent ${result.actor.agentId}, collapsed into the list of node ${result.anchorNodeId ?? 'unknown'} (your nearest expanded owner); what you spawn goes there by default.`,
+      owner,
+      project
+    ].join('\n')
+  }
+  return [
     `You are agent node ${nodeLine(result.node)} (Paseo agent ${result.actor.agentId})`,
-    result.project ? `Project: ${result.project.name} (${result.project.id}) ${result.project.rootPath}` : 'Project: unknown',
+    owner,
+    project,
     `Parent: ${result.node.parentId ?? 'none (you are a root)'}`,
     `Children: ${result.childIds.length ? result.childIds.join(', ') : 'none'}`
-  ]
-  return lines.join('\n')
+  ].join('\n')
 }
 
 export function formatProjects(projects: ProjectSummary[]): string {
@@ -130,6 +142,10 @@ export function formatProviders(providers: AgentProviderInfo[]): string {
       return `${provider.id} (${provider.label})${state}\n  models: ${models}\n  modes: ${modes}`
     })
     .join('\n')
+}
+
+export function formatSpawnedAgent(result: SpawnedAgent): string {
+  return `ok: started Paseo agent ${result.agentId}, owned by you (${result.ownerAgentId}); it is listed under its owner, not placed on the canvas`
 }
 
 export function formatMutation(verb: string, result: MutationResult): string {

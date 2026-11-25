@@ -1,6 +1,5 @@
 import {
   CANVAS_ACTIVITY_LIMIT,
-  CANVAS_DISMISSED_RESOURCE_LIMIT,
   DOMAIN_RECORD_VERSION,
   type Actor,
   type AgentDefaults,
@@ -237,7 +236,8 @@ export function parseActor(value: unknown, path = 'actor'): Actor {
   oneOf(kind, ['user', 'agent', 'system'], `${path}.kind`)
   if (kind === 'agent') {
     const actor = shape(value, path, ['kind', 'nodeId', 'agentId'])
-    nonEmptyString(actor.nodeId, `${path}.nodeId`)
+    // Null while the agent is collapsed into its owner's list.
+    if (actor.nodeId !== null) nonEmptyString(actor.nodeId, `${path}.nodeId`)
     nonEmptyString(actor.agentId, `${path}.agentId`)
   } else {
     shape(value, path, ['kind'])
@@ -290,8 +290,7 @@ export function parseCanvas(value: unknown, path = 'canvas'): Canvas {
     'edges',
     'workspaces',
     'viewport',
-    'activity',
-    'dismissedResources'
+    'activity'
   ])
   recordVersion(canvas.version, `${path}.version`)
   const projectId = nonEmptyString(canvas.projectId, `${path}.projectId`)
@@ -304,11 +303,6 @@ export function parseCanvas(value: unknown, path = 'canvas'): Canvas {
   const activity = array(canvas.activity, `${path}.activity`)
   if (activity.length > CANVAS_ACTIVITY_LIMIT) fail(`${path}.activity`, `exceeds ${CANVAS_ACTIVITY_LIMIT} entries`)
   activity.forEach((entry, index) => parseCanvasActivity(entry, `${path}.activity[${index}]`))
-  const dismissed = array(canvas.dismissedResources, `${path}.dismissedResources`)
-  if (dismissed.length > CANVAS_DISMISSED_RESOURCE_LIMIT) {
-    fail(`${path}.dismissedResources`, `exceeds ${CANVAS_DISMISSED_RESOURCE_LIMIT} entries`)
-  }
-  dismissed.forEach((ref, index) => parseResourceRef(ref, `${path}.dismissedResources[${index}]`))
 
   const nodeIds = uniqueIds(nodes, `${path}.nodes`)
   const workspaceIds = uniqueIds(workspaces, `${path}.workspaces`)

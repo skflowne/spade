@@ -20,6 +20,7 @@ export type ControlServerOptions = {
   executablePath: string
   platform?: NodeJS.Platform
   maxBodyBytes?: number
+  // How long a caller Paseo does not report yet (a just-created agent) is looked up again.
   identityLookup?: { timeoutMs: number; intervalMs: number }
 }
 
@@ -93,20 +94,21 @@ export function createControlServer(options: ControlServerOptions): ControlServe
       throw new HttpFailure(400, 'bad-request', 'The body is not valid JSON')
     }
     if (typeof payload !== 'object' || payload === null || Array.isArray(payload)) {
-      throw new HttpFailure(400, 'bad-request', 'The body must be an object { method, params, agentId?, asUser? }')
+      throw new HttpFailure(400, 'bad-request', 'The body must be an object { method, params?, agentId? }')
     }
-    const { method, params, agentId, asUser } = payload as Record<string, unknown>
+    const unknownField = Object.keys(payload).find((key) => key !== 'method' && key !== 'params' && key !== 'agentId')
+    if (unknownField !== undefined) throw new HttpFailure(400, 'bad-request', `The body has an unknown field ${unknownField}`)
+    const { method, params, agentId } = payload as Record<string, unknown>
     if (typeof method !== 'string' || !methods.has(method)) {
       throw new HttpFailure(400, 'unknown-method', `Unknown method: ${String(method)}`)
     }
     if (agentId !== undefined && (typeof agentId !== 'string' || agentId.length === 0 || agentId.length > 256)) {
       throw new HttpFailure(400, 'bad-request', 'agentId must be a non-empty string')
     }
-    if (asUser !== undefined && asUser !== true) throw new HttpFailure(400, 'bad-request', 'asUser must be true when present')
 
     let reply: RpcResponse
     try {
-      reply = { ok: true, result: await methods.call(method, params, { agentId, asUser: asUser === true }) }
+      reply = { ok: true, result: await methods.call(method, params, agentId) }
     } catch (error) {
       reply = { ok: false, error: toControlError(error) }
     }

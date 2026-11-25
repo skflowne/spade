@@ -1,4 +1,5 @@
 import type {
+  AgentLocation,
   AgentService,
   AgentServiceEvent,
   MainEntityAdapter,
@@ -33,9 +34,6 @@ export class FakeGateway implements WorkspaceGateway {
   readonly entities = createBuiltinEntityRegistry()
   readonly executed: ExecutedCommand[] = []
   settings: AppSettings = DEFAULT_APP_SETTINGS
-  // Number of upcoming findNodeByResource calls that report nothing, as if reconciliation were still running.
-  resourceMisses = 0
-  resourceLookups = 0
   private readonly projects: Project[] = []
   private readonly canvases = new Map<string, Canvas>()
   private nextId = 0
@@ -110,11 +108,6 @@ export class FakeGateway implements WorkspaceGateway {
   }
 
   async findNodeByResource(ref: ResourceRef): Promise<{ projectId: string; node: CanvasNode } | null> {
-    this.resourceLookups += 1
-    if (this.resourceMisses > 0) {
-      this.resourceMisses -= 1
-      return null
-    }
     for (const [projectId, canvas] of this.canvases) {
       const node = canvas.nodes.find(
         (candidate) =>
@@ -171,10 +164,21 @@ export function noteSeed(title: string, body = `${title} body`): NodeSeed {
   return { entityType: 'note', title, config: { body } }
 }
 
+export type SpawnedChildAgent = {
+  callerAgentId: string
+  input: { prompt: string; provider: string; model?: string; mode?: string; title?: string }
+}
+
+// Locates an agent by its own node on the fake gateway's canvases unless a test registers another location,
+// for example a child collapsed into its owner's list.
 export class FakeAgentService implements AgentService {
-  readonly prompts: Array<{ nodeId: string; text: string; actor: Actor }> = []
+  readonly spawned: SpawnedChildAgent[] = []
+  readonly locations = new Map<string, AgentLocation>()
+  // Number of upcoming locateAgent calls that report nothing, as if Paseo had not reported the agent yet.
+  locateMisses = 0
+  locateCalls = 0
   // When set, the next calls of that operation reject with it.
-  promptFailure: Error | null = null
+  spawnFailure: Error | null = null
   providersFailure: Error | null = null
   readonly runtimeList: AgentRuntime[] = []
   providers: AgentProviderInfo[] = [
@@ -195,6 +199,8 @@ export class FakeAgentService implements AgentService {
     create: async () => ({ resourceRef: null })
   }
 
+  constructor(private readonly gateway: FakeGateway | null = null) {}
+
   addRuntime(runtime: Partial<AgentRuntime> & { projectId: string; nodeId: string; agentId: string }): void {
     this.runtimeList.push({
       resourceState: 'live',
@@ -208,6 +214,7 @@ export class FakeAgentService implements AgentService {
       cwd: null,
       pendingPermissions: [],
       providerSubagents: [],
+      children: [],
       lastError: null,
       updatedAt: NOW,
       ...runtime
@@ -219,6 +226,10 @@ export class FakeAgentService implements AgentService {
 
   connection() {
     return { state: 'connected' as const, url: 'ws://127.0.0.1:6767', error: null }
+  }
+
+  async refreshConnection() {
+    return this.connection()
   }
 
   async listProviders(): Promise<AgentProviderInfo[]> {
@@ -234,16 +245,41 @@ export class FakeAgentService implements AgentService {
     return { nodeId, epoch: null, items: [], olderCursor: null }
   }
 
-  async prompt(nodeId: string, input: { text: string }, actor: Actor): Promise<void> {
-    if (this.promptFailure) throw this.promptFailure
-    this.prompts.push({ nodeId, text: input.text, actor })
-  }
-
+  async prompt(): Promise<void> {}
   async interrupt(): Promise<void> {}
   async respondToPermission(): Promise<void> {}
+  async respondToAgentPermission(): Promise<void> {}
+  async setAgentMode(): Promise<void> {}
 
   async openProviderSubagent(nodeId: string): Promise<{ nodeId: string }> {
     return { nodeId }
+  }
+
+  async expandChildAgent(ownerNodeId: string): Promise<{ nodeId: string }> {
+    return { nodeId: ownerNodeId }
+  }
+
+  async spawnChildAgent(callerAgentId: string, input: SpawnedChildAgent['input']): Promise<{ agentId: string }> {
+    if (this.spawnFailure) throw this.spawnFailure
+    this.spawned.push({ callerAgentId, input })
+    return { agentId: `paseo-child-${this.spawned.length}` }
+  }
+
+  async locateAgent(agentId: string): Promise<AgentLocation | null> {
+    this.locateCalls += 1
+    if (this.locateMisses > 0) {
+      this.locateMisses -= 1
+      return null
+    }
+    const registered = this.locations.get(agentId)
+    if (registered) return registered
+    const found = await this.gateway?.findNodeByResource({ provider: 'paseo', kind: PASEO_AGENT_KIND, id: agentId })
+    if (!found) return null
+    return {
+      agentId,
+      parentAgentId: null,
+      placements: [{ projectId: found.projectId, nodeId: found.node.id, anchorNodeId: found.node.id }]
+    }
   }
 
   subscribe(listener: (event: AgentServiceEvent) => void): () => void {
