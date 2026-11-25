@@ -8,6 +8,7 @@ import type { EntityCreateFormProps } from '../types'
 import { reloaderOf } from './reloadRequests'
 import { normalizeWebAddress } from './webAddress'
 import { WebPageBody } from './WebPageBody'
+import { icons } from '../../ui/icons'
 
 function WebPageCreateForm({ formId, onSubmit }: EntityCreateFormProps): React.JSX.Element {
   const [address, setAddress] = useState('')
@@ -51,7 +52,7 @@ function reloadUnavailable(node: CanvasNode): string | null {
 
 export const webPageRenderer = defineEntityRenderer<WebPageConfig>({
   type: WEB_PAGE_ENTITY,
-  icon: 'W',
+  icon: icons.webpage,
   Body: WebPageBody,
   CreateForm: WebPageCreateForm,
   menuActions: ({ node, config, host }) => {

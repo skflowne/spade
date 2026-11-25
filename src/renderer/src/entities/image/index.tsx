@@ -6,6 +6,7 @@ import { defineEntityRenderer } from '../registry'
 import type { EntityCreateFormProps, EntityMenuAction } from '../types'
 import { ImageBody } from './ImageBody'
 import { copyImagePath, imageBodyOf, revealImage, type ImageBodyControls } from './imageRequests'
+import { icons } from '../../ui/icons'
 
 function ImageCreateForm({ project, formId, onSubmit }: EntityCreateFormProps): React.JSX.Element {
   const [path, setPath] = useState('')
@@ -61,7 +62,7 @@ function ImageCreateForm({ project, formId, onSubmit }: EntityCreateFormProps): 
 
 export const imageRenderer = defineEntityRenderer<ImageConfig>({
   type: IMAGE_ENTITY,
-  icon: 'I',
+  icon: icons.image,
   Body: ImageBody,
   CreateForm: ImageCreateForm,
   menuActions: ({ node, config, project, host }) => {

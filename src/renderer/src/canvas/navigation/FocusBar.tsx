@@ -1,9 +1,10 @@
 import { Panel } from '@xyflow/react'
-import { entityRenderers } from '../../entities'
 import { MenuButton } from '../../ui/Menu'
 import { useCanvasActions, useCanvasData, useCanvasNavigation } from '../CanvasContext'
 import { archivedEntryOf } from '../model/archivedNodes'
 import { canvasIndex } from '../model/canvasIndex'
+import { icons } from '../../ui/icons'
+import { EntityTypeIcon } from '../../entities/EntityTypeIcon'
 
 // Path segments shown before the rest fold into a menu: the root and the last few.
 const SHOWN_TAIL = 3
@@ -40,7 +41,7 @@ export function FocusBar(): React.JSX.Element | null {
               <li key={nodeId} className="breadcrumb__item">
                 {position > 0 ? (
                   <span className="breadcrumb__separator" aria-hidden="true">
-                    ›
+                    <icons.pathSeparator />
                   </span>
                 ) : null}
                 {position === 1 && folded.length > 0 ? (
@@ -53,10 +54,10 @@ export function FocusBar(): React.JSX.Element | null {
                         folded.map((id) => ({ label: index.byId.get(id)?.title ?? id, onSelect: () => go(id) }))
                       }
                     >
-                      …
+                      <icons.more />
                     </MenuButton>
                     <span className="breadcrumb__separator" aria-hidden="true">
-                      ›
+                      <icons.pathSeparator />
                     </span>
                   </>
                 ) : null}
@@ -74,7 +75,7 @@ export function FocusBar(): React.JSX.Element | null {
                   onClick={() => go(nodeId)}
                 >
                   <span className="breadcrumb__icon" aria-hidden="true">
-                    {entityRenderers.get(node.entityType)?.icon ?? '?'}
+                    <EntityTypeIcon type={node.entityType} />
                   </span>
                   <span className="breadcrumb__title">{node.title}</span>
                 </button>

@@ -8,6 +8,7 @@ import { useArtifacts } from './ArtifactLayer'
 import { AssistantMessage } from './AssistantMessage'
 import { useConversation } from './ConversationContext'
 import { paneKindOf, type PaneKind } from './expansion'
+import { icons } from '../../ui/icons'
 
 type ToolCall = Extract<ConversationItem, { kind: 'tool-call' }>
 
@@ -124,7 +125,7 @@ function Pane({
           onClick={() => setToggled(!expanded)}
         >
           <span className="agent-pane__chevron" aria-hidden="true">
-            {expanded ? '▾' : '▸'}
+            {expanded ? <icons.expanded /> : <icons.collapsed />}
           </span>
           <span className="agent-pane__label">{label}</span>
           <span className="agent-pane__summary">{summary}</span>

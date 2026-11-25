@@ -9,7 +9,7 @@ export type MenuItem =
       danger?: boolean
       // Secondary text after the label, e.g. a node's type.
       detail?: string
-      // A short glyph before the label.
+      // An icon from the SPADE icon set before the label.
       icon?: ReactNode
     }
   // A non-interactive label for the items that follow it.

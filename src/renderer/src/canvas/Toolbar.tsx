@@ -6,6 +6,7 @@ import { useCanvasActions, useCanvasData, useCanvasNavigation } from './CanvasCo
 import { canvasSidePanels, canvasToolbarItems } from './extensions'
 import { SearchBox } from './navigation/SearchBox'
 import { ShortcutsHelp } from './navigation/ShortcutsHelp'
+import { icons } from '../ui/icons'
 
 export function Toolbar(): React.JSX.Element {
   const { project } = useCanvasData()
@@ -35,7 +36,7 @@ export function Toolbar(): React.JSX.Element {
           disabled={!navigation.canGoBack}
           onClick={actions.goBack}
         >
-          ‹
+          <icons.back />
         </button>
         <button
           type="button"
@@ -45,7 +46,7 @@ export function Toolbar(): React.JSX.Element {
           disabled={!navigation.canGoForward}
           onClick={actions.goForward}
         >
-          ›
+          <icons.forward />
         </button>
         <SearchBox />
         <span className="canvas-toolbar__divider" aria-hidden="true" />
@@ -55,20 +56,21 @@ export function Toolbar(): React.JSX.Element {
           title="Add a node as a new tree"
           className="cr-button cr-button--primary"
           items={() =>
-            entityRenderers.creatable().map(({ definition }) => ({
+            entityRenderers.creatable().map(({ definition, renderer }) => ({
               label: definition.displayName,
+              icon: <renderer.icon />,
               onSelect: () => actions.openCreate({ entityType: definition.type })
             }))
           }
         >
-          <span aria-hidden="true">＋</span> New node
+          <icons.add aria-hidden="true" /> New node
         </MenuButton>
         <span className="canvas-toolbar__divider" aria-hidden="true" />
         <button type="button" className="cr-button cr-button--ghost" onClick={actions.fitAll}>
           Fit all
         </button>
         <button type="button" className="cr-icon-button" aria-label="Zoom out" title="Zoom out" onClick={() => void flow.zoomOut()}>
-          −
+          <icons.zoomOut />
         </button>
         <button
           type="button"
@@ -80,7 +82,7 @@ export function Toolbar(): React.JSX.Element {
           {percent}
         </button>
         <button type="button" className="cr-icon-button" aria-label="Zoom in" title="Zoom in" onClick={() => void flow.zoomIn()}>
-          +
+          <icons.zoomIn />
         </button>
         <span className="canvas-toolbar__divider" aria-hidden="true" />
         {canvasSidePanels.map(({ id, label, Badge }) => (
@@ -108,7 +110,7 @@ export function Toolbar(): React.JSX.Element {
           aria-pressed={minimap}
           onClick={() => store.setSession({ minimap: !minimap })}
         >
-          <span aria-hidden="true">▣</span>
+          <icons.minimap weight={minimap ? 'fill' : 'regular'} aria-hidden="true" />
         </button>
         <ShortcutsHelp />
         {canvasToolbarItems.map((Item, index) => (

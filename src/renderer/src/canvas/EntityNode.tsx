@@ -14,6 +14,8 @@ import { canvasIndex } from './model/canvasIndex'
 import { detailForZoom } from './model/levelOfDetail'
 import { RelatedMenu } from './RelatedMenu'
 import type { NodeView } from './viewModel'
+import { icons } from '../ui/icons'
+import { EntityTypeIcon } from '../entities/EntityTypeIcon'
 
 export type EntityNodeData = { record: CanvasNode; view: NodeView }
 export type EntityFlowNode = Node<EntityNodeData, 'entity'>
@@ -113,7 +115,7 @@ function EntityNodeView({ id, data, selected }: NodeProps<EntityFlowNode>): Reac
           }}
         >
           <span className="spade-node__icon" aria-hidden="true">
-            {resolved.renderer?.icon ?? '?'}
+            <EntityTypeIcon type={record.entityType} />
           </span>
           <div className="spade-node__titles">
             <NodeTitle id={titleId} record={record} />
@@ -358,7 +360,7 @@ function NodeControls({
             run({ type: branchHidden ? 'expandBranch' : 'collapseBranch', nodeId })
           }}
         >
-          {branchHidden ? `+${view.hiddenDescendantCount}` : '⊟'}
+          {branchHidden ? `+${view.hiddenDescendantCount}` : <icons.collapseBranch />}
         </button>
       ) : null}
       <button
@@ -371,10 +373,10 @@ function NodeControls({
           run({ type: record.collapsed ? 'expandNode' : 'collapseNode', nodeId })
         }}
       >
-        {record.collapsed ? '▸' : '▾'}
+        {record.collapsed ? <icons.collapsed /> : <icons.expanded />}
       </button>
       <MenuButton label="Node actions" menuLabel={`Actions for ${record.title}`} className="cr-icon-button" items={items}>
-        ⋯
+        <icons.more />
       </MenuButton>
     </div>
   )
