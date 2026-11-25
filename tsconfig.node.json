@@ -12,7 +12,9 @@
   "include": [
     "electron.vite.config.ts",
     "playwright.config.ts",
+    "playwright.live.config.ts",
     "src/main/**/*.ts",
+    "src/cli/**/*.ts",
     "src/preload/**/*.ts",
     "src/shared/**/*.ts",
     "tests/**/*.ts"

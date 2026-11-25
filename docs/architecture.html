@@ -29,219 +29,310 @@
         <p>How the current application fits together and where planned integrations belong.</p>
       </header>
       <article class="docs-content architecture-content">
-<p>This page is a visual map. The <a href="foundation.html">foundation</a> describes what is implemented today; the <a href="plan.html">plan</a> contains detailed product decisions and proposals.</p>
+<p>This page is a visual map. The <a href="foundation.html">foundation</a> describes what is implemented today and the rules it enforces; the <a href="plan.html">plan</a> contains detailed product decisions and proposals.</p>
 <div class="architecture-key" aria-label="Diagram status key">
   <span><i class="architecture-key__line"></i>Implemented</span>
   <span><i class="architecture-key__line architecture-key__line--planned"></i>Planned boundary</span>
 </div>
 
 <h2 id="current-application">Current application</h2>
-<p>SPADE currently has one Electron window, one React renderer, and a small shared core. There are no external integrations or persistent storage.</p>
+<p>SPADE is one Electron application with three parts: a sandboxed React renderer, a preload bridge, and a main process that owns every record and every outside connection. Agents started through Paseo reach back into SPADE through the <code>spade</code> CLI and a local control server.</p>
 <figure class="architecture-figure">
   <div class="architecture-diagram-wrap">
-    <svg class="architecture-diagram" viewBox="0 0 1080 500" role="img" aria-labelledby="current-title current-desc">
-      <title id="current-title">Current SPADE application architecture</title>
-      <desc id="current-desc">The Electron shell contains the React canvas user interface and shared core. The user interacts directly with the canvas. The canvas uses shared records, entity definitions, canvas commands, and the current mock note adapter.</desc>
+    <svg class="architecture-diagram" viewBox="0 0 1080 800" role="img" aria-labelledby="current-title current-desc">
+      <title id="current-title">SPADE process architecture</title>
+      <desc id="current-desc">The user works in the sandboxed React renderer, which contains the store and shell, the React Flow canvas, the entity renderers, and the rich blocks, and hosts web pages as guest webviews. The renderer reaches the main process only through the preload bridge, window.spadeHost, over IPC. The main process contains the workspace gateway, which owns the records and writes them atomically to the application data directory; the file service, which reads project files and reveals them in Explorer, and touches a network path outside the project only when the user asks for it; the agent service with its Paseo adapter, which talks to the Paseo daemon over WebSocket; and the control server, which Paseo agents call with the spade CLI over local HTTP with a bearer token. Every canvas change runs through the gateway queue.</desc>
       <defs>
         <marker id="current-arrow" class="diagram-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M 0 0 L 10 5 L 0 10 z"></path>
         </marker>
       </defs>
 
-      <rect class="diagram-box diagram-box--neutral" x="20" y="210" width="120" height="92" rx="10"></rect>
-      <text class="diagram-title" x="80" y="246" text-anchor="middle">User</text>
-      <text class="diagram-copy" x="80" y="270" text-anchor="middle">mouse · keyboard</text>
+      <rect class="diagram-box diagram-box--neutral" x="20" y="110" width="120" height="80" rx="10"></rect>
+      <text class="diagram-title" x="80" y="146" text-anchor="middle">User</text>
+      <text class="diagram-copy" x="80" y="170" text-anchor="middle">mouse · keyboard</text>
 
-      <rect class="diagram-boundary" x="180" y="35" width="850" height="420" rx="18"></rect>
-      <text class="diagram-kicker" x="212" y="72">ELECTRON SHELL</text>
-      <text class="diagram-copy" x="212" y="99">Window lifecycle · sandboxed renderer · no Node access</text>
+      <rect class="diagram-boundary" x="165" y="30" width="525" height="740" rx="18"></rect>
+      <text class="diagram-kicker" x="195" y="64">SPADE · ELECTRON APP</text>
 
-      <rect class="diagram-box diagram-box--green" x="240" y="145" width="330" height="240" rx="12"></rect>
-      <text class="diagram-kicker" x="270" y="182">REACT RENDERER</text>
-      <text class="diagram-title" x="270" y="220">Canvas UI</text>
-      <text class="diagram-copy" x="270" y="255">React Flow canvas</text>
-      <text class="diagram-copy" x="270" y="280">Generic node view</text>
-      <text class="diagram-copy" x="270" y="305">In-memory state</text>
-      <line class="diagram-divider" x1="270" y1="329" x2="540" y2="329"></line>
-      <text class="diagram-note" x="270" y="356">User interaction happens here</text>
+      <rect class="diagram-box diagram-box--green" x="195" y="85" width="465" height="180" rx="12"></rect>
+      <text class="diagram-kicker" x="220" y="115">RENDERER · SANDBOXED</text>
+      <text class="diagram-title" x="220" y="146">React UI</text>
+      <text class="diagram-copy" x="220" y="176">Store and shell: sidebar, settings, notices</text>
+      <text class="diagram-copy" x="220" y="199">Canvas: React Flow, node wrapper, navigation</text>
+      <text class="diagram-copy" x="220" y="222">Entity renderers: note · agent · image · web page</text>
+      <text class="diagram-copy" x="220" y="245">Rich blocks: Markdown · Mermaid · HTML answers</text>
 
-      <rect class="diagram-box" x="650" y="145" width="320" height="240" rx="12"></rect>
-      <text class="diagram-kicker" x="680" y="182">SHARED CORE</text>
-      <text class="diagram-title" x="680" y="220">Domain and commands</text>
-      <text class="diagram-copy" x="680" y="255">Record definitions</text>
-      <text class="diagram-copy" x="680" y="280">Entity registry</text>
-      <text class="diagram-copy" x="680" y="305">Canvas commands</text>
-      <line class="diagram-divider" x1="680" y1="329" x2="940" y2="329"></line>
-      <text class="diagram-note" x="680" y="356">Contains the mock note adapter</text>
+      <rect class="diagram-box diagram-box--accent" x="195" y="290" width="465" height="60" rx="12"></rect>
+      <text class="diagram-title" x="220" y="317">Preload bridge</text>
+      <text class="diagram-copy" x="220" y="338">window.spadeHost · typed requests and pushes</text>
 
-      <path class="diagram-line" d="M 140 256 L 240 256" marker-end="url(#current-arrow)"></path>
-      <path class="diagram-line" d="M 570 256 L 650 256" marker-start="url(#current-arrow)" marker-end="url(#current-arrow)"></path>
+      <rect class="diagram-boundary" x="195" y="375" width="465" height="375" rx="14"></rect>
+      <text class="diagram-kicker" x="220" y="405">MAIN PROCESS</text>
+      <text class="diagram-copy" x="220" y="428">Every canvas change runs through the gateway queue</text>
+
+      <rect class="diagram-box diagram-box--accent" x="220" y="448" width="415" height="62" rx="10"></rect>
+      <text class="diagram-title" x="245" y="475">Workspace gateway</text>
+      <text class="diagram-copy" x="245" y="497">Serialized owner of records · app-data store</text>
+
+      <rect class="diagram-box" x="220" y="525" width="415" height="62" rx="10"></rect>
+      <text class="diagram-title" x="245" y="552">File service</text>
+      <text class="diagram-copy" x="245" y="574">Reveal · image protocol · watcher · webview policy</text>
+
+      <rect class="diagram-box" x="220" y="602" width="415" height="62" rx="10"></rect>
+      <text class="diagram-title" x="245" y="629">Agent service</text>
+      <text class="diagram-copy" x="245" y="651">Reconciliation · runtimes · Paseo adapter</text>
+
+      <rect class="diagram-box" x="220" y="679" width="415" height="62" rx="10"></rect>
+      <text class="diagram-title" x="245" y="706">Control server</text>
+      <text class="diagram-copy" x="245" y="728">127.0.0.1 · bearer token · discovery file · shims</text>
+
+      <text class="diagram-kicker" x="815" y="64">OUTSIDE THE APP</text>
+
+      <rect class="diagram-box diagram-box--neutral" x="815" y="144" width="240" height="62" rx="10"></rect>
+      <text class="diagram-title" x="840" y="171">Web pages</text>
+      <text class="diagram-copy" x="840" y="193">Guest &lt;webview&gt; · own session</text>
+
+      <rect class="diagram-box diagram-box--neutral" x="815" y="448" width="240" height="62" rx="10"></rect>
+      <text class="diagram-title" x="840" y="475">App data directory</text>
+      <text class="diagram-copy" x="840" y="497">Records · backups · assets</text>
+
+      <rect class="diagram-box diagram-box--neutral" x="815" y="525" width="240" height="62" rx="10"></rect>
+      <text class="diagram-title" x="840" y="552">Projects and Explorer</text>
+      <text class="diagram-copy" x="840" y="574">Read-only · reveal only</text>
+
+      <rect class="diagram-box diagram-box--neutral" x="815" y="602" width="240" height="62" rx="10"></rect>
+      <text class="diagram-title" x="840" y="629">Paseo daemon</text>
+      <text class="diagram-copy" x="840" y="651">Agents and timelines</text>
+
+      <rect class="diagram-box diagram-box--neutral" x="815" y="679" width="240" height="62" rx="10"></rect>
+      <text class="diagram-title" x="840" y="706">Agents</text>
+      <text class="diagram-copy" x="840" y="728">Run the spade CLI</text>
+
+      <path class="diagram-line" d="M 140 150 L 195 150" marker-end="url(#current-arrow)"></path>
+      <path class="diagram-line" d="M 427 265 L 427 290" marker-start="url(#current-arrow)" marker-end="url(#current-arrow)"></path>
+      <path class="diagram-line" d="M 427 350 L 427 375" marker-start="url(#current-arrow)" marker-end="url(#current-arrow)"></path>
+      <text class="diagram-edge-label" x="439" y="367">IPC</text>
+      <path class="diagram-line" d="M 660 175 L 815 175" marker-end="url(#current-arrow)"></path>
+      <text class="diagram-edge-label" x="700" y="164">guests</text>
+      <path class="diagram-line" d="M 635 479 L 815 479" marker-end="url(#current-arrow)"></path>
+      <text class="diagram-edge-label" x="700" y="468">atomic writes</text>
+      <path class="diagram-line" d="M 635 556 L 815 556" marker-end="url(#current-arrow)"></path>
+      <text class="diagram-edge-label" x="700" y="545">read-only</text>
+      <path class="diagram-line" d="M 635 633 L 815 633" marker-start="url(#current-arrow)" marker-end="url(#current-arrow)"></path>
+      <text class="diagram-edge-label" x="700" y="622">WebSocket</text>
+      <path class="diagram-line" d="M 815 710 L 635 710" marker-end="url(#current-arrow)"></path>
+      <text class="diagram-edge-label" x="700" y="699">HTTP · token</text>
     </svg>
   </div>
-  <figcaption>The Electron shell is the application container. The user interacts with the canvas UI, and the UI uses the shared core; the shell itself does not sit in that interaction flow.</figcaption>
+  <figcaption>The renderer reaches the host only through the preload bridge. The main process owns the records, the Paseo connection, file access, and the agent control channel; agents change the canvas through the same gateway as the user.</figcaption>
 </figure>
 
 <h2 id="domain-relationships">Core data relationships</h2>
-<p>The model separates the work being done from the place where it is done and from the items visible on the canvas. These are TypeScript records today; they are not persisted yet.</p>
+<p>A project is a root directory plus one canvas. The canvas holds the nodes and the two kinds of edges between them, the project's workspace, the saved viewport, the activity log, and the resources of removed nodes, which reconciliation never adds back. Projects, the selection, and settings are stored in <code>index.json</code>; each canvas is its own file.</p>
 <figure class="architecture-figure">
   <div class="architecture-diagram-wrap">
-    <svg class="architecture-diagram" viewBox="0 0 1080 600" role="img" aria-labelledby="domain-title domain-desc">
+    <svg class="architecture-diagram" viewBox="0 0 1080 620" role="img" aria-labelledby="domain-title domain-desc">
       <title id="domain-title">SPADE core data hierarchy and relationships</title>
-      <desc id="domain-desc">A project contains its work items, workspaces, and canvas. The canvas contains nodes joined by canvas edges. Nodes may refer to a work item, workspace, and external resource.</desc>
+      <desc id="domain-desc">A project, listed in index.json, is a root directory plus one canvas stored in its own file. The canvas holds a workspace for the project root, an activity log of attributed changes, the saved viewport, the dismissed resources of removed nodes that reconciliation never adds back, and canvas nodes. A child edge joins a parent node to a child node and records its origin: spawned, delegated, or artifact. A references edge with an optional label joins any two nodes without changing the tree. A node names its workspace through workspaceId and points at a resource owned elsewhere through a resource reference made of provider, kind, and ID. Only agent nodes carry one, for a Paseo agent or a provider-native sub-agent; note, image, and web page nodes have none and keep their locator in their config.</desc>
       <defs>
         <marker id="domain-arrow" class="diagram-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M 0 0 L 10 5 L 0 10 z"></path>
         </marker>
       </defs>
 
-      <rect class="diagram-boundary diagram-boundary--accent" x="30" y="35" width="800" height="520" rx="18"></rect>
+      <rect class="diagram-boundary diagram-boundary--accent" x="30" y="35" width="760" height="550" rx="18"></rect>
       <text class="diagram-kicker" x="60" y="72">PROJECT</text>
-      <text class="diagram-title" x="60" y="105">Project and its SPADE canvas</text>
+      <text class="diagram-title" x="60" y="103">Root directory plus one canvas</text>
+      <text class="diagram-copy" x="60" y="128">Listed in index.json with the selection and settings</text>
 
-      <rect class="diagram-box diagram-box--green" x="80" y="135" width="220" height="105" rx="12"></rect>
-      <text class="diagram-kicker" x="105" y="168">WORK</text>
-      <text class="diagram-title" x="105" y="199">Work item</text>
-      <text class="diagram-copy" x="105" y="222">Issue · task · investigation</text>
+      <rect class="diagram-boundary" x="60" y="150" width="710" height="410" rx="14"></rect>
+      <text class="diagram-kicker" x="85" y="182">CANVAS · canvases/&lt;projectId&gt;.json</text>
 
-      <rect class="diagram-box diagram-box--amber" x="550" y="135" width="230" height="105" rx="12"></rect>
-      <text class="diagram-kicker" x="575" y="168">LOCATION</text>
-      <text class="diagram-title" x="575" y="199">Workspace</text>
-      <text class="diagram-copy" x="575" y="222">Checkout or worktree</text>
+      <rect class="diagram-box diagram-box--amber" x="85" y="205" width="150" height="95" rx="12"></rect>
+      <text class="diagram-kicker" x="105" y="235">LOCATION</text>
+      <text class="diagram-title" x="105" y="263">Workspace</text>
+      <text class="diagram-copy" x="105" y="285">Root · Paseo ID</text>
 
-      <rect class="diagram-boundary" x="80" y="285" width="700" height="220" rx="14"></rect>
-      <text class="diagram-kicker" x="105" y="320">CANVAS</text>
+      <rect class="diagram-box diagram-box--neutral" x="255" y="205" width="150" height="95" rx="12"></rect>
+      <text class="diagram-kicker" x="275" y="235">ATTRIBUTION</text>
+      <text class="diagram-title" x="275" y="263">Activity log</text>
+      <text class="diagram-copy" x="275" y="285">Actor · command</text>
 
-      <rect class="diagram-box" x="120" y="350" width="200" height="110" rx="12"></rect>
-      <text class="diagram-kicker" x="145" y="382">CANVAS NODE</text>
-      <text class="diagram-title" x="145" y="413">Source node</text>
-      <text class="diagram-copy" x="145" y="437">Type · position · state</text>
+      <rect class="diagram-box diagram-box--neutral" x="425" y="205" width="150" height="95" rx="12"></rect>
+      <text class="diagram-kicker" x="445" y="235">VIEW</text>
+      <text class="diagram-title" x="445" y="263">Viewport</text>
+      <text class="diagram-copy" x="445" y="285">Restored on switch</text>
 
-      <rect class="diagram-box" x="540" y="350" width="200" height="110" rx="12"></rect>
-      <text class="diagram-kicker" x="565" y="382">CANVAS NODE</text>
-      <text class="diagram-title" x="565" y="413">Connected node</text>
-      <text class="diagram-copy" x="565" y="437">Type · position · state</text>
+      <rect class="diagram-box diagram-box--neutral" x="595" y="205" width="150" height="95" rx="12"></rect>
+      <text class="diagram-kicker" x="615" y="235">REMOVED</text>
+      <text class="diagram-title" x="615" y="263">Dismissed</text>
+      <text class="diagram-copy" x="615" y="285">Never re-added</text>
 
-      <path class="diagram-line" d="M 320 405 L 540 405" marker-end="url(#domain-arrow)"></path>
-      <text class="diagram-edge-label" x="365" y="392">CanvasEdge · spawned</text>
+      <rect class="diagram-box" x="85" y="345" width="205" height="105" rx="12"></rect>
+      <text class="diagram-kicker" x="110" y="377">CANVAS NODE</text>
+      <text class="diagram-title" x="110" y="407">Parent</text>
+      <text class="diagram-copy" x="110" y="431">Type · config · flags</text>
 
-      <path class="diagram-line diagram-line--muted" d="M 220 350 L 220 240"></path>
-      <text class="diagram-edge-label" x="232" y="270">optional work item</text>
-      <path class="diagram-line diagram-line--muted" d="M 640 350 L 640 240"></path>
-      <text class="diagram-edge-label" x="650" y="270">optional workspace</text>
+      <rect class="diagram-box" x="560" y="345" width="180" height="105" rx="12"></rect>
+      <text class="diagram-kicker" x="585" y="377">CANVAS NODE</text>
+      <text class="diagram-title" x="585" y="407">Child</text>
+      <text class="diagram-copy" x="585" y="431">Type · config · flags</text>
 
-      <rect class="diagram-box diagram-box--neutral" x="870" y="350" width="180" height="110" rx="12"></rect>
-      <text class="diagram-kicker" x="895" y="382">OPTIONAL</text>
-      <text class="diagram-title" x="895" y="413">Resource ref</text>
-      <text class="diagram-copy" x="895" y="437">External identity</text>
-      <path class="diagram-line diagram-line--muted" d="M 740 430 L 870 430" marker-end="url(#domain-arrow)"></path>
-      <text class="diagram-edge-label" x="772" y="418">points to</text>
+      <rect class="diagram-box" x="85" y="470" width="205" height="72" rx="12"></rect>
+      <text class="diagram-kicker" x="110" y="498">CANVAS NODE</text>
+      <text class="diagram-title" x="110" y="526">Any other node</text>
+
+      <path class="diagram-line" d="M 290 390 L 560 390" marker-end="url(#domain-arrow)"></path>
+      <text class="diagram-edge-label" x="305" y="378">CanvasEdge · child</text>
+      <text class="diagram-edge-label" x="305" y="410">spawned · delegated · artifact</text>
+
+      <path class="diagram-line diagram-line--muted" d="M 560 430 C 470 430, 380 505, 290 505" marker-end="url(#domain-arrow)"></path>
+      <text class="diagram-edge-label" x="440" y="502">CanvasEdge · references</text>
+      <text class="diagram-edge-label" x="440" y="520">optional label · no tree effect</text>
+
+      <path class="diagram-line diagram-line--muted" d="M 190 345 L 190 300"></path>
+      <text class="diagram-edge-label" x="202" y="327">workspaceId</text>
+
+      <rect class="diagram-box diagram-box--neutral" x="870" y="320" width="204" height="210" rx="12"></rect>
+      <text class="diagram-kicker" x="886" y="350">EXTERNAL IDENTITY</text>
+      <text class="diagram-title" x="886" y="380">Resource ref</text>
+      <text class="diagram-copy" x="886" y="404">provider · kind · id</text>
+      <line class="diagram-divider" x1="886" y1="420" x2="1058" y2="420"></line>
+      <text class="diagram-note" x="886" y="444">paseo · agent</text>
+      <text class="diagram-note" x="886" y="466">paseo · provider-subagent</text>
+      <text class="diagram-note" x="886" y="488">Agent nodes only;</text>
+      <text class="diagram-note" x="886" y="510">others have none</text>
+      <path class="diagram-line diagram-line--muted" d="M 740 397 L 870 397" marker-end="url(#domain-arrow)"></path>
+      <text class="diagram-edge-label" x="795" y="385">resourceRef</text>
     </svg>
   </div>
-  <figcaption>The project is the parent boundary. Work-item and workspace associations remain explicit on each node, while a canvas edge only describes the relationship between two nodes.</figcaption>
+  <figcaption>The project is the parent boundary and its canvas is the unit of storage. Tree structure lives only in <code>child</code> edges; <code>references</code> edges add context. An agent node stores Paseo's exact identity for its agent; image and web page nodes keep their path, asset ID, or URL only in their config. Paseo and the filesystem stay authoritative for the resources themselves.</figcaption>
 </figure>
 
 <h2 id="selected-project-management-presentation">Selected project-management presentation</h2>
-<p>The planned first usable version replaces the work-item model with generic projects, groups, and trees (see the <a href="plan.html">plan</a>). The records above describe current code; the planned presentation is:</p>
+<p>Projects, trees, and automatic placement are implemented. Group containers are the next brick (B6) and remain planned.</p>
 <ul>
-<li>Each project owns one canvas, which is the authoritative spatial surface for its Group containers, nodes, and edges. No record spans two canvases.</li>
-<li>The sidebar is a derived project list and canvas switcher with running-agent activity. It owns no state beyond the selected project.</li>
-<li>A shared Group container owns child bounds, nesting, movement, and common viewport actions within one canvas. There is no Project container and no work-item or status specialization; groups never separate projects.</li>
-<li>Group membership is explicit. Overlapping a group never changes it.</li>
-<li>Structure is a forest of <code>child</code> edges; a branch is a derived view of one child and its descendants. One generic tree mechanic serves every node type, including agents and sub-agents. Agents read and change the graph through the same commands as the user, via a CLI tool taught by a skill, not MCP. By default an agent continues its own tree, from itself or from a descendant.</li>
-<li>Container chrome and non-interactive surfaces preserve outer-canvas zoom-in/out, and containers keep navigation gutters between children.</li>
-<li>Automatic placement of new nodes is one pure shared function that never overlaps nodes and never moves user-placed nodes.</li>
+<li>Each project owns one canvas, which is the authoritative spatial surface for its nodes and edges. No record spans two canvases.</li>
+<li>The sidebar is a derived project list and canvas switcher with running-agent and attention counts. It owns no state beyond the selected project.</li>
+<li>Structure is a forest of <code>child</code> edges; a branch is a derived view of one node and its descendants. One generic tree mechanic in <code>src/shared/tree.ts</code> serves every node type, including agents and sub-agents.</li>
+<li>Agents read and change the graph through the same commands as the user, via the <code>spade</code> CLI taught by a skill, not MCP. When an agent names no target, a spawned node becomes its own child.</li>
+<li>Automatic placement of new nodes is one pure shared function that never overlaps nodes and never moves existing nodes.</li>
+<li>Node chrome and inactive node bodies keep canvas pan and zoom; a body captures wheel and pointer input only after the user activates it, until Escape, a click elsewhere, or the node is collapsed, hidden, archived, or removed.</li>
+<li><strong>Planned (B6):</strong> a shared Group container that owns child bounds, nesting, movement, navigation gutters, and <code>Fit</code> / <code>Full height</code> for groups within one canvas. Group membership will be explicit; overlapping a group never changes it. There is no Project container and groups never separate projects.</li>
 </ul>
 
-<h2 id="p3-proven-prototype-boundaries">Prototype-proven boundaries</h2>
-<p>The production application still has no external integrations or persistence. The merged P3 prototype proved the following generic boundaries; its GitHub, issue, pull-request, and checkout parts are deferred beyond the first usable phase.</p>
+<h2 id="p3-proven-prototype-boundaries">Implemented integration boundaries</h2>
+<p>The P3 prototype's generic boundaries were copied into <code>src/</code> and generalized; its GitHub, issue, pull-request, and checkout parts remain deferred in the prototype.</p>
 <ul>
-<li>Typed renderer requests cross a sandboxed preload into one serialized main-process command and publication owner; renderers receive no credentials, filesystem access, or Paseo client.</li>
-<li>SPADE persists its own ledger and exact external references as <code>provider + kind + opaque ID</code>. Paseo remains authoritative for agents, workspaces, parent relations, and bounded timeline data. Production persistence lives in SPADE's application data directory and never inside user project directories.</li>
-<li>One confined Paseo adapter owns one daemon connection and isolates internal client use.</li>
-<li>Managed sub-agents relate to their parent through durable Paseo parent IDs without classifying titles, prompts, paths, or ordering.</li>
+<li>Typed renderer requests cross a sandboxed preload into one serialized main-process owner of records, which publishes every applied change back to the renderer. The renderer receives no credentials, filesystem access, or Paseo client.</li>
+<li>SPADE persists its own records and exact external references as <code>provider + kind + opaque ID</code> in its application data directory, never inside project directories. Paseo stays authoritative for agents, workspaces, parent relations, and timelines.</li>
+<li>One Paseo adapter on <code>@getpaseo/client</code> 0.17.0 owns one daemon connection, with readiness, reconnect, and client-owned observations. The confined internal <code>DaemonClient</code> import stays inside <code>src/main/paseo</code>.</li>
+<li>Managed sub-agents relate to their parent through Paseo's durable parent identity, never through titles, prompts, paths, or ordering. Provider-native sub-agents are listed on demand and keep their last known list when Paseo can no longer read them.</li>
+<li>Agents reach SPADE through a local HTTP control server on <code>127.0.0.1</code>, found through a discovery file and called by launchers for POSIX shells, PowerShell, and cmd.exe, all in SPADE's data directory. A change without an agent identity is refused unless a person at a terminal passes <code>--as-user</code>.</li>
 </ul>
-<p>P3 did not prove complete integration: a full Claude run stalled on Paseo 0.14, provider-native child discovery was unavailable for some providers, and timeline epochs/ranges change after a Paseo restart. These remain open risks.</p>
+<p>Open risks: provider-native sub-agents cannot be read once their parent is archived; daemon-restart reconciliation is covered by fake-driver tests, not by a live run; long agent runs on Paseo 0.17 are untested. See <a href="plan.html">plan</a> §13.</p>
 
 <h2 id="entity-integration-boundary">Entity and integration boundary</h2>
-<p>Canvas behavior stays generic. A node type is registered through an entity definition, which currently provides its metadata and creation adapter. The plan extends this boundary with entity-specific renderers, actions, and production integrations.</p>
+<p>Canvas behavior stays generic. Each node type has three parts that never import each other: a shared definition, an optional main-process adapter, and a renderer. External systems are reached only through main-process services.</p>
 <figure class="architecture-figure">
   <div class="architecture-diagram-wrap">
     <svg class="architecture-diagram" viewBox="0 0 1080 600" role="img" aria-labelledby="entity-title entity-desc">
       <title id="entity-title">SPADE entity and external integration boundary</title>
-      <desc id="entity-desc">Generic canvas commands resolve an entity definition. The current mock adapter creates a resource reference. Planned entity adapters will communicate through dedicated SPADE service adapters with Paseo, the filesystem, the Windows shell, and browsers. Entity renderers do not call external systems directly.</desc>
+      <desc id="entity-desc">Generic canvas commands, with validation, the reducer, and placement, resolve a shared entity definition per node type that holds its type, version, sizes, config parser, and agent description. The generic node wrapper renders each type's entity renderer, which owns the body, create form, status, and menu actions. Creation commands run the type's main-process entity adapter first. The agent adapter spawns the Paseo agent and archives it again if the command then fails; the image and web page adapters normalize their config and size and create no resource reference. SPADE services reach the Paseo daemon, the filesystem, Windows Explorer, and web content. The built-in types are note, agent, image, and webpage. A Group container is planned.</desc>
       <defs>
         <marker id="entity-arrow" class="diagram-arrow" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
           <path d="M 0 0 L 10 5 L 0 10 z"></path>
         </marker>
       </defs>
 
-      <rect class="diagram-boundary" x="25" y="35" width="640" height="510" rx="18"></rect>
+      <rect class="diagram-boundary" x="25" y="35" width="700" height="530" rx="18"></rect>
       <text class="diagram-kicker" x="55" y="72">SPADE-OWNED</text>
 
-      <rect class="diagram-box diagram-box--accent" x="65" y="120" width="210" height="120" rx="12"></rect>
-      <text class="diagram-kicker" x="90" y="155">GENERIC</text>
-      <text class="diagram-title" x="90" y="189">Canvas commands</text>
-      <text class="diagram-copy" x="90" y="216">Create · spawn · connect</text>
+      <rect class="diagram-box diagram-box--accent" x="55" y="100" width="290" height="140" rx="12"></rect>
+      <text class="diagram-kicker" x="80" y="132">GENERIC</text>
+      <text class="diagram-title" x="80" y="164">Canvas commands</text>
+      <text class="diagram-copy" x="80" y="190">Validation · reducer · placement</text>
+      <text class="diagram-copy" x="80" y="213">Node wrapper and navigation</text>
 
-      <rect class="diagram-box diagram-box--green" x="385" y="120" width="230" height="120" rx="12"></rect>
-      <text class="diagram-kicker" x="410" y="155">PER NODE TYPE</text>
-      <text class="diagram-title" x="410" y="189">Entity definition</text>
-      <text class="diagram-copy" x="410" y="216">Type · version · adapter</text>
+      <rect class="diagram-box diagram-box--green" x="405" y="100" width="290" height="140" rx="12"></rect>
+      <text class="diagram-kicker" x="430" y="132">PER TYPE · SHARED</text>
+      <text class="diagram-title" x="430" y="164">Entity definition</text>
+      <text class="diagram-copy" x="430" y="190">Type · version · sizes</text>
+      <text class="diagram-copy" x="430" y="213">Config parser · agent description</text>
 
-      <rect class="diagram-box" x="65" y="370" width="210" height="120" rx="12"></rect>
-      <text class="diagram-kicker" x="90" y="405">IMPLEMENTED</text>
-      <text class="diagram-title" x="90" y="439">Mock note adapter</text>
-      <text class="diagram-copy" x="90" y="466">Deterministic local data</text>
+      <rect class="diagram-box" x="55" y="320" width="290" height="140" rx="12"></rect>
+      <text class="diagram-kicker" x="80" y="352">PER TYPE · RENDERER</text>
+      <text class="diagram-title" x="80" y="384">Entity renderer</text>
+      <text class="diagram-copy" x="80" y="410">Body · create form · status</text>
+      <text class="diagram-copy" x="80" y="433">Menu actions</text>
 
-      <rect class="diagram-box diagram-box--planned" x="385" y="330" width="230" height="160" rx="12"></rect>
-      <text class="diagram-kicker" x="410" y="365">PLANNED</text>
-      <text class="diagram-title" x="410" y="399">Service adapters</text>
-      <text class="diagram-copy" x="410" y="428">Paseo adapter</text>
-      <text class="diagram-copy" x="410" y="453">Filesystem · shell</text>
-      <text class="diagram-copy" x="410" y="478">Electron capabilities</text>
+      <rect class="diagram-box" x="405" y="320" width="290" height="140" rx="12"></rect>
+      <text class="diagram-kicker" x="430" y="352">PER TYPE · MAIN PROCESS</text>
+      <text class="diagram-title" x="430" y="384">Entity adapter</text>
+      <text class="diagram-copy" x="430" y="410">Agent: spawns · archives on failure</text>
+      <text class="diagram-copy" x="430" y="433">Image · web page: normalize config</text>
 
-      <rect class="diagram-boundary diagram-boundary--planned" x="750" y="35" width="300" height="510" rx="18"></rect>
-      <text class="diagram-kicker" x="780" y="72">EXTERNAL SYSTEMS</text>
+      <rect class="diagram-box diagram-box--planned diagram-box--neutral" x="55" y="490" width="290" height="55" rx="10"></rect>
+      <text class="diagram-kicker" x="80" y="512">PLANNED</text>
+      <text class="diagram-title" x="80" y="535">Group container (B6)</text>
+      <text class="diagram-note" x="405" y="522">note · agent · image · webpage</text>
 
-      <rect class="diagram-box diagram-box--planned diagram-box--neutral" x="790" y="115" width="220" height="82" rx="10"></rect>
-      <text class="diagram-title" x="815" y="150">Paseo</text>
-      <text class="diagram-copy" x="815" y="175">Agents and workspaces</text>
+      <rect class="diagram-boundary" x="790" y="35" width="265" height="530" rx="18"></rect>
+      <text class="diagram-kicker" x="815" y="72">EXTERNAL SYSTEMS</text>
 
-      <rect class="diagram-box diagram-box--planned diagram-box--neutral" x="790" y="230" width="220" height="82" rx="10"></rect>
-      <text class="diagram-title" x="815" y="265">Windows shell</text>
-      <text class="diagram-copy" x="815" y="290">Reveal in Explorer</text>
+      <rect class="diagram-box diagram-box--neutral" x="805" y="100" width="235" height="82" rx="10"></rect>
+      <text class="diagram-title" x="830" y="135">Paseo daemon</text>
+      <text class="diagram-copy" x="830" y="160">Agents and timelines</text>
 
-      <rect class="diagram-box diagram-box--planned diagram-box--neutral" x="790" y="345" width="220" height="82" rx="10"></rect>
-      <text class="diagram-title" x="815" y="380">Local tools</text>
-      <text class="diagram-copy" x="815" y="405">Files · terminals · editors</text>
+      <rect class="diagram-box diagram-box--neutral" x="805" y="205" width="235" height="82" rx="10"></rect>
+      <text class="diagram-title" x="830" y="240">Filesystem</text>
+      <text class="diagram-copy" x="830" y="265">Read-only image files</text>
 
-      <rect class="diagram-box diagram-box--planned diagram-box--neutral" x="790" y="460" width="220" height="62" rx="10"></rect>
-      <text class="diagram-title" x="815" y="498">Browser content</text>
+      <rect class="diagram-box diagram-box--neutral" x="805" y="310" width="235" height="82" rx="10"></rect>
+      <text class="diagram-title" x="830" y="345">Windows Explorer</text>
+      <text class="diagram-copy" x="830" y="370">Reveal, never launch</text>
 
-      <path class="diagram-line" d="M 275 180 L 385 180" marker-end="url(#entity-arrow)"></path>
-      <text class="diagram-edge-label" x="300" y="167">resolves</text>
-      <path class="diagram-line" d="M 440 240 C 390 300, 300 330, 230 370" marker-end="url(#entity-arrow)"></path>
-      <text class="diagram-edge-label" x="286" y="307">current</text>
-      <path class="diagram-line diagram-line--planned" d="M 500 240 L 500 330" marker-end="url(#entity-arrow)"></path>
-      <text class="diagram-edge-label" x="515" y="292">planned</text>
-      <path class="diagram-line diagram-line--planned" d="M 615 410 L 750 410" marker-end="url(#entity-arrow)"></path>
-      <text class="diagram-edge-label" x="640" y="397">provider APIs</text>
+      <rect class="diagram-box diagram-box--neutral" x="805" y="415" width="235" height="82" rx="10"></rect>
+      <text class="diagram-title" x="830" y="450">Web content</text>
+      <text class="diagram-copy" x="830" y="475">Guests · default browser</text>
+
+      <path class="diagram-line" d="M 345 170 L 405 170" marker-end="url(#entity-arrow)"></path>
+      <text class="diagram-edge-label" x="349" y="158">resolves</text>
+      <path class="diagram-line" d="M 200 240 L 200 320" marker-end="url(#entity-arrow)"></path>
+      <text class="diagram-edge-label" x="212" y="302">renders body</text>
+      <path class="diagram-line" d="M 300 240 L 300 280 L 550 280 L 550 320" marker-end="url(#entity-arrow)"></path>
+      <text class="diagram-edge-label" x="330" y="272">creation commands</text>
+      <path class="diagram-line" d="M 695 390 L 790 390" marker-end="url(#entity-arrow)"></path>
+      <text class="diagram-edge-label" x="733" y="378">services</text>
     </svg>
   </div>
-  <figcaption>External APIs stay behind SPADE-owned adapters. Node renderers present data and actions; they do not spread provider-specific calls through the UI.</figcaption>
+  <figcaption>External APIs stay behind main-process services. Renderers present data and actions through <code>window.spadeHost</code>; they never call Paseo, the filesystem, or the shell directly.</figcaption>
 </figure>
+<table>
+<thead>
+<tr><th>Type</th><th>Shared definition</th><th>Main-process adapter</th><th>Renderer</th></tr>
+</thead>
+<tbody>
+<tr><td><code>note</code></td><td><code>{ body }</code>; 320×200</td><td>None; the node has no resource</td><td>Editable text</td></tr>
+<tr><td><code>agent</code></td><td><code>{ provider, model, mode, prompt }</code>; 640×720, collapsed 320×96</td><td>The agent service spawns the Paseo agent in the project root, and archives it again if the creation command fails; <code>paseo · agent</code></td><td>Conversation, composer with context selection, permissions, sub-agents, artifacts</td></tr>
+<tr><td><code>image</code></td><td><code>{ source: path | asset, caption? }</code>; 560×420 until the image is measured</td><td>The file service resolves the path and fits the size to the image; no resource reference, the config is the source of truth</td><td>Image with reload, reveal, copy path, and full-size view</td></tr>
+<tr><td><code>webpage</code></td><td><code>{ url }</code>, http or https; 960×640</td><td>The file service normalizes the URL; no resource reference, the config is the source of truth</td><td>Guest <code>&lt;webview&gt;</code> with address bar and navigation</td></tr>
+</tbody>
+</table>
 
 <h2 id="architecture-rules">Architecture rules</h2>
 <ul>
-<li>The generic canvas owns container position, size, selection, nesting, connections, lifecycle, and viewport navigation.</li>
-<li>Container chrome and non-interactive surfaces never trap canvas zoom-in/out; groups preserve navigation gutters between children for outer-canvas pan and zoom, and interactive child content is the only gesture-routing exception.</li>
-<li>Group owns reusable containment geometry and remains a visual hull; a project is a root directory with its own canvas, not a container.</li>
-<li>The sidebar reads shared records and activity state to switch canvases; it does not own a parallel navigation or persistence model.</li>
-<li>An entity renderer owns only the content and actions specific to its node type.</li>
-<li>Shared records are the common contract across application areas.</li>
+<li>The generic canvas owns node position, size, selection, connections, lifecycle, and viewport navigation. Groups will add containment and nesting.</li>
+<li>Node chrome and non-interactive surfaces never trap canvas zoom-in/out; interactive content captures input only while active. Groups will preserve navigation gutters between children.</li>
+<li>Group will own reusable containment geometry as a visual hull; a project is a root directory with its own canvas, not a container.</li>
+<li>The sidebar reads shared records and agent runtimes to switch canvases; it does not own a parallel navigation or persistence model.</li>
+<li>An entity renderer owns only the content and actions specific to its node type. Tree behavior and placement never depend on the entity type.</li>
+<li>Shared records and the command set in <code>src/shared</code> are the common contract across the renderer, the main process, and the CLI.</li>
+<li>Every canvas change from the user, an agent, or reconciliation goes through the workspace gateway, with its actor.</li>
 <li>Connections describe provenance and context; they are not an execution graph.</li>
-<li>External systems are accessed through dedicated adapters.</li>
-<li>Planned boundaries remain proposals until a prototype proves them.</li>
+<li>External systems are accessed only from the main process, through dedicated services; the renderer reaches them only through <code>window.spadeHost</code>.</li>
+<li>Planned boundaries remain proposals until they are built.</li>
 </ul>
         <footer class="docs-footer">SPADE documentation</footer>
       </article>

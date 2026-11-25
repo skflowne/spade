@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="color-scheme" content="dark" />
+    <title>SPADE HTML answer</title>
+  </head>
+  <body>
+    <!--
+      Bootstrap for agent-authored HTML answers (plan §11). It is a separate document so the app's
+      strict Content-Security-Policy does not apply to answer scripts; it deliberately has no CSP of
+      its own. It replaces itself with the document the host sends; see htmlRuntimeProtocol.ts.
+    -->
+    <script>
+      ;(() => {
+        const token = location.hash.slice(1)
+        const receive = (event) => {
+          const data = event.data
+          if (
+            event.source !== window.parent ||
+            !data ||
+            data.source !== 'spade-html-host' ||
+            data.token !== token ||
+            data.type !== 'load' ||
+            typeof data.html !== 'string'
+          ) {
+            return
+          }
+          window.removeEventListener('message', receive)
+          document.open()
+          document.write(data.html)
+          document.close()
+        }
+        window.addEventListener('message', receive)
+        window.parent.postMessage({ source: 'spade-html-runtime', token, type: 'ready' }, '*')
+      })()
+    </script>
+  </body>
+</html>
