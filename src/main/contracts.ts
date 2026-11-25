@@ -88,6 +88,40 @@ export interface AgentService {
   respondToPermission(nodeId: string, requestId: string, behavior: PermissionBehavior): Promise<void>
   openProviderSubagent(nodeId: string, subagentId: string, actor: Actor): Promise<{ nodeId: string }>
   subscribe(listener: (event: AgentServiceEvent) => void): () => void
+
+  // SPADE-38: Paseo manages agents; SPADE is a view on top.
+
+  // Forwards an agent's request to Paseo with the caller as parent. Creates no node: the child appears,
+  // collapsed, in its owner's list. Unset fields are not filled from the caller; Paseo applies its own rules.
+  spawnChildAgent(
+    callerAgentId: string,
+    input: { prompt: string; provider: string; model?: string; mode?: string; title?: string }
+  ): Promise<{ agentId: string }>
+  // Where a Paseo agent shows on canvases: its own node when expanded, otherwise its nearest expanded
+  // owner. Null when Paseo does not know the agent or no owner is shown on any canvas.
+  locateAgent(agentId: string): Promise<AgentLocation | null>
+  // Agent-keyed operations, usable on a collapsed child from its owner's list.
+  respondToAgentPermission(agentId: string, requestId: string, behavior: PermissionBehavior): Promise<void>
+  setAgentMode(agentId: string, modeId: string): Promise<void>
+  // Expands a Paseo child of the owner node's agent into a delegated child node; returns the existing
+  // node when it is already expanded there. Collapsing back is removing that node.
+  expandChildAgent(ownerNodeId: string, agentId: string, actor: Actor): Promise<{ nodeId: string }>
+  // Re-resolves the daemon URL (setting, SPADE_PASEO_URL, paseo.pid, config.json, default), reconnects
+  // when it changed or the connection is down, and reconciles.
+  refreshConnection(): Promise<PaseoConnection>
+}
+
+export type AgentLocation = {
+  agentId: string
+  parentAgentId: string | null
+  // One entry per canvas that shows the agent or an owner of it.
+  placements: Array<{
+    projectId: string
+    // The agent's own node when expanded on that canvas, else null.
+    nodeId: string | null
+    // The node that stands for the agent on that canvas: its own node, or its nearest expanded owner's.
+    anchorNodeId: string
+  }>
 }
 
 // Read-only access to the filesystem and the Windows shell on behalf of the renderer.

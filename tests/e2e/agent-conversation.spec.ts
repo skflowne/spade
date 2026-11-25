@@ -3,10 +3,11 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import { PREVIEW_ZOOM_THRESHOLD } from '../../src/renderer/src/canvas/model/levelOfDetail'
-import type { AgentRuntime, ConversationItem } from '../../src/shared/agents'
+import type { AgentRuntime, ChildAgentInfo, ConversationItem } from '../../src/shared/agents'
 import { indexTree } from '../../src/shared/tree'
 import {
   agentCalls,
+  childFor,
   installAgentScript,
   items,
   png,
@@ -22,6 +23,7 @@ import {
   appState,
   canvasNode,
   execute,
+  expectCenteredInView,
   fitAll,
   launch,
   nodeBody,
@@ -29,6 +31,8 @@ import {
   nodeMenu,
   openProjectFromSidebar,
   readCanvas,
+  recordCanvasCommands,
+  recordedCanvasCommands,
   renderedViewport,
   scratchDirectory,
   selectedProjectId,
@@ -76,6 +80,10 @@ async function seedAgent(session: Session, title = 'Agent', config: Record<strin
 async function showAgent(session: Session, nodeId: string, conversation: ConversationItem[], runtime: Partial<AgentRuntime> = {}): Promise<void> {
   await pushRuntime(session.app, runtimeFor(session.projectId, nodeId, runtime))
   await setTimeline(session.app, nodeId, { epoch: 'e1', items: conversation, olderCursor: null })
+}
+
+function agentsPane(page: Page, title: string): Locator {
+  return page.getByRole('region', { name: `Agents of ${title}` })
 }
 
 async function activate(page: Page, title: string): Promise<Locator> {
@@ -474,7 +482,8 @@ test('permissions, prompts with shared context, interrupting, and provider sub-a
     const spec = await execute(page, { type: 'spawnChild', sourceNodeId: nodeId, origin: 'spawned', node: { entityType: 'note', config: { body: 'Spec text' }, title: 'Spec' } })
     const elsewhere = await execute(page, { type: 'startTree', node: { entityType: 'note', config: { body: '' }, title: 'Elsewhere' } })
     if (!spec.ok || !elsewhere.ok) throw new Error('seeding failed')
-    await setReply(app, 'agents.openProviderSubagent', { ok: true, nodeId: spec.nodeId! })
+    // The opened node is centered; answering with the agent's own node keeps it, and its pane, in view.
+    await setReply(app, 'agents.openProviderSubagent', { ok: true, nodeId })
     await showAgent(
       session,
       nodeId,
@@ -550,17 +559,174 @@ test('permissions, prompts with shared context, interrupting, and provider sub-a
     await expect.poll(async () => (await agentCalls(app, 'agents.interrupt')).length).toBe(2)
 
     await activate(page, 'Agent')
-    await body.getByRole('button', { name: /Sub-agents/ }).click()
-    const entry = body.getByRole('listitem', { name: 'Sub-agent Explore' })
+    // Sub-agents are listed in the node's agents pane, not in its conversation.
+    await canvasNode(page, 'Agent').getByRole('button', { name: /^Agents\s*1$/ }).click()
+    const entry = agentsPane(page, 'Agent').getByRole('region', { name: 'Provider sub-agents' }).getByRole('listitem', { name: 'Sub-agent Explore' })
     await expect(entry).toContainText('Explore the parser')
     await entry.getByRole('button', { name: 'Open as node' }).click()
     await expect.poll(() => agentCalls(app, 'agents.openProviderSubagent')).toEqual([[nodeId, 'sub-1']])
     // The sub-agent's tool call links to the same action.
+    await activate(page, 'Agent')
     await body.locator('[data-tool-kind="subagent"]').getByRole('button', { name: 'Open as node' }).click()
     await expect.poll(async () => (await agentCalls(app, 'agents.openProviderSubagent')).length).toBe(2)
 
     await nodeMenu(page, 'Agent', 'Copy agent id')
     await expect.poll(() => app.evaluate(({ clipboard }) => clipboard.readText())).toBe('fake-1')
+  } finally {
+    await app.close()
+  }
+})
+
+test('an owner lists its Paseo children: what waits on the user surfaces, and each can be answered, switched, expanded and collapsed back', async () => {
+  test.setTimeout(60_000)
+  const session = await launchScripted()
+  const { page, app } = session
+  try {
+    await setProviders(app, { providers: PROVIDERS })
+    const nodeId = await seedAgent(session, 'Lead')
+    const permission = { id: 'perm-w', kind: 'tool', name: 'Edit', title: 'Edit src/parser.ts', description: null, detail: 'src/parser.ts' }
+    const worker = childFor('worker', { title: 'Worker', activity: 'attention', status: 'running', mode: 'plan', pendingPermissions: [permission] })
+    const helper = childFor('helper', { title: 'Helper', activity: 'error', status: 'error', lastError: 'Rate limited' })
+    const reviewer = childFor('reviewer', { title: 'Reviewer', activity: 'running', status: 'running' })
+    const lead = (children: ChildAgentInfo[]): Partial<AgentRuntime> => ({ mode: 'default', children })
+    await showAgent(session, nodeId, [], lead([{ ...worker, children: [helper] }, reviewer]))
+
+    // What waits on the user among collapsed children shows on the owner's header, collapsed or not.
+    const status = canvasNode(page, 'Lead').getByTestId('agent-status')
+    await expect(status).toContainText('idle')
+    await expect(status).toContainText('1 child request')
+    await expect(status).toContainText('1 child error')
+    await expect(canvasNode(page, 'Lead')).toHaveClass(/spade-node--attention/)
+    await execute(page, { type: 'collapseNode', nodeId })
+    await expect(status).toContainText('1 child request')
+    await expect(canvasNode(page, 'Lead')).toHaveClass(/spade-node--attention/)
+    await execute(page, { type: 'expandNode', nodeId })
+
+    const body = await activate(page, 'Lead')
+    // The node is its conversation: the agents pane is closed until asked for, and opening it beside the node
+    // resizes neither the node nor its conversation.
+    const pane = agentsPane(page, 'Lead')
+    await expect(pane).toHaveCount(0)
+    await expect(body.getByRole('region', { name: 'Child agents' })).toHaveCount(0)
+    const nodeBox = (await canvasNode(page, 'Lead').boundingBox())!
+    const bodyBox = (await body.boundingBox())!
+    expect(bodyBox.width).toBeGreaterThan(nodeBox.width - 4)
+    const toggle = canvasNode(page, 'Lead').getByRole('button', { name: /^Agents\s*2$/ })
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    // Something waits on the user: the closed pane's toggle says so.
+    await expect(toggle).toHaveClass(/agents-toggle--attention/)
+    const sizeBefore = (await readCanvas(page)).nodes.find((node) => node.id === nodeId)!.size
+    await status.getByRole('button', { name: '1 child request' }).click()
+    await expect(pane).toBeVisible()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(await canvasNode(page, 'Lead').boundingBox()).toEqual(nodeBox)
+    expect((await body.boundingBox())!.width).toBe(bodyBox.width)
+    const paneBox = (await pane.boundingBox())!
+    expect(paneBox.x).toBeGreaterThanOrEqual(nodeBox.x + nodeBox.width)
+    expect(Math.abs(paneBox.height - nodeBox.height)).toBeLessThan(4)
+    expect((await readCanvas(page)).nodes.find((node) => node.id === nodeId)!.size).toEqual(sizeBefore)
+
+    const list = pane.getByRole('region', { name: 'Child agents' })
+    const workerRow = list.getByRole('listitem', { name: 'Agent Worker' })
+    await expect(workerRow).toContainText('needs attention')
+    // A collapsed child's own children are listed under it.
+    const helperRow = workerRow.getByRole('listitem', { name: 'Agent Helper' })
+    await expect(helperRow).toContainText('error')
+    await expect(helperRow).toContainText('Rate limited')
+    await expect(helperRow.getByRole('button', { name: 'Expand' })).toHaveCount(0)
+
+    // A permission is answered from the list, by agent.
+    const request = workerRow.getByRole('article', { name: 'Permission request: Edit src/parser.ts' })
+    await request.getByRole('button', { name: 'Allow' }).click()
+    await expect.poll(() => agentCalls(app, 'agents.respondToAgentPermission')).toEqual([['worker', 'perm-w', 'allow']])
+
+    // Modes are the provider's, by label; the owner's own mode sits on its toolbar.
+    const workerMode = workerRow.getByRole('combobox', { name: 'Mode of Worker' })
+    await expect(workerMode).toHaveValue('plan')
+    await expect(workerMode.locator('option')).toHaveText(['Default', 'Plan'])
+    await workerMode.selectOption('default')
+    await expect.poll(() => agentCalls(app, 'agents.setMode')).toEqual([['worker', 'default']])
+    // The owner's own mode stays on its toolbar.
+    const ownMode = body.getByRole('combobox', { name: 'Mode', exact: true })
+    await expect(ownMode).toHaveValue('default')
+    await ownMode.selectOption('plan')
+    await expect.poll(() => agentCalls(app, 'agents.setMode')).toEqual([['worker', 'default'], ['fake-1', 'plan']])
+
+    // Expanding asks for the child's node; once expanded the row leads to it.
+    const expanded = await execute(page, {
+      type: 'spawnChild',
+      sourceNodeId: nodeId,
+      origin: 'delegated',
+      node: {
+        entityType: 'agent',
+        config: { provider: 'claude', model: 'opus', mode: 'default', prompt: null },
+        title: 'Reviewer',
+        resourceRef: { provider: 'paseo', kind: 'agent', id: 'reviewer' }
+      }
+    })
+    if (!expanded.ok || !expanded.nodeId) throw new Error(JSON.stringify(expanded))
+    await setReply(app, 'agents.expandChild', { ok: true, nodeId: expanded.nodeId })
+    const reviewerRow = list.getByRole('listitem', { name: 'Agent Reviewer' })
+    await reviewerRow.getByRole('button', { name: 'Expand' }).click()
+    await expect.poll(() => agentCalls(app, 'agents.expandChild')).toEqual([[nodeId, 'reviewer']])
+    await pushRuntime(app, runtimeFor(session.projectId, expanded.nodeId, { agentId: 'reviewer', parentAgentId: 'fake-1', title: 'Reviewer', mode: 'default' }))
+    await showAgent(session, nodeId, [], lead([{ ...worker, children: [helper] }, { ...reviewer, nodeId: expanded.nodeId }]))
+    await expect(reviewerRow).toContainText('expanded')
+    await fitAll(page)
+    await reviewerRow.getByRole('button', { name: 'Go to node' }).click()
+    await expectCenteredInView(page, canvasNode(page, 'Reviewer'))
+
+    // Closing the pane leaves the owner exactly as it was.
+    await pane.getByRole('button', { name: 'Close the agents pane' }).click()
+    await expect(pane).toHaveCount(0)
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect((await readCanvas(page)).nodes.find((node) => node.id === nodeId)!.size).toEqual(sizeBefore)
+
+    // Collapsing it removes its node; its owner lists it again.
+    await nodeMenu(page, 'Reviewer', 'Collapse into owner')
+    await expect.poll(async () => (await readCanvas(page)).nodes.map((node) => node.title)).toEqual(['Lead'])
+    await showAgent(session, nodeId, [], lead([{ ...worker, children: [helper] }, reviewer]))
+    await fitAll(page)
+    await toggle.click()
+    await expect(reviewerRow.getByRole('button', { name: 'Expand' })).toBeVisible()
+
+    // A collapsed child that finishes a run waits on the user until it is seen.
+    await showAgent(session, nodeId, [], lead([{ ...worker, children: [helper] }, { ...reviewer, activity: 'idle', status: 'idle' }]))
+    await expect(status).toContainText('1 child finished')
+    await expect(reviewerRow).toContainText('finished')
+    await reviewerRow.getByRole('button', { name: 'Mark seen' }).click()
+    await expect(status).not.toContainText('finished')
+    await expect(reviewerRow.getByRole('button', { name: 'Mark seen' })).toHaveCount(0)
+  } finally {
+    await app.close()
+  }
+})
+
+test('an agent started from an agent node is placed next to it without an edge; a note keeps its tree target', async () => {
+  const session = await launchScripted()
+  const { page, app } = session
+  try {
+    await setProviders(app, { providers: PROVIDERS })
+    const leadId = await seedAgent(session, 'Lead')
+    await recordCanvasCommands(app)
+    await nodeMenu(page, 'Lead', 'Spawn connected…')
+    const dialog = page.getByRole('dialog', { name: 'Spawn from Lead' })
+    await dialog.getByRole('radio', { name: 'Agent' }).check()
+    await expect(dialog.getByRole('radio', { name: 'Next to Lead, not connected' })).toBeChecked()
+    await dialog.getByLabel('Prompt', { exact: true }).fill('Review the parser')
+    await dialog.getByRole('button', { name: 'Create' }).click()
+    // The spawn itself reaches the real agent service, which has no Paseo in UI specs.
+    await expect(dialog.getByRole('alert')).toContainText('Could not create the agent')
+    const [command] = await recordedCanvasCommands(app)
+    expect(command).toMatchObject({ type: 'startTree', node: { entityType: 'agent', config: { prompt: 'Review the parser' } } })
+    const lead = (await readCanvas(page)).nodes.find((node) => node.id === leadId)!
+    const position = command.type === 'startTree' ? command.node.position : undefined
+    expect(position?.x).toBeGreaterThan(lead.position.x + 640)
+    expect(position?.y).toBe(lead.position.y)
+
+    await dialog.getByRole('radio', { name: 'Note' }).check()
+    await expect(dialog.getByRole('radio', { name: 'Child of Lead' })).toBeChecked()
+    await dialog.getByRole('button', { name: 'Cancel' }).click()
   } finally {
     await app.close()
   }

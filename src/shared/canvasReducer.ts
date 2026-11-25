@@ -1,3 +1,4 @@
+import { AGENT_ENTITY } from './builtinEntities'
 import {
   CanvasCommandError,
   type CanvasCommand,
@@ -6,7 +7,6 @@ import {
 } from './commands'
 import {
   CANVAS_ACTIVITY_LIMIT,
-  CANVAS_DISMISSED_RESOURCE_LIMIT,
   DOMAIN_RECORD_VERSION,
   type Actor,
   type Canvas,
@@ -195,8 +195,7 @@ function applyChange(canvas: Canvas, command: CanvasCommand, context: CanvasComm
         canvas: {
           ...canvas,
           nodes: canvas.nodes.filter((candidate) => !gone.has(candidate.id)),
-          edges: canvas.edges.filter((edge) => !gone.has(edge.fromNodeId) && !gone.has(edge.toNodeId)),
-          dismissedResources: dismiss(canvas.dismissedResources, canvas.nodes.filter((candidate) => gone.has(candidate.id)))
+          edges: canvas.edges.filter((edge) => !gone.has(edge.fromNodeId) && !gone.has(edge.toNodeId))
         },
         outcome: { removedNodeIds: removed },
         summary: `Removed the branch ${quote(node)} (${removed.length} ${removed.length === 1 ? 'node' : 'nodes'})`,
@@ -230,10 +229,6 @@ function createNode(
   if (seed.ifResourceAbsent && resourceRef) {
     const existing = canvas.nodes.find((node) => node.resourceRef !== null && sameResource(node.resourceRef, resourceRef))
     if (existing) return { canvas, outcome: { nodeId: existing.id, created: false } }
-    // The user removed this resource's node: SPADE's own reconciliation must not bring it back.
-    if (context.actor.kind === 'system' && canvas.dismissedResources.some((ref) => sameResource(ref, resourceRef))) {
-      return { canvas, outcome: { created: false } }
-    }
   }
 
   const id = context.nodeId ?? context.createId()
@@ -285,16 +280,8 @@ function createNode(
         : `Started a new tree with ${subject}`
   const related = placement.kind === 'child' ? [placement.parentId] : placement.source ? [placement.source.id] : []
 
-  const dismissedResources = resourceRef
-    ? canvas.dismissedResources.filter((ref) => !sameResource(ref, resourceRef))
-    : canvas.dismissedResources
   return {
-    canvas: {
-      ...canvas,
-      nodes: [...canvas.nodes, node],
-      edges,
-      ...(dismissedResources.length === canvas.dismissedResources.length ? {} : { dismissedResources })
-    },
+    canvas: { ...canvas, nodes: [...canvas.nodes, node], edges },
     outcome: { nodeId: id, created: true, ...(edgeId === undefined ? {} : { edgeId }) },
     summary,
     nodeIds: [id, ...related]
@@ -431,27 +418,41 @@ function setFlag(
   return { canvas: changed, summary: `${verb} ${quote(node)}`, nodeIds: changedIds(canvas, changed) }
 }
 
+// Children move up to the removed node's parent, except that ownership is direct: an agent's delegated
+// agent children (and theirs) are removed with it, so they return to its list instead of being promoted
+// under the grandparent. Whatever those agents spawned is promoted to the nearest surviving ancestor.
 function removeNode(canvas: Canvas, nodeId: string): Change {
   const node = requireNode(canvas, nodeId)
-  const parentEdge = indexTree(canvas).parentEdgeOf(node.id)
+  const tree = indexTree(canvas)
+  const types = new Map(canvas.nodes.map((candidate) => [candidate.id, candidate.entityType]))
+  const removed = [node.id]
+  for (let index = 0; index < removed.length; index += 1) {
+    if (types.get(removed[index]) !== AGENT_ENTITY) continue
+    for (const edge of canvas.edges) {
+      if (edge.relation === 'child' && edge.fromNodeId === removed[index] && edge.origin === 'delegated') {
+        if (types.get(edge.toNodeId) === AGENT_ENTITY) removed.push(edge.toNodeId)
+      }
+    }
+  }
+  const gone = new Set(removed)
+  const newParent = tree.parentEdgeOf(node.id)?.fromNodeId ?? null
   const edges: CanvasEdge[] = []
   for (const edge of canvas.edges) {
-    if (edge.relation === 'child' && edge.fromNodeId === node.id && parentEdge) {
-      edges.push({ ...edge, fromNodeId: parentEdge.fromNodeId })
-    } else if (edge.fromNodeId !== node.id && edge.toNodeId !== node.id) {
+    if (edge.relation === 'child' && gone.has(edge.fromNodeId) && !gone.has(edge.toNodeId)) {
+      if (newParent !== null) edges.push({ ...edge, fromNodeId: newParent })
+    } else if (!gone.has(edge.fromNodeId) && !gone.has(edge.toNodeId)) {
       edges.push(edge)
     }
   }
+  const delegated = removed.length - 1
   return {
-    canvas: {
-      ...canvas,
-      nodes: canvas.nodes.filter((candidate) => candidate.id !== node.id),
-      edges,
-      dismissedResources: dismiss(canvas.dismissedResources, [node])
-    },
-    outcome: { removedNodeIds: [node.id] },
-    summary: `Removed ${quote(node)}`,
-    nodeIds: [node.id]
+    canvas: { ...canvas, nodes: canvas.nodes.filter((candidate) => !gone.has(candidate.id)), edges },
+    outcome: { removedNodeIds: removed },
+    summary:
+      delegated === 0
+        ? `Removed ${quote(node)}`
+        : `Removed ${quote(node)} and ${delegated} delegated agent ${delegated === 1 ? 'node' : 'nodes'}`,
+    nodeIds: removed
   }
 }
 
@@ -494,17 +495,6 @@ function upsertWorkspace(
 // Provider, kind, and id identify a resource; the revision does not.
 function sameResource(a: ResourceRef, b: ResourceRef): boolean {
   return a.provider === b.provider && a.kind === b.kind && a.id === b.id
-}
-
-// Appends the resources of removed nodes, newest last, each once and without its revision.
-function dismiss(dismissed: ResourceRef[], removed: CanvasNode[]): ResourceRef[] {
-  const refs = removed.flatMap((node) =>
-    node.resourceRef ? [{ provider: node.resourceRef.provider, kind: node.resourceRef.kind, id: node.resourceRef.id }] : []
-  )
-  if (refs.length === 0) return dismissed
-  const kept = dismissed.filter((ref) => !refs.some((added) => sameResource(ref, added)))
-  const unique = refs.filter((ref, index) => refs.findIndex((other) => sameResource(ref, other)) === index)
-  return [...kept, ...unique].slice(-CANVAS_DISMISSED_RESOURCE_LIMIT)
 }
 
 function childEdge(

@@ -1,6 +1,6 @@
 ---
 name: spade-canvas
-description: Read and change the SPADE canvas (nodes, trees, references) with the `spade` CLI. Use when running inside SPADE and the work calls for recording findings, spawning notes, pages, images, or agents, or reorganizing the map of the work.
+description: Read the SPADE canvas (nodes, trees, references) with the `spade` CLI, and change it when the user asks. Use when running inside SPADE and you need to see how the work is mapped, or the user asked you to record, reorganize, or spawn something on the canvas.
 ---
 
 # SPADE canvas
@@ -9,14 +9,17 @@ SPADE shows the work as a **mind map on a canvas**: nodes (agents, notes, images
 **trees** by parent-child edges, plus **references** edges between any two nodes. It is a map of the work,
 not an execution engine: edges carry no data and trigger nothing.
 
-You appear on the canvas as your own node. Run the CLI through the launcher path SPADE gave you (written
-`spade` below). Every change is **attributed to you**, shown to the user, and reviewable. Graph commands only
-touch SPADE's records, **never files**: removing a node never deletes project content.
+Paseo manages agents; SPADE is a view on top. You are a Paseo agent, and SPADE knows you by
+`PASEO_AGENT_ID`, which Paseo sets for you. You may have a node of your own on the canvas, or, if another
+agent started you, be **collapsed** into your owner's node, which lists you with your status. Run the CLI
+through the launcher path SPADE gave you (written `spade` below). Every change is **attributed to you**,
+shown to the user, and reviewable. Graph commands only touch SPADE's records, **never files**: removing a
+node never deletes project content.
 
-## Read before you change
+## Read
 
 ```sh
-spade whoami                      # your node, project, parent, children
+spade whoami                      # your Paseo agent, its owner, your node (when expanded), project, children
 spade tree                        # indented trees: id · type · title [flags] (+N below) ← you
 spade tree --root <node> --depth 2
 spade node <node>                 # state, parent, children, references, bounded excerpt, agent status
@@ -32,22 +35,22 @@ Reads are bounded and paged: follow `--cursor <c>` from the "next page" hint. Th
 transcripts, pages, or files; read those with your own tools. Reads default to your own project; pass
 `--project <id|name>` for another.
 
-## Tree continuation
+## Change only when the user asks
 
-When you name no target, a spawned node becomes **your child**. Continue your own tree: spawn under yourself
-to start a new branch, or under a node below you (`--parent <node>`) to continue an existing branch. You
-may name any other target when the work calls for it: `--parent` any node, `--tree <node>` (child of that
-tree's root), or `--new-tree`.
+**Do not create canvas nodes on your own.** Spawn a node only when the user asks for one, in your
+instructions or in the conversation (for example by asking you to record findings on the canvas). Otherwise
+answer in your conversation: SPADE renders it richly, and the user can turn paths, images, and links in it
+into nodes themselves.
 
-## Change
+When the user asks for a node and names no target, it becomes **your child**, or, while you are collapsed,
+a child of your **nearest expanded owner's** node; it is still attributed to you. You may name another
+target: `--parent` any node, `--tree <node>` (child of that tree's root), or `--new-tree`.
 
 ```sh
 spade spawn note --title "Findings" --body "Root cause: …"            # child of you
 spade spawn note --parent <node> --title "Detail" --body "…"            # continue a branch
 spade spawn webpage --url https://example.com/docs --title "API docs"
 spade spawn image --path shots/before.png --caption "Before the fix"   # or --asset <id>
-spade spawn agent --prompt "Review the diff in src/" --title "Reviewer" # provider/model/mode follow yours
-spade spawn agent --prompt "…" --provider claude --model opus --mode default
 spade spawn note --new-tree --title "Open questions" --body "…"
 spade spawn <type> --config '<json>'                                    # any registered type
 spade reparent <node> <new-parent>        # moves the whole branch; cycles are rejected
@@ -64,19 +67,35 @@ spade expand <node> [--branch]
 spade archive <node> [--branch]
 spade restore <node> [--branch]
 spade remove <node> [--branch]            # without --branch, children move up to its parent
-spade prompt <agent-node> Please summarize your result
 ```
 
-Spawning an agent starts a real Paseo agent in the project root as your sub-agent; do it only when the work
-needs a separate agent. The viewport belongs to the user: there is no viewport or focus command.
+The viewport belongs to the user: there is no viewport or focus command.
 
-**Pass arbitrary text through stdin.** Any free-text value (the text of `prompt`, `rename`, `describe`;
-`--body`, `--prompt`, `--title`, `--description`, `--caption`, `--config`, `--label`) can be a single `-`,
-which reads that value from stdin (one per command; a final line break is dropped). Shells, and above all
-`cmd.exe` on Windows, re-read quotes, `&`, `|`, `>`, `$`, and `%VAR%` in arguments; stdin is passed as is:
+## Agents
+
+`spade spawn agent` starts a **Paseo agent owned by you**, exactly as Paseo's own tools do when you create
+an agent with them: it is not a node. It appears, collapsed, in your list, where the user follows it and can
+expand it. It prints the new agent's Paseo id. Start one only when the work needs a separate agent.
 
 ```sh
-spade prompt <agent-node> - <<'EOF'
+spade spawn agent --prompt "Review the diff in src/" --provider claude --title "Reviewer"
+spade spawn agent --prompt "…" --provider codex --model gpt-5 --mode auto
+```
+
+Name the provider (and model, if it matters) yourself; `spade providers` lists them. Without `--provider`
+the user's saved default provider and its model apply. Nothing else is filled in: with `--provider` and no
+`--model`, Paseo picks the model, and an unset `--mode` is left to Paseo. An agent takes no `--parent`, `--tree`, `--new-tree`, `--description`, or `--project`.
+
+**Message other agents with Paseo's own tools**, not through SPADE; the agents you start are reachable there
+by the id `spade spawn agent` printed.
+
+**Pass arbitrary text through stdin.** Any free-text value (the text of `rename` and `describe`; `--body`,
+`--prompt`, `--title`, `--description`, `--caption`, `--config`, `--label`) can be a single `-`, which reads
+that value from stdin (one per command; a final line break is dropped). Shells, and above all `cmd.exe` on
+Windows, re-read quotes, `&`, `|`, `>`, `$`, and `%VAR%` in arguments; stdin is passed as is:
+
+```sh
+spade spawn note --title "Findings" --body - <<'EOF'
 Text with "quotes", & | > $HOME %PATH%, and several lines.
 EOF
 spade spawn note --title "Findings" --body - < findings.md
@@ -89,9 +108,9 @@ stderr (`spade: unknown-node: Unknown node: …`) and a non-zero exit; nothing f
 means wrong usage (`spade <command> --help`). If SPADE is not running, say so and continue without the
 canvas. Add `--json` to any command for exact structured output.
 
-You act as yourself through `PASEO_AGENT_ID`, which Paseo sets for you. **Never pass `--as-user`**: it is
-only for a person at a terminal. If a command fails with `identity-required` (your agent identity is
-missing), stop using the canvas and tell the user; do not try to work around it.
+You always act as yourself. If a command fails with `identity-required` (your agent identity is missing) or
+`unknown-agent` (SPADE shows neither you nor an agent that owns you), stop using the canvas and tell the
+user; do not try to work around it.
 
 ## Rich answers
 

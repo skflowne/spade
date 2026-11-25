@@ -1,3 +1,5 @@
+import type { AgentRuntime, ChildAgentInfo } from '../../../../shared/agents'
+import { PASEO_AGENT_KIND } from '../../../../shared/builtinEntities'
 import type { Actor, Canvas, CanvasActivity, CanvasNode } from '../../../../shared/domain'
 import { canvasIndex } from './canvasIndex'
 
@@ -5,8 +7,9 @@ import { canvasIndex } from './canvasIndex'
 
 export type ActivityActorView =
   | { kind: 'user'; label: string }
-  // `nodeId` is the agent's own node; `exists` is false once it was removed from the canvas.
-  | { kind: 'agent'; label: string; nodeId: string; entityType: string | null; exists: boolean }
+  // An agent is identified by its Paseo id. `nodeId` is its node on this canvas, null while it is collapsed
+  // into its owner's list; `exists` is false when it has no node here (removed, or collapsed).
+  | { kind: 'agent'; label: string; agentId: string; nodeId: string | null; entityType: string | null; exists: boolean }
   | { kind: 'system'; label: string }
 
 export type ActivityItem = {
@@ -18,26 +21,89 @@ export type ActivityItem = {
   targetNodeId: string | null
 }
 
+// What the renderer knows of agents without a node of their own, from the project's agent runtimes.
+export type AgentDirectory = {
+  // Paseo agent id to title, for every agent a runtime names with a title.
+  titles: ReadonlyMap<string, string>
+  // A collapsed agent's nearest expanded owner: the node it acts from.
+  owners: ReadonlyMap<string, string>
+}
+
+export const EMPTY_AGENT_DIRECTORY: AgentDirectory = { titles: new Map(), owners: new Map() }
+
+export function agentDirectory(runtimes: Iterable<AgentRuntime>, projectId: string): AgentDirectory {
+  const titles = new Map<string, string>()
+  const owners = new Map<string, string>()
+  const visit = (children: readonly ChildAgentInfo[], ownerNodeId: string): void => {
+    for (const child of children) {
+      if (child.title !== null) titles.set(child.agentId, child.title)
+      if (child.nodeId !== null) continue
+      owners.set(child.agentId, ownerNodeId)
+      visit(child.children, ownerNodeId)
+    }
+  }
+  for (const runtime of runtimes) {
+    if (runtime.projectId !== projectId) continue
+    if (runtime.title !== null) titles.set(runtime.agentId, runtime.title)
+    visit(runtime.children, runtime.nodeId)
+  }
+  return { titles, owners }
+}
+
+export function sameAgentDirectory(a: AgentDirectory, b: AgentDirectory): boolean {
+  const sameMap = (x: ReadonlyMap<string, string>, y: ReadonlyMap<string, string>): boolean =>
+    x.size === y.size && [...x].every(([key, value]) => y.get(key) === value)
+  return sameMap(a.titles, b.titles) && sameMap(a.owners, b.owners)
+}
+
 // How long a node shows that an agent changed it.
 export const RECENT_AGENT_CHANGE_MS = 5 * 60_000
 
-export function actorView(canvas: Canvas, actor: Actor, byId: ReadonlyMap<string, CanvasNode> = canvasIndex(canvas).byId): ActivityActorView {
+type AgentActor = Extract<Actor, { kind: 'agent' }>
+
+function agentNodeOf(canvas: Canvas, byId: ReadonlyMap<string, CanvasNode>, actor: AgentActor): CanvasNode | null {
+  if (actor.nodeId !== null) {
+    const node = byId.get(actor.nodeId)
+    if (node) return node
+  }
+  // An agent that acted while collapsed and was expanded since.
+  return (
+    canvas.nodes.find(
+      (node) =>
+        node.resourceRef?.provider === 'paseo' && node.resourceRef.kind === PASEO_AGENT_KIND && node.resourceRef.id === actor.agentId
+    ) ?? null
+  )
+}
+
+export function actorView(
+  canvas: Canvas,
+  actor: Actor,
+  byId: ReadonlyMap<string, CanvasNode> = canvasIndex(canvas).byId,
+  agents: AgentDirectory = EMPTY_AGENT_DIRECTORY
+): ActivityActorView {
   switch (actor.kind) {
     case 'user':
       return { kind: 'user', label: 'You' }
     case 'system':
       return { kind: 'system', label: 'SPADE' }
     case 'agent': {
-      const node = byId.get(actor.nodeId)
+      const node = agentNodeOf(canvas, byId, actor)
       return node
-        ? { kind: 'agent', label: node.title, nodeId: node.id, entityType: node.entityType, exists: true }
-        : { kind: 'agent', label: `Agent ${actor.agentId}`, nodeId: actor.nodeId, entityType: null, exists: false }
+        ? { kind: 'agent', label: node.title, agentId: actor.agentId, nodeId: node.id, entityType: node.entityType, exists: true }
+        : {
+            kind: 'agent',
+            label: agents.titles.get(actor.agentId) ?? `Agent ${actor.agentId}`,
+            agentId: actor.agentId,
+            nodeId: actor.nodeId,
+            entityType: null,
+            exists: false
+          }
     }
   }
 }
 
 // Newest first.
-export function activityItems(canvas: Canvas, options: { agentsOnly?: boolean } = {}): ActivityItem[] {
+export function activityItems(canvas: Canvas, options: { agentsOnly?: boolean; agents?: AgentDirectory } = {}): ActivityItem[] {
   const byId: ReadonlyMap<string, CanvasNode> = canvasIndex(canvas).byId
   const items: ActivityItem[] = []
   for (let i = canvas.activity.length - 1; i >= 0; i -= 1) {
@@ -46,7 +112,7 @@ export function activityItems(canvas: Canvas, options: { agentsOnly?: boolean } 
     items.push({
       id: entry.id,
       at: entry.at,
-      actor: actorView(canvas, entry.actor, byId),
+      actor: actorView(canvas, entry.actor, byId, options.agents),
       summary: entry.summary,
       targetNodeId: entry.nodeIds.find((id) => byId.has(id) && !byId.get(id)!.archived) ?? null
     })
@@ -54,13 +120,14 @@ export function activityItems(canvas: Canvas, options: { agentsOnly?: boolean } 
   return items
 }
 
-export type AgentChange = { agentNodeId: string; agentLabel: string; at: string; summary: string }
+export type AgentChange = { agentId: string; agentNodeId: string | null; agentLabel: string; at: string; summary: string }
 
 // For each node an agent changed within RECENT_AGENT_CHANGE_MS of `now`, the newest such change, and when the
 // earliest of them expires (null when there are none).
 export function recentAgentChanges(
   canvas: Canvas,
-  now: number
+  now: number,
+  agents: AgentDirectory = EMPTY_AGENT_DIRECTORY
 ): { changes: Map<string, AgentChange>; expiresAt: number | null } {
   const byId: ReadonlyMap<string, CanvasNode> = canvasIndex(canvas).byId
   const changes = new Map<string, AgentChange>()
@@ -70,11 +137,14 @@ export function recentAgentChanges(
     const at = Date.parse(entry.at)
     if (!(now - at < RECENT_AGENT_CHANGE_MS)) break
     if (entry.actor.kind !== 'agent') continue
-    const actor = actorView(canvas, entry.actor, byId)
+    const actor = actorView(canvas, entry.actor, byId, agents)
+    if (actor.kind !== 'agent') continue
+    // The node an agent acts from appears in its spawns as their source; that is not a change to it. A collapsed
+    // agent acts from its nearest expanded owner's node.
+    const actingFrom = entry.actor.nodeId ?? agents.owners.get(entry.actor.agentId) ?? null
     for (const nodeId of entry.nodeIds) {
-      // An agent's own node appears in its spawns as their source; that is not a change to it.
-      if (nodeId === entry.actor.nodeId || changes.has(nodeId) || !byId.has(nodeId)) continue
-      changes.set(nodeId, { agentNodeId: entry.actor.nodeId, agentLabel: actor.label, at: entry.at, summary: entry.summary })
+      if (nodeId === actingFrom || nodeId === actor.nodeId || changes.has(nodeId) || !byId.has(nodeId)) continue
+      changes.set(nodeId, { agentId: actor.agentId, agentNodeId: actor.nodeId, agentLabel: actor.label, at: entry.at, summary: entry.summary })
       const expiry = at + RECENT_AGENT_CHANGE_MS
       expiresAt = expiresAt === null ? expiry : Math.min(expiresAt, expiry)
     }

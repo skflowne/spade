@@ -20,7 +20,7 @@ import { installWebviewPolicy, type WebviewPolicyTarget } from '../../src/main/f
 import { AssetStore } from '../../src/main/persistence'
 import { IMAGE_EXTENSIONS } from '../../src/shared/paths'
 import { WEB_PAGE_PARTITION } from '../../src/shared/builtinEntities'
-import type { Project } from '../../src/shared/domain'
+import { DOMAIN_RECORD_VERSION, type Project } from '../../src/shared/domain'
 
 // ---------- Image fixtures, encoded from their dimensions independently of the parser ----------
 
@@ -218,7 +218,7 @@ async function withFixture(
   const appData = join(directory, 'app-data')
   await mkdir(root)
   await mkdir(appData)
-  const project: Project = { version: 2, id: 'project-1', name: 'Demo', rootPath: root, createdAt: '2026-01-01T00:00:00.000Z' }
+  const project: Project = { version: DOMAIN_RECORD_VERSION, id: 'project-1', name: 'Demo', rootPath: root, createdAt: '2026-01-01T00:00:00.000Z' }
   const host = createFakeHost()
   const assets = new AssetStore({ directory: appData })
   const service = createFileService({ host, assetStore: assets, ...options })
@@ -384,7 +384,7 @@ test('paths inside a project whose root is a network share are always checked', 
     async ({ service }) => {
       await service.start()
       const project: Project = {
-        version: 2,
+        version: DOMAIN_RECORD_VERSION,
         id: 'project-unc',
         name: 'Shared',
         rootPath: '\\\\fileserver\\team\\framework',

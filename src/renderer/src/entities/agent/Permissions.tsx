@@ -1,31 +1,36 @@
 import { useState } from 'react'
 import type { AgentPermissionRequest, PermissionBehavior } from '@shared/agents'
+import type { Result } from '@shared/ipc'
+
+// Answers one request: by node for the node's own agent, by agent for a child in its owner's list.
+export type PermissionResponder = (requestId: string, behavior: PermissionBehavior) => Promise<Result>
 
 type PermissionsProps = {
-  nodeId: string
   requests: readonly AgentPermissionRequest[]
+  respond: PermissionResponder
   // Why the agent cannot be answered right now; null when it can.
   blocked: string | null
 }
 
-// Pending permission requests, above the composer. A request disappears when the runtime no longer lists it.
-export function Permissions({ nodeId, requests, blocked }: PermissionsProps): React.JSX.Element | null {
+// Pending permission requests, above the composer or in an owner's list of children. A request disappears
+// when the runtime no longer lists it.
+export function Permissions({ requests, respond, blocked }: PermissionsProps): React.JSX.Element | null {
   if (requests.length === 0) return null
   return (
     <section className="agent-permissions" aria-label="Permission requests">
       {requests.map((request) => (
-        <PermissionRequest key={request.id} nodeId={nodeId} request={request} blocked={blocked} />
+        <PermissionRequest key={request.id} respond={respond} request={request} blocked={blocked} />
       ))}
     </section>
   )
 }
 
 function PermissionRequest({
-  nodeId,
+  respond: send,
   request,
   blocked
 }: {
-  nodeId: string
+  respond: PermissionResponder
   request: AgentPermissionRequest
   blocked: string | null
 }): React.JSX.Element {
@@ -36,9 +41,7 @@ function PermissionRequest({
   const respond = async (behavior: PermissionBehavior): Promise<void> => {
     setSending(behavior)
     setFailure(null)
-    const result = await window.spadeHost.agents
-      .respondToPermission(nodeId, request.id, behavior)
-      .catch((reason: unknown) => ({ ok: false as const, error: { code: 'failed', message: String(reason) } }))
+    const result = await send(request.id, behavior).catch((reason: unknown) => ({ ok: false as const, error: { code: 'failed', message: String(reason) } }))
     if (!result.ok) {
       setSending(null)
       setFailure(result.error.message)

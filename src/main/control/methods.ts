@@ -1,7 +1,7 @@
 import type { AgentService, WorkspaceGateway } from '../contracts'
 import { stableErrorCode } from '../errors'
 import { describeNodeForAgent } from '../../shared/agentContext'
-import { AGENT_ENTITY, PASEO_AGENT_KIND, type AgentConfig } from '../../shared/builtinEntities'
+import { AGENT_ENTITY } from '../../shared/builtinEntities'
 import {
   CanvasCommandError,
   type CanvasCommand,
@@ -32,6 +32,7 @@ import {
   type ProjectSummary,
   type RpcMethod,
   type RpcMethods,
+  type SpawnedAgent,
   type SpawnPlacement,
   type TreeLine
 } from './protocol'
@@ -49,10 +50,14 @@ export class ControlFailure extends Error {
   }
 }
 
+// The caller as Paseo knows it. An agent acts as itself whether or not the canvas shows its own node.
 export type Caller = {
   actor: Actor
-  // The calling agent's own node; null for the user.
+  // The calling agent's own node while it is expanded; null while it is collapsed, and for the user.
   node: CanvasNode | null
+  // The node that stands for the agent on its canvas: its own, or its nearest expanded owner's.
+  anchorNodeId: string | null
+  ownerAgentId: string | null
   projectId: string | null
 }
 
@@ -60,18 +65,16 @@ export type ControlMethodsOptions = {
   gateway: WorkspaceGateway
   agentService: AgentService
   entities: EntityRegistry
-  // How long to wait for a just-created agent's node to be reconciled onto the canvas.
+  // How long to wait for Paseo to report a just-created agent.
   identityLookup: { timeoutMs: number; intervalMs: number }
 }
 
 type Handler = (params: unknown, caller: () => Promise<Caller>) => Promise<unknown>
 
-// Who the request says is calling: an agent by its Paseo id, or a person who explicitly acts as the user.
-export type CallerIdentity = { agentId: string | undefined; asUser: boolean }
-
 export type ControlMethods = {
   has(method: string): method is RpcMethod
-  call(method: RpcMethod, params: unknown, identity: CallerIdentity): Promise<unknown>
+  // `agentId` is the caller's PASEO_AGENT_ID; absent for a person at a terminal, who may only read.
+  call(method: RpcMethod, params: unknown, agentId: string | undefined): Promise<unknown>
 }
 
 // Commands an agent or the CLI may send through `execute`. Creation goes through `spawn`, which builds the
@@ -99,7 +102,7 @@ const EXECUTABLE_COMMANDS = new Set<CanvasCommand['type']>([
 const CONFIG_FIELDS: Record<string, string> = {
   note: '{ body: string }  (--body)',
   agent:
-    '{ provider: string, model: string|null, mode: string|null, prompt: string|null }  (--prompt, --provider, --model, --mode; unset fields default to the caller’s own)',
+    '{ prompt: string, provider?: string, model?: string, mode?: string }  (--prompt, --provider, --model, --mode). Not a node: starts a Paseo agent owned by you. Without a provider, the user’s saved default provider and its model apply; an unset mode is left to Paseo',
   image:
     '{ source: { kind: "path", path } | { kind: "asset", assetId }, caption?: string }  (--path, --asset, --caption)',
   webpage: '{ url: http(s) URL }  (--url)'
@@ -113,17 +116,27 @@ export function createControlMethods(options: ControlMethodsOptions): ControlMet
   const { gateway, agentService, entities } = options
 
   async function resolveCaller(agentId: string | undefined): Promise<Caller> {
-    if (agentId === undefined) return { actor: { kind: 'user' }, node: null, projectId: null }
+    if (agentId === undefined) {
+      return { actor: { kind: 'user' }, node: null, anchorNodeId: null, ownerAgentId: null, projectId: null }
+    }
     const deadline = Date.now() + options.identityLookup.timeoutMs
     for (;;) {
-      const found = await gateway.findNodeByResource({ provider: 'paseo', kind: PASEO_AGENT_KIND, id: agentId })
-      if (found) {
-        return { actor: { kind: 'agent', nodeId: found.node.id, agentId }, node: found.node, projectId: found.projectId }
+      const location = await agentService.locateAgent(agentId)
+      const placement = location?.placements[0]
+      if (location && placement) {
+        const node = placement.nodeId === null ? null : ((await gateway.findNode(placement.nodeId))?.node ?? null)
+        return {
+          actor: { kind: 'agent', nodeId: node?.id ?? null, agentId },
+          node,
+          anchorNodeId: placement.anchorNodeId,
+          ownerAgentId: location.parentAgentId,
+          projectId: placement.projectId
+        }
       }
       if (Date.now() + options.identityLookup.intervalMs > deadline) {
         throw new ControlFailure(
           'unknown-agent',
-          `No SPADE canvas node represents Paseo agent ${agentId}. Only agents shown on the SPADE canvas can use this CLI; if this agent was just created, retry in a moment.`
+          `SPADE shows neither Paseo agent ${agentId} nor an agent that owns it. Only agents on a SPADE canvas, and the agents they own, can use this CLI; if this agent was just created, retry in a moment.`
         )
       }
       await delay(options.identityLookup.intervalMs)
@@ -171,35 +184,43 @@ export function createControlMethods(options: ControlMethodsOptions): ControlMet
     return { projectId, ...outcome }
   }
 
-  function inheritedAgentSettings(caller: Caller): { provider: string; model: string | null; mode: string | null } | null {
-    if (caller.node && caller.projectId) {
-      const runtime = agentService.runtimes(caller.projectId).find((candidate) => candidate.nodeId === caller.node!.id)
-      if (runtime) return { provider: runtime.provider, model: runtime.model, mode: runtime.mode }
-      if (caller.node.entityType === AGENT_ENTITY && entities.has(AGENT_ENTITY)) {
-        try {
-          const config = entities.resolve<AgentConfig>(AGENT_ENTITY).parseConfig(caller.node.config)
-          return { provider: config.provider, model: config.model, mode: config.mode }
-        } catch {
-          // Fall through to the app defaults.
-        }
+  // A pass-through to Paseo with the caller as parent. SPADE fills in only the provider Paseo requires,
+  // from the user's saved default (with its model); Paseo applies its own rules to everything left unset.
+  async function spawnAgent(input: Record<string, unknown>, caller: Caller): Promise<SpawnedAgent> {
+    for (const [field, flag] of [
+      ['placement', '--parent, --tree, --new-tree'],
+      ['description', '--description'],
+      ['project', '--project']
+    ] as const) {
+      if (input[field] !== undefined) {
+        throw new ControlFailure('invalid-params', `An agent takes no ${flag}: it is not placed on the canvas but listed under you`)
       }
     }
-    return gateway.getSettings().agentDefaults
-  }
-
-  // Unset provider/model/mode follow the caller; model and mode follow only when the provider does.
-  function agentConfig(raw: unknown, caller: Caller): unknown {
-    if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return raw
-    const fields = raw as Record<string, unknown>
-    const inherited = inheritedAgentSettings(caller)
-    const provider = fields.provider ?? inherited?.provider
-    const same = inherited !== null && provider === inherited.provider
-    return {
-      provider,
-      model: fields.model !== undefined ? fields.model : same ? inherited.model : null,
-      mode: fields.mode !== undefined ? fields.mode : same ? inherited.mode : null,
-      prompt: fields.prompt ?? null
+    const config = fields(input.config, ['prompt', 'provider', 'model', 'mode'], 'config')
+    const prompt = requiredText(config, 'prompt', 'config')
+    if (prompt.length > PROMPT_LIMIT) throw new ControlFailure('invalid-params', `config.prompt exceeds ${PROMPT_LIMIT} characters`)
+    const title = optionalText(input, 'title')
+    if (caller.actor.kind !== 'agent') throw new ControlFailure('identity-required', 'Only an agent can start an agent it owns')
+    const defaults = gateway.getSettings().agentDefaults
+    const named = optionalSetting(config, 'provider')
+    const provider = named ?? defaults?.provider
+    if (provider === undefined) {
+      throw new ControlFailure(
+        'invalid-params',
+        'Name the agent’s provider with --provider <id> (run `spade providers` to list them); the user has saved no default provider in SPADE'
+      )
     }
+    // The saved model comes only with the saved provider; a provider the caller names gets Paseo's choice.
+    const model = optionalSetting(config, 'model') ?? (named === undefined && defaults?.model ? defaults.model : undefined)
+    const mode = optionalSetting(config, 'mode')
+    const { agentId } = await agentService.spawnChildAgent(caller.actor.agentId, {
+      prompt,
+      provider,
+      ...(model === undefined ? {} : { model }),
+      ...(mode === undefined ? {} : { mode }),
+      ...(title === undefined ? {} : { title })
+    })
+    return { agentId, ownerAgentId: caller.actor.agentId }
   }
 
   async function spawnCommand(
@@ -208,8 +229,9 @@ export function createControlMethods(options: ControlMethodsOptions): ControlMet
     node: NodeSeed,
     explicitProject: string | undefined
   ): Promise<{ projectId: string; command: CanvasCommand }> {
+    // While the caller is collapsed, what it spawns belongs to its nearest expanded owner.
     const spawnFrom = (projectId: string, fallbackSource: string, target?: SpawnTarget) => {
-      const sourceNodeId = caller.node && caller.projectId === projectId ? caller.node.id : fallbackSource
+      const sourceNodeId = caller.anchorNodeId !== null && caller.projectId === projectId ? caller.anchorNodeId : fallbackSource
       const command: CanvasCommand = {
         type: 'spawnChild',
         sourceNodeId,
@@ -222,13 +244,13 @@ export function createControlMethods(options: ControlMethodsOptions): ControlMet
 
     switch (placement.kind) {
       case 'self':
-        if (!caller.node || caller.projectId === null) {
+        if (caller.anchorNodeId === null || caller.projectId === null) {
           throw new ControlFailure(
             'invalid-params',
-            'Only an agent has a node of its own; name a target with --parent, --tree, or --new-tree'
+            'Only an agent has a place on the canvas; name a target with --parent, --tree, or --new-tree'
           )
         }
-        return spawnFrom(caller.projectId, caller.node.id)
+        return spawnFrom(caller.projectId, caller.anchorNodeId)
       case 'child': {
         const { projectId } = await locateNode(placement.parentNodeId)
         return spawnFrom(projectId, placement.parentNodeId, { kind: 'child', parentNodeId: placement.parentNodeId })
@@ -239,8 +261,8 @@ export function createControlMethods(options: ControlMethodsOptions): ControlMet
       }
       case 'new-tree': {
         const project = await projectFor(caller, explicitProject)
-        if (caller.node && caller.projectId === project.id) {
-          return spawnFrom(project.id, caller.node.id, { kind: 'new-tree' })
+        if (caller.anchorNodeId !== null && caller.projectId === project.id) {
+          return spawnFrom(project.id, caller.anchorNodeId, { kind: 'new-tree' })
         }
         return { projectId: project.id, command: { type: 'startTree', node } }
       }
@@ -255,17 +277,18 @@ export function createControlMethods(options: ControlMethodsOptions): ControlMet
     async whoami(params, caller): Promise<RpcMethods['whoami']['result']> {
       fields(params, [])
       const self = await caller()
-      if (!self.node || self.projectId === null) return { actor: self.actor, project: null, node: null, childIds: [] }
+      const project = self.projectId === null ? null : gateway.getProject(self.projectId)
+      const identity = {
+        actor: self.actor,
+        project: project && projectSummary(project),
+        ownerAgentId: self.ownerAgentId,
+        anchorNodeId: self.anchorNodeId
+      }
+      if (!self.node || self.projectId === null) return { ...identity, node: null, childIds: [] }
       const canvas = await gateway.getCanvas(self.projectId)
       const tree = indexTree(canvas)
       const node = canvas.nodes.find((candidate) => candidate.id === self.node!.id) ?? self.node
-      const project = gateway.getProject(self.projectId)
-      return {
-        actor: self.actor,
-        project: project && projectSummary(project),
-        node: summarize(node, tree),
-        childIds: tree.childrenOf(node.id).slice(0, DETAIL_LIST_LIMIT)
-      }
+      return { ...identity, node: summarize(node, tree), childIds: tree.childrenOf(node.id).slice(0, DETAIL_LIST_LIMIT) }
     },
 
     async projects(params): Promise<RpcMethods['projects']['result']> {
@@ -432,13 +455,14 @@ export function createControlMethods(options: ControlMethodsOptions): ControlMet
       const input = fields(params, ['project', 'entityType', 'config', 'title', 'description', 'placement'])
       const entityType = requiredText(input, 'entityType')
       if (!Object.hasOwn(input, 'config')) throw new ControlFailure('invalid-params', 'config is required')
+      if (entityType === AGENT_ENTITY) return spawnAgent(input, await caller())
       const title = optionalText(input, 'title')
       const description = optionalText(input, 'description')
       const placement = spawnPlacement(input.placement)
       const self = await caller()
       const node: NodeSeed = {
         entityType,
-        config: entityType === AGENT_ENTITY ? agentConfig(input.config, self) : input.config,
+        config: input.config,
         ...(title === undefined ? {} : { title }),
         ...(description === undefined ? {} : { shortDescription: description })
       }
@@ -465,32 +489,16 @@ export function createControlMethods(options: ControlMethodsOptions): ControlMet
           ? await locateEdge(command.edgeId)
           : (await locateNode(firstNodeId(command))).projectId
       return execute(projectId, command, (await caller()).actor)
-    },
-
-    async prompt(params, caller): Promise<RpcMethods['prompt']['result']> {
-      const input = fields(params, ['nodeId', 'text'])
-      const nodeId = requiredText(input, 'nodeId')
-      const text = requiredText(input, 'text')
-      if (text.length > PROMPT_LIMIT) throw new ControlFailure('invalid-params', `text exceeds ${PROMPT_LIMIT} characters`)
-      const { node } = await locateNode(nodeId)
-      if (node.entityType !== AGENT_ENTITY) {
-        throw new CanvasCommandError('invalid-command', `Node ${nodeId} is a ${node.entityType}, not an agent`)
-      }
-      await agentService.prompt(nodeId, { text }, (await caller()).actor)
-      return { nodeId }
     }
   }
 
   return {
     has: (method): method is RpcMethod => Object.hasOwn(handlers, method),
-    async call(method, params, { agentId, asUser }) {
-      if (agentId !== undefined && asUser) {
-        throw new ControlFailure('invalid-params', 'An agent acts as itself; --as-user is only for a person at a terminal')
-      }
-      if (agentId === undefined && !asUser && MUTATING_METHODS.includes(method)) {
+    async call(method, params, agentId) {
+      if (agentId === undefined && MUTATING_METHODS.includes(method)) {
         throw new ControlFailure(
           'identity-required',
-          `This command changes the canvas but carries no agent identity (${PASEO_AGENT_ID_ENV} is not set), so SPADE cannot attribute it. An agent must stop and tell the user. A person at a terminal passes --as-user to act as the user.`
+          `This command makes a change but carries no agent identity (${PASEO_AGENT_ID_ENV} is not set), so SPADE cannot attribute it. Only an agent running in SPADE changes the canvas through this CLI; the user does so in SPADE itself. An agent must stop and tell the user.`
         )
       }
       let resolved: Promise<Caller> | null = null
@@ -603,6 +611,11 @@ function requiredText(input: Record<string, unknown>, key: string, path = 'param
   const value = optionalText(input, key, path)
   if (value === undefined) throw new ControlFailure('invalid-params', `${path}.${key} is required`)
   return value
+}
+
+// A config setting the caller may leave unset with null as well as by omission.
+function optionalSetting(input: Record<string, unknown>, key: string): string | undefined {
+  return input[key] === null ? undefined : optionalText(input, key, 'config')
 }
 
 function optionalInteger(input: Record<string, unknown>, key: string, min: number, max: number): number | undefined {

@@ -68,13 +68,19 @@ const activity = {
   nodeIds: [canvasNode.id]
 } satisfies CanvasActivity
 
+// An agent collapsed into its owner's list acts without a node of its own.
+const collapsedAgentActivity = {
+  ...activity,
+  id: 'activity-collapsed-id',
+  actor: { kind: 'agent', nodeId: null, agentId: 'agent-child-id' }
+} satisfies CanvasActivity
+
 const canvas: Canvas = {
   ...createEmptyCanvas(project.id),
   nodes: [canvasNode],
   edges: [childEdge],
   workspaces: [workspace],
-  activity: [activity],
-  dismissedResources: [{ provider: 'paseo', kind: 'agent', id: 'agent-removed' }]
+  activity: [activity, collapsedAgentActivity]
 }
 
 void canvas

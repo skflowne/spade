@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, test, type Locator, type Page } from '@playwright/test'
 import type { NodeSeed } from '../../src/shared/commands'
+import { agentCalls, installAgentScript, setReply } from './agent-harness'
 import {
   canvasNode,
   execute,
@@ -536,7 +537,7 @@ test('edits the conversation expansion defaults and the Paseo daemon URL in the 
     let dialog = page.getByRole('dialog', { name: 'Settings' })
     await expect(dialog.getByRole('checkbox', { name: 'Tool calls' })).toBeChecked()
     await expect(dialog.getByRole('checkbox', { name: 'File reads' })).not.toBeChecked()
-    await expect(dialog).toContainText('applies the next time SPADE starts')
+    await expect(dialog).toContainText('Saving reconnects to the daemon')
     await dialog.getByRole('checkbox', { name: 'File reads' }).check()
     await dialog.getByRole('checkbox', { name: 'Thinking' }).uncheck()
     await dialog.getByLabel('Paseo daemon URL').fill('ws://127.0.0.1:7777/ws')
@@ -557,6 +558,30 @@ test('edits the conversation expansion defaults and the Paseo daemon URL in the 
     await expect.poll(async () => (await appState(page)).settings.paseoUrl).toBeNull()
   } finally {
     await spade.app.close()
+  }
+})
+
+test('refreshes the Paseo connection from the sidebar status and shows where it landed', async () => {
+  const spade = await launchWithProject()
+  const { page, app } = spade
+  try {
+    await installAgentScript(app)
+    const status = page.getByTestId('paseo-status')
+    await expect(status).toContainText('Unavailable')
+    await setReply(app, 'agents.refreshConnection', {
+      ok: true,
+      connection: { state: 'connected', url: 'ws://127.0.0.1:7777/ws', error: null }
+    })
+    await status.getByRole('button', { name: 'Refresh the Paseo connection' }).click()
+    await expect.poll(async () => (await agentCalls(app, 'agents.refreshConnection')).length).toBe(1)
+    await expect(status).toContainText('Connected')
+    await expect(status).toContainText('ws://127.0.0.1:7777/ws')
+
+    await setReply(app, 'agents.refreshConnection', { ok: false, error: { code: 'paseo-unavailable', message: 'Nothing answers there' } })
+    await status.getByRole('button', { name: 'Refresh the Paseo connection' }).click()
+    await expect(status.getByRole('alert')).toContainText('Could not refresh: Nothing answers there')
+  } finally {
+    await app.close()
   }
 })
 

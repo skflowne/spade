@@ -37,8 +37,8 @@
 <p>SPADE is deliberately <strong>workflow-agnostic</strong>. It does not assume GitHub issues, pull requests, reviews, or any particular agent workflow. The first usable version is built from a small set of generic bricks that adapt to any kind of work, for example agent and sub-agent runs, image review, and several fixed checkouts kept under one framework project folder:</p>
 <pre><code class="language-text">Project            a root directory plus its own canvas (the sidebar switches canvases)
   Group            optional spatial hull around related nodes on the canvas
-  Agent            Paseo agent, always started in the project's root directory
-    Sub-agents     children of the agent
+  Agent            Paseo agent the user starts in the project's root directory
+    Sub-agents     the agents it owns in Paseo, listed on it, expandable into nodes
   Image, Web page  viewer nodes
   Rich conversation  paths, images and links become actions:
                      reveal in Explorer, or spawn as a new node in a tree
@@ -51,7 +51,8 @@
 <li><strong>GitHub is deferred.</strong> Issue, pull-request, review, check, diff, commit, push, and merge surfaces are not relevant to the first usable phase and are postponed to a later phase (§14).</li>
 <li><strong>Windows only.</strong> v1 targets native Windows. WSL, macOS, and Linux are out of scope and must not shape the design.</li>
 <li><strong>SPADE never touches user projects.</strong> The application keeps all of its own state in its application data directory (§4.7). It writes no files, markers, ignore entries, or Git state into project directories.</li>
-<li><strong>A project is a root directory plus a canvas.</strong> Each project has its own canvas, and the sidebar switches between canvases. There is one canvas per project, no global canvas, and no project containers; groups are never used to tell projects apart. Every agent starts in its project's root directory. This replaces an earlier decision for one global canvas and multi-folder projects.</li>
+<li><strong>A project is a root directory plus a canvas.</strong> Each project has its own canvas, and the sidebar switches between canvases. There is one canvas per project, no global canvas, and no project containers; groups are never used to tell projects apart. Every agent the user starts begins in its project's root directory. This replaces an earlier decision for one global canvas and multi-folder projects.</li>
+<li><strong>Paseo manages agents; SPADE is a view on top</strong> (added in SPADE-38). SPADE never has its own way of creating, governing, or messaging agents on behalf of other agents. It observes what Paseo reports (agents, parent identity, provider sub-agents, status, mode) and offers the user the same operations Paseo does. An agent exists, and is itself, because Paseo knows it, whether or not the canvas shows it (§4.6, §7.1).</li>
 <li><strong>Parent-child trees, not branches.</strong> The structural relationship is a parent-child edge. A "branch" is only a derived view: a child together with everything below it (§4.6).</li>
 <li><strong>Legible by default.</strong> Default sizes and automatic placement must leave enough room that every new node is readable without manual rearrangement (§8). Users will still move things; automatic layout never overrides them.</li>
 <li><strong>Prototypes stay as reference.</strong> The P3 work is merged to <code>main</code> and the prototypes remain in the repository. They are not extended and not imported; code is copied into <code>src/</code> and generalized (§19).</li>
@@ -294,7 +295,8 @@
 <ul>
 <li><code>child</code> edges form a forest: a node has at most one parent, cycles are rejected, and a node with no parent is a <strong>root</strong>. A <strong>tree</strong> is a root and all of its descendants.</li>
 <li>A <strong>branch</strong> is not a stored thing. It is the derived view of one child and everything below it, and it is what users collapse, move, or archive as a unit. It has no relation to a Git branch.</li>
-<li><code>origin</code> records how the child came to exist: <code>spawned</code> by the user from a node, <code>delegated</code> by an agent to a sub-agent, or created from an <code>artifact</code> inside a node (an image, a path, a link). Origin is descriptive and does not change tree behavior.</li>
+<li><code>origin</code> records how the child came to exist: <code>spawned</code> from a node, <code>delegated</code> for an agent's Paseo child or provider sub-agent that the user expanded into a node, or created from an <code>artifact</code> inside a node (an image, a path, a link). Origin is descriptive and does not change tree behavior, with one exception for ownership: removing an agent node also removes its <code>delegated</code> agent children.</li>
+<li>Between two agent nodes, a <code>child</code> edge means only that Paseo reports the child as the parent's child. An agent the user creates from an agent node starts related work, not a child: it is placed next to that node as a new tree, not connected.</li>
 <li><code>references</code> edges are optional, non-tree context links (§9). They never affect tree structure.</li>
 </ul>
 <p>Every spawn-as-new-node gesture, whether from node chrome or from an artifact inside a node, asks for a <strong>target</strong>:</p>
@@ -304,35 +306,41 @@
 <li><strong>Start a new tree:</strong> create the node with no parent.</li>
 </ol>
 <h4 id="agent-spawn-rule">Agent control of the graph</h4>
-<p>Agents are first-class operators of the canvas, not just content on it. An agent can <strong>read the structure and change the graph however the work requires</strong>, using the same generic commands as the user. The channel is a SPADE <strong>CLI tool</strong> taught by a <strong>skill</strong>, not MCP.</p>
+<p>Agents are first-class operators of the canvas, not just content on it. An agent can <strong>read the structure and, when the user asks, change the graph however the work requires</strong>, using the same generic commands as the user. The channel is a SPADE <strong>CLI tool</strong> taught by a <strong>skill</strong>, not MCP.</p>
 <ul>
 <li><strong>Read:</strong> list projects, groups, nodes, edges, trees, and branches; read a node's type, title, state, workspace, parent, children, and bounded context projection (§9). Reads are bounded and paged; the CLI never dumps full transcripts or pages.</li>
-<li><strong>Change:</strong> every canvas command in §5.3 and §4.6 is available: create and spawn nodes of any registered type, start trees, reparent, move, resize, collapse and expand, archive and remove, create and edit groups, connect <code>references</code>, and prompt or spawn other agents.</li>
-<li><strong>Default for spawning a child is tree continuation.</strong> An agent that spawns a child normally continues its own tree, either by <em>itself</em> (a new child of its own node, starting a new branch off the agent) or from <em>a node below it</em> (a child of a descendant in its own tree, continuing an existing branch). When the agent names no target, the child is a child of the agent itself. This is the default and the documented convention in the skill, not a restriction: the agent may name any other target, including a new tree, when the work calls for it.</li>
+<li><strong>Change:</strong> every canvas command in §5.3 and §4.6 is available: create and spawn nodes of any registered type, start trees, reparent, move, resize, collapse and expand, archive and remove, create and edit groups, connect <code>references</code>, and start Paseo agents it owns.</li>
+<li><strong>Agents do not create canvas nodes on their own.</strong> An agent spawns a node only when the user asks for one, in its instructions or in the conversation; otherwise it answers in its conversation, where the user can turn paths, images, and links into nodes. This is the convention the skill and the agent instructions teach, not an enforced restriction.</li>
+<li><strong>Default target.</strong> When the agent names no target, the node is a child of the agent's own node or, while the agent is collapsed into its owner's list, of its nearest expanded owner's node, still attributed to the agent. The agent may name any other target, including a node below it or a new tree.</li>
 <li><strong>Same invariants as the user.</strong> Agent commands pass through the same validation: tree rules (single parent, no cycles), the layout rules in §8, and project safety in §4.7. A graph command only ever touches SPADE records, never user files, so even a broad command cannot delete or rewrite project content. Agent-created nodes do not take over the viewport.</li>
-<li><strong>Attribution.</strong> The CLI identifies the calling agent from its own environment. Every agent-made change records the acting agent, so the UI can show who changed what and the user can undo or review it. An agent cannot act as another node.</li>
+<li><strong>Attribution.</strong> The CLI identifies the calling agent from its own environment, as the Paseo agent it is, whether or not the canvas shows its node. Every agent-made change records the acting agent, so the UI can show who changed what and the user can undo or review it. An agent cannot act as another agent or as the user.</li>
 <li><strong>Failure.</strong> A command naming a node that no longer exists fails with an error returned to the agent; it never falls back silently.</li>
 </ul>
 <p>Scoping what an agent may touch (for example limiting it to its own subtree) is not part of the first usable phase. It can be added later as a permission setting without changing the command surface.</p>
 <h4 id="agent-cli">Agent CLI, transport, and skill delivery</h4>
 <p>Decided in B3:</p>
 <ul>
-<li><strong>Surface.</strong> One <code>spade</code> command. Reads: <code>whoami</code>, <code>projects</code>, <code>tree</code>, <code>nodes</code>, <code>node</code>, <code>edges</code>, <code>activity</code>, <code>entities</code>, <code>providers</code>. Changes: <code>spawn</code> (a child of the caller by default; <code>--parent</code>, <code>--tree</code>, or <code>--new-tree</code> otherwise), <code>reparent</code>, <code>move</code>, <code>resize</code>, <code>rename</code>, <code>describe</code>, <code>edit</code>, <code>collapse</code>, <code>expand</code>, <code>archive</code>, <code>restore</code>, <code>remove</code> (each with <code>--branch</code> where it applies), <code>connect</code>, <code>disconnect</code>, and <code>prompt</code>. Plus <code>help</code> and <code>skill</code>. Every command accepts <code>--json</code>; reads are paged. There is no viewport or focus command.</li>
+<li><strong>Surface.</strong> One <code>spade</code> command. Reads: <code>whoami</code>, <code>projects</code>, <code>tree</code>, <code>nodes</code>, <code>node</code>, <code>edges</code>, <code>activity</code>, <code>entities</code>, <code>providers</code>. Changes: <code>spawn</code> (a child of the caller by default; <code>--parent</code>, <code>--tree</code>, or <code>--new-tree</code> otherwise), <code>reparent</code>, <code>move</code>, <code>resize</code>, <code>rename</code>, <code>describe</code>, <code>edit</code>, <code>collapse</code>, <code>expand</code>, <code>archive</code>, <code>restore</code>, <code>remove</code> (each with <code>--branch</code> where it applies), <code>connect</code>, and <code>disconnect</code>. Plus <code>help</code> and <code>skill</code>. Every command accepts <code>--json</code>; reads are paged. There is no viewport or focus command.</li>
 <li><strong>Transport.</strong> The running application serves a local HTTP control server on <code>127.0.0.1</code> with an OS-assigned port and a bearer token created at each start. It writes a discovery file, <code>control.json</code>, and three launcher shims into its own application data directory: <code>bin/spade</code> (POSIX sh, also for Git Bash on Windows, with forward-slash paths), <code>bin/spade.ps1</code> (PowerShell), and <code>bin/spade.cmd</code> (cmd.exe, which re-parses quotes and special characters, so text goes through stdin). The shims run the bundled CLI with the application's own executable in Node mode, so agents need no separate Node install. The CLI identifies the calling agent from <code>PASEO_AGENT_ID</code>.</li>
-<li><strong>Skill delivery.</strong> SPADE appends a few lines to every agent's initial prompt naming the agent's node, its project, and the shim path; on Windows it lists the three launchers in that order. The agent runs <code>spade skill</code> to read the <code>spade-canvas</code> skill bundled with the CLI. Nothing is written into project directories or provider configuration.</li>
-<li>An agent spawned through the CLI becomes a Paseo child of the calling agent.</li>
+<li><strong>Skill delivery.</strong> SPADE appends a few lines to the initial prompt of every agent the user creates, naming the agent's node, its project, and the shim path; on Windows it lists the three launchers in that order. The agent runs <code>spade skill</code> to read the <code>spade-canvas</code> skill bundled with the CLI. Nothing is written into project directories or provider configuration.</li>
+<li>An agent started through the CLI becomes a Paseo child of the calling agent.</li>
 </ul>
 <p>Decided in SPADE-36:</p>
 <ul>
-<li><strong>No silent identity.</strong> A change or <code>prompt</code> without <code>PASEO_AGENT_ID</code> is refused with <code>identity-required</code> unless a person at a terminal passes <code>--as-user</code> to act as the user. Nothing falls back to the user silently. A spoofed <code>PASEO_AGENT_ID</code> is still not detected (§21).</li>
+<li><strong>No silent identity.</strong> A change without <code>PASEO_AGENT_ID</code> is refused with <code>identity-required</code>; nothing falls back to the user. SPADE-38 removed the <code>--as-user</code> escape: a person at a terminal can only read, and changes the canvas in SPADE itself. A forged <code>PASEO_AGENT_ID</code> is still not detected (§21).</li>
 <li><strong>Text through stdin.</strong> Any one free-text argument of a command can be <code>-</code> to read that value from stdin, the safe way to pass arbitrary text.</li>
 <li><strong>Stable error codes.</strong> Reducer, agent-service (<code>agent-missing</code>, <code>paseo-unavailable</code>, …), and control errors reach the CLI with their own code; only unexpected failures are <code>internal</code>.</li>
-<li><strong>Prompt attribution.</strong> A prompt one agent sends another starts with a line naming the sending node, so both the receiving agent and the user see who sent it. Prompts are not canvas commands and are not recorded in the activity log.</li>
+</ul>
+<p>Decided in SPADE-38:</p>
+<ul>
+<li><strong>Identity comes from Paseo.</strong> The caller is resolved as the Paseo agent it is, through Paseo's parent chain, not through its canvas node. The actor carries the agent ID and, only while the agent is expanded, its node. A collapsed child takes its project and default spawn target from its nearest expanded owner. <code>whoami</code> reports the agent, its owner, and its node when expanded.</li>
+<li><strong><code>spade spawn agent</code> is a pass-through to Paseo.</strong> It forwards the request with the caller as parent; Paseo places the child in the caller's workspace and directory. The caller names the provider and model (<code>spade providers</code> lists them); without <code>--provider</code>, the user's saved default provider applies, and with no saved default the command is refused; without <code>--model</code>, the saved default model applies only when the saved default provider was used because the caller named none. SPADE never fills in a mode and appends no instructions. It creates no canvas node and rejects <code>--parent</code>, <code>--tree</code>, <code>--new-tree</code>, <code>--description</code>, and <code>--project</code>. Paseo's own tools do the same.</li>
+<li><strong>No SPADE messaging between agents.</strong> <code>spade prompt</code> is gone; agents message each other with Paseo's own tools.</li>
 </ul>
 <p>Commands: <code>spawnChild(sourceNodeId, type, config, target, origin)</code>, <code>startTree(type, config, placement)</code>, <code>reparent(nodeId, newParentId | null)</code> (moves the whole branch; rejects cycles; <code>null</code> makes the node a new root), <code>collapseBranch</code> / <code>expandBranch</code> (hides descendants and shows a count), and <code>archiveBranch</code>.</p>
 <p>Removing a single node never deletes its children: they are promoted to the removed node's parent, or become roots if it had none. Deleting a whole branch is an explicit action. Removing a node removes only SPADE records.</p>
-<p>A removed node stays removed. The canvas remembers the resource of every removed node (the newest 500), and SPADE's own reconciliation never adds a node for one of them again, also after a restart. A user or an agent creating that resource again clears its entry.</p>
-<p>Sub-agents use the same mechanic. A managed sub-agent identified by Paseo's durable parent identity appears as a collapsed <code>child</code> node with origin <code>delegated</code>. A sub-agent can itself have children of any type, so a branch can start at a sub-agent and continue with images and web pages.</p>
+<p>A removed node stays removed: reconciliation never creates nodes, so it never brings one back.</p>
+<p><strong>A conversation owns the agents it started.</strong> An agent's direct children, as Paseo reports them by its durable parent identity, are sub-agents in the same sense as provider-native ones. By default they are <strong>collapsed</strong>: the owner's node lists them with live status and they have no node of their own. While a child is collapsed, what it spawns goes into the tree of its nearest expanded owner. The user can expand any direct child of an expanded node into a <code>delegated</code> child node and collapse it back; collapsing removes the node and returns the child to the list, without touching the agent. Ownership is direct: a child's own children appear under the child, and collapsing an expanded child removes its delegated agent nodes too, instead of promoting them under the grandparent. Anything waiting on the user surfaces on the nearest expanded owner. An expanded sub-agent can itself have children of any type, so a branch can start at a sub-agent and continue with images and web pages.</p>
 <p>Edges are provenance and context. They do not schedule, trigger, or stream live data.</p>
 <h3 id="4-7-persistence">4.7 Persistence and project safety</h3>
 <ul>
@@ -418,7 +426,7 @@
 <tr>
 <td>Agent</td>
 <td>Paseo session</td>
-<td>prompt, interrupt, resume, archive, answer permission, spawn child</td>
+<td>prompt, interrupt, resume, archive, answer permission, change mode, expand child, spawn child</td>
 <td>status, objective, selected messages, latest result</td>
 </tr>
 <tr>
@@ -524,9 +532,10 @@
 <li>Uses Paseo normalized events rather than scraping terminal ANSI.</li>
 <li>Renders Markdown, code, Mermaid, tool calls, file reads, edits, shell commands, permission prompts and results.</li>
 <li>Tool calls and file reads use expandable panes.</li>
-<li>Supports prompts, interrupt/resume, model/mode display and attention state.</li>
-<li>Spawn: the caller selects provider, model, mode, and prompt. The working directory is always the project root. The mode default comes from a user setting; unattended runs depend on it.</li>
-<li>Can spawn child nodes from any message, artifact, or the generic node chrome, using the tree mechanic (§4.6). When the agent itself spawns a child, it defaults to continuing its own tree, from itself or from a node below it; it can also read and change the wider graph through the agent CLI (§4.6).</li>
+<li>Supports prompts, interrupt/resume, model display, attention state, and the agent's mode, shown on the node and changed on the running agent. Modes are opaque provider IDs with Paseo's labels.</li>
+<li>Spawn from the UI: the user selects provider, model, mode, and prompt. The working directory is the project root. The mode default comes from a user setting; unattended runs depend on it. An agent the user creates from an agent node is placed next to it, not connected.</li>
+<li>An agent started by another agent, with <code>spade spawn agent</code> or Paseo's own tools, is Paseo's: it runs where Paseo places it, in its caller's directory, with the mode Paseo gives it. SPADE does not control that mode; it shows it and lets the user change it.</li>
+<li>Can spawn child nodes from any message, artifact, or the generic node chrome, using the tree mechanic (§4.6). The agent itself creates nodes through the agent CLI only when the user asks (§4.6).</li>
 <li>Can attach selected connected nodes as bounded context (§9).</li>
 <li>Each node's conversation UI state (draft, shared-context picks, pending annotations, loaded history, scroll position) survives collapse and level-of-detail changes for the renderer's lifetime.</li>
 </ul>
@@ -590,10 +599,11 @@ const defaultConversationExpansion = {
 <p>The preference controls initial expansion only; users can always toggle individual panels without changing the default.</p>
 <h4 id="subagents">Subagents</h4>
 <ul>
-<li>Managed sub-agents appear as collapsed <code>child</code> nodes with origin <code>delegated</code> and are placed by the tree layout (§8).</li>
-<li>Expanding a sub-agent follows or centers the node.</li>
-<li>The agent/sub-agent structure is a view over normal nodes and edges, not a second graph model.</li>
-<li>Provider-native sub-agents collapse into their parent agent node as a list. Each entry can open its conversation on demand as a <code>delegated</code> child; they are not placed on the canvas by default.</li>
+<li>An agent node's <code>Agents</code> pane, a drawer on the node's right edge that is closed by default, lists its Paseo children and its provider-native sub-agents. A header toggle counts them; header badges show the permission requests, errors, and unseen finished runs of collapsed descendants and open the pane.</li>
+<li>Each Paseo child row shows status, provider, model, mode, and its last error; its permissions are answered and its mode changed in the row. A collapsed child's own children are listed under it.</li>
+<li><code>Expand</code> creates a <code>delegated</code> child node placed by the tree layout (§8) and centers it; <code>Collapse into owner</code> in the expanded node's menu removes it again.</li>
+<li>The agent/sub-agent structure is a view over Paseo and normal nodes and edges, not a second graph model.</li>
+<li>Provider-native sub-agents have no mode in Paseo. Each entry can open its conversation on demand as a <code>delegated</code> child; they are not placed on the canvas by default.</li>
 </ul>
 <h3 id="7-2-image">7.2 Image</h3>
 <ul>
@@ -642,7 +652,7 @@ const defaultConversationExpansion = {
 <li><strong>New roots</strong> go in the first free slot below the existing content of the target container, left-aligned.</li>
 <li><strong>User position is authoritative.</strong> Automatic layout never moves a node the user has placed or moved. A later explicit <code>Tidy branch</code> command may re-lay out one branch on request; it is not required for v1.</li>
 <li><strong>Containers fit and keep gutters.</strong> Groups and projects auto-fit their members with padding and preserve the navigation gutters of §6.</li>
-<li><strong>Viewport on spawn.</strong> After a user-initiated spawn, the canvas centers the new node at a readable zoom; it does not fit-all. Nodes created by agents (sub-agents) never take over the viewport.</li>
+<li><strong>Viewport on spawn.</strong> After a user-initiated spawn, the canvas centers the new node at a readable zoom; it does not fit-all. Nodes created by agents never take over the viewport.</li>
 </ol>
 <h3 id="layout-tuning">Placement as built</h3>
 <p>B2 kept the initial sizes and spacing and settled the cases the rules above left open:</p>
@@ -801,13 +811,13 @@ const defaultConversationExpansion = {
 <ul>
 <li>One daemon connection with explicit readiness and reconnect. A missing daemon is a normal state that recovers on its own.</li>
 <li>Identify the client with a semver <code>appVersion</code>; a non-semver value hides non-legacy providers from the session.</li>
-<li>Exact agent reads, spawn with caller-selected cwd/provider/model/mode/prompt and an optional durable parent, prompt, interrupt, archive. The agent service archives an agent only to roll back a spawn whose creation command failed after Paseo created the agent; removing or archiving a node never touches its agent.</li>
-<li>Durable managed-child identity and parent relations, mapped to <code>child</code> edges.</li>
+<li>Exact agent reads, spawn with caller-selected cwd/provider/model/mode/prompt and an optional durable parent, prompt, interrupt, mode change, archive. The agent service archives an agent only to roll back a spawn whose creation command failed after Paseo created the agent; removing or archiving a node never touches its agent.</li>
+<li>Durable child identity and parent relations: children are listed on their owner and become <code>delegated</code> <code>child</code> edges only when the user expands them.</li>
 <li>Normalized, bounded timelines that tolerate changed epochs/ranges after a daemon restart.</li>
 <li>Pending permissions presented on the agent node and answered through a generic command.</li>
 <li>Persisting opaque agent and workspace identities before any fallible refresh, so restarts never duplicate nodes.</li>
 </ul>
-<p>The daemon address comes from the SPADE setting, then <code>SPADE_PASEO_URL</code>, then the listen address the local daemon records in its <code>paseo.pid</code> or <code>config.json</code>, then Paseo's default <code>ws://127.0.0.1:6767/ws</code>. It is resolved once when SPADE starts, so a daemon started later on a non-default port is found only after SPADE restarts (§21).</p>
+<p>The daemon address comes from the SPADE setting, then <code>SPADE_PASEO_URL</code>, then the listen address the local daemon records in its <code>paseo.pid</code> or <code>config.json</code>, then Paseo's default <code>ws://127.0.0.1:6767/ws</code>. It is resolved when SPADE starts and again when the user refreshes the connection from the sidebar's Paseo status or saves the URL in Settings; both reconnect and reconcile. <code>SPADE_PASEO_URL</code> belongs to SPADE's launch environment, so a refresh does not see a changed value. Agent references carry no daemon identity: after switching to a different daemon, its agents show and agent nodes from the previous daemon appear missing. That is expected and not repaired.</p>
 <h4 id="paseo-0-17">What changed with Paseo 0.17</h4>
 <ul>
 <li>The client owns its subscriptions: SPADE opens agent and event observations that survive reconnects, instead of the prototype's polling. The daemon sends agent updates and session events only while an observation is open.</li>
@@ -950,7 +960,7 @@ const defaultConversationExpansion = {
 <p>Unresolved P3 findings that still bear on the agent brick: a full Claude run stalled on Paseo 0.14, sub-agent coverage after parent archival is unproven, and timeline epochs/ranges change after a daemon restart. Their status on Paseo 0.17 is in §13.</p>
 <h2 id="20-proposed-implementation-sequence">20. Implementation sequence</h2>
 <p>The core is <strong>project, agents, and tree</strong> (B1 to B3), which together are the first usable version. Viewer nodes and rich conversation come next (B4, B5), then groups (B6). Bricks are built in this order. Each brick is its own issue and pull request, ends with a working application, and follows the repository's verification rules. Build in <code>src/</code> on the existing entity registry and canvas commands; update <code>docs/foundation.html</code> and <code>docs/architecture.html</code> as each brick lands.</p>
-<p><strong>Status:</strong> B1 to B5 are implemented (SPADE-36); see the <a href="foundation.html">foundation</a> for what exists. B6 grouping is next. The live acceptance run, <code>npm run test:live</code>, has passed against a real Paseo 0.17.0 daemon and verified B1, B3, B4, and B5 through the real UI; its sub-agent is a provider-native one. The B3 criterion of restarting Paseo is covered by fake-driver tests only (§13).</p>
+<p><strong>Status:</strong> B1 to B5 are implemented (SPADE-36); see the <a href="foundation.html">foundation</a> for what exists. SPADE-38 then changed how B3 shows sub-agents: Paseo children are listed on their owner and become nodes only when the user expands them (§4.6). B6 grouping is next. The live acceptance run, <code>npm run test:live</code>, has passed against a real Paseo 0.17.0 daemon and verified B1, B3, B4, and B5 through the real UI; its sub-agent is a provider-native one. The B3 criterion of restarting Paseo is covered by fake-driver tests only (§13).</p>
 <table>
 <thead>
 <tr>
@@ -1001,8 +1011,7 @@ const defaultConversationExpansion = {
 <li>Long-duration <code>&lt;webview&gt;</code> stability and downloads (refused for now).</li>
 <li>Mapped network drives. A mapped drive letter cannot be told apart from a local drive, so the network-path rule (§7.1) does not cover it.</li>
 <li>Packaged-build behavior of the CLI launchers. They run the application executable with <code>ELECTRON_RUN_AS_NODE</code>, which a packaged build only honors with Electron's <code>RunAsNode</code> fuse enabled, and the CLI script must stay readable outside an asar archive. There is no packaged build yet, and none of the Windows launchers (<code>spade</code> under Git Bash, <code>spade.ps1</code>, <code>spade.cmd</code>) has been run on Windows.</li>
-<li>Per-agent credentials for the CLI. Today it trusts the caller's <code>PASEO_AGENT_ID</code>, so a spoofed identity is not detected (§4.6).</li>
-<li>Finding a Paseo daemon started after SPADE on a non-default port without restarting SPADE (§13).</li>
+<li>Per-agent credentials for the CLI. Today it trusts the caller's <code>PASEO_AGENT_ID</code>, so a forged identity is not detected (§4.6).</li>
 <li>Undo for agent changes. Today they can only be reviewed, in the Activity panel and on recently changed nodes.</li>
 <li>Storing HTML answers as artifact revisions (§11).</li>
 <li>Live verification of reconciliation after a Paseo daemon restart, covered by fake-driver tests only (§13).</li>

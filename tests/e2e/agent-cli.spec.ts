@@ -31,7 +31,7 @@ const directories: string[] = []
 // Project "Alpha": the lead agent, its delegated sub-agent, and a note under the sub-agent.
 async function world(): Promise<World> {
   const gateway = new FakeGateway()
-  const agents = new FakeAgentService()
+  const agents = new FakeAgentService(gateway)
   gateway.addProject('alpha', 'Alpha')
   const lead = gateway.seedTree('alpha', agentSeed('agent-lead', 'Lead'))
   const helper = gateway.seed('alpha', {
@@ -125,7 +125,7 @@ test('an agent reads its tree, spawns on itself and on a descendant, reparents, 
   ])
 
   const readable = await cli(['activity', '--limit', '1'], agentEnv)
-  expect(readable.stdout).toContain(`agent ${lead} · Moved "Finding" under "Helper"`)
+  expect(readable.stdout).toContain(`agent agent-lead (node ${lead}) · Moved "Finding" under "Helper"`)
 })
 
 test('a command naming a missing node exits non-zero with the reducer’s error and changes nothing', async () => {
@@ -167,14 +167,62 @@ test('typed spawn flags become the entity’s config', async () => {
   const { gateway, agentEnv } = await world()
   await json(['spawn', 'image', '--path', 'shots/a.png', '--caption', 'Before'], agentEnv)
   await json(['spawn', 'webpage', '--url', 'https://example.com', '--new-tree'], agentEnv)
-  await json(['spawn', 'agent', '--prompt', 'Review src', '--model', 'sonnet'], agentEnv)
   await json(['spawn', 'note', '--config', '{"body":"raw"}', '--description', 'From JSON'], agentEnv)
   expect(gateway.executed.map((entry) => entry.command)).toMatchObject([
     { node: { entityType: 'image', config: { source: { kind: 'path', path: resolve('/work/alpha', 'shots/a.png') }, caption: 'Before' } } },
     { node: { entityType: 'webpage', config: { url: 'https://example.com' } }, target: { kind: 'new-tree' } },
-    { node: { entityType: 'agent', config: { provider: 'claude', model: 'sonnet', mode: 'default', prompt: 'Review src' } } },
     { node: { entityType: 'note', config: { body: 'raw' }, shortDescription: 'From JSON' } }
   ])
+})
+
+test('spawn agent starts a Paseo agent owned by the caller, prints its id, and takes no tree target', async () => {
+  const { gateway, agents, agentEnv, lead } = await world()
+  const started = await cli(['spawn', 'agent', '--prompt', 'Review src', '--provider', 'claude', '--model', 'sonnet', '--title', 'Reviewer'], agentEnv)
+  expect(started.stderr).toBe('')
+  expect(started.code).toBe(0)
+  expect(started.stdout).toBe('ok: started Paseo agent paseo-child-1, owned by you (agent-lead); it is listed under its owner, not placed on the canvas')
+  const asJson = await json<Record<string, unknown>>(['spawn', 'agent', '--prompt', 'Then this', '--provider', 'codex', '--mode', 'auto'], agentEnv)
+  expect(asJson).toEqual({ agentId: 'paseo-child-2', ownerAgentId: 'agent-lead' })
+  expect(agents.spawned).toEqual([
+    { callerAgentId: 'agent-lead', input: { prompt: 'Review src', provider: 'claude', model: 'sonnet', title: 'Reviewer' } },
+    { callerAgentId: 'agent-lead', input: { prompt: 'Then this', provider: 'codex', mode: 'auto' } }
+  ])
+
+  for (const flags of [['--parent', lead], ['--tree', lead], ['--new-tree'], ['--description', 'Reviews'], ['--project', 'Alpha']]) {
+    const refused = await cli(['spawn', 'agent', '--prompt', 'x', '--provider', 'claude', ...flags], agentEnv)
+    expect(refused.code, flags[0]).toBe(2)
+    expect(refused.stderr, flags[0]).toContain(flags[0])
+  }
+
+  const noProvider = await cli(['spawn', 'agent', '--prompt', 'x'], agentEnv)
+  expect(noProvider.code).toBe(1)
+  expect(noProvider.stderr).toMatch(/^spade: invalid-params: /)
+  expect(noProvider.stderr).toContain('spade providers')
+  expect(agents.spawned).toHaveLength(2)
+  expect(gateway.executed).toEqual([])
+})
+
+test('a child collapsed into its owner’s list acts as itself and spawns into its owner’s tree', async () => {
+  const { gateway, agents, info, lead } = await world()
+  agents.locations.set('agent-worker', {
+    agentId: 'agent-worker',
+    parentAgentId: 'agent-lead',
+    placements: [{ projectId: 'alpha', nodeId: null, anchorNodeId: lead }]
+  })
+  const workerEnv = { SPADE_CONTROL_FILE: info.controlFile, PASEO_AGENT_ID: 'agent-worker' }
+
+  const me = await cli(['whoami'], workerEnv)
+  expect(me.code).toBe(0)
+  expect(me.stdout.split('\n')).toEqual([
+    `You are Paseo agent agent-worker, collapsed into the list of node ${lead} (your nearest expanded owner); what you spawn goes there by default.`,
+    'Owner: Paseo agent agent-lead',
+    'Project: Alpha (alpha) /work/Alpha'
+  ])
+
+  const finding = await json<{ nodeId: string }>(['spawn', 'note', '--title', 'Finding', '--body', 'Root cause'], workerEnv)
+  expect(gateway.parentOf(finding.nodeId)).toBe(lead)
+  expect(gateway.executed.at(-1)?.actor).toEqual({ kind: 'agent', nodeId: null, agentId: 'agent-worker' })
+  expect((await cli(['activity', '--limit', '1'], workerEnv)).stdout).toContain('agent agent-worker · Spawned Note "Finding"')
 })
 
 test('json output parses and matches the human reading', async () => {
@@ -184,6 +232,7 @@ test('json output parses and matches the human reading', async () => {
 
   const human = await cli(['whoami'], agentEnv)
   expect(human.stdout).toContain(`You are agent node ${lead} · agent · Lead`)
+  expect(human.stdout).toContain('Owner: none')
   expect(human.stdout).toContain(`Children: ${helper}`)
 })
 
@@ -197,35 +246,39 @@ test('without an agent identity the user names the project', async () => {
   expect(scoped.code).toBe(0)
   expect(scoped.stdout).toContain(`${lead} · agent · Lead`)
 
-  const noSelf = await cli(['spawn', 'note', '--body', 'x', '--as-user'], userEnv)
-  expect(noSelf.code).toBe(1)
-  expect(noSelf.stderr).toContain('--parent')
+  const me = await cli(['whoami'], userEnv)
+  expect(me.stdout).toContain('You are the user')
+  expect(me.stdout).not.toContain('--as-user')
 })
 
-test('without an agent identity a change is refused unless a person passes --as-user', async () => {
+test('without an agent identity a change is refused; nobody acts as the user and there is no prompt command', async () => {
   const { gateway, userEnv, agentEnv, lead } = await world()
-  const refused = await cli(['rename', lead, 'Renamed'], userEnv)
-  expect(refused.code).toBe(1)
-  expect(refused.stderr).toMatch(/^spade: identity-required: /)
-  expect(refused.stderr).toContain('--as-user')
+  for (const argv of [['rename', lead, 'Renamed'], ['spawn', 'note', '--parent', lead, '--body', 'x']]) {
+    const refused = await cli(argv, userEnv)
+    expect(refused.code, argv[0]).toBe(1)
+    expect(refused.stderr, argv[0]).toMatch(/^spade: identity-required: /)
+    expect(refused.stderr, argv[0]).not.toContain('--as-user')
+  }
+
+  for (const env of [userEnv, agentEnv]) {
+    const posing = await cli(['rename', lead, 'Mine', '--as-user'], env)
+    expect(posing.code).toBe(2)
+    expect(posing.stderr).toContain('unknown option --as-user')
+  }
+  const prompt = await cli(['prompt', lead, 'status?'], agentEnv)
+  expect(prompt.code).toBe(2)
+  expect(prompt.stderr).toContain('unknown command "prompt"')
   expect(gateway.executed).toEqual([])
+  expect(gateway.node(lead).title).toBe('Lead')
 
-  const asUser = await cli(['rename', lead, 'Renamed', '--as-user'], userEnv)
-  expect(asUser.code).toBe(0)
-  expect(gateway.executed.at(-1)?.actor).toEqual({ kind: 'user' })
-  expect(gateway.node(lead).title).toBe('Renamed')
-
-  // An agent cannot pose as the user.
-  const posing = await cli(['rename', lead, 'Mine', '--as-user'], agentEnv)
-  expect(posing.code).toBe(1)
-  expect(gateway.node(lead).title).toBe('Renamed')
-
-  expect((await cli(['help'], {})).stdout).toContain('--as-user')
-  expect((await cli(['skill'], {})).stdout).toContain('--as-user')
+  for (const text of [(await cli(['help'], {})).stdout, (await cli(['help', 'spawn'], {})).stdout, (await cli(['skill'], {})).stdout]) {
+    expect(text).not.toContain('--as-user')
+    expect(text).not.toContain('spade prompt')
+  }
 })
 
 test('a "-" argument reads that free-text value from stdin, verbatim apart from one trailing newline', async () => {
-  const { gateway, agents, agentEnv, lead, helper, sketch } = await world()
+  const { gateway, agents, agentEnv, helper, sketch } = await world()
   // Text cmd.exe, PowerShell, or a shell would otherwise reinterpret.
   const tricky = `Say "hi" & echo pwned | more > out.txt %PATH% ^ $HOME \`x\` 'q'\nsecond line`
 
@@ -259,15 +312,10 @@ test('a "-" argument reads that free-text value from stdin, verbatim apart from 
     [tricky, { body: 'B' }]
   ])
 
-  await send(['spawn', 'agent', '--prompt', '-', '--title', 'Reviewer'], tricky)
+  await send(['spawn', 'agent', '--prompt', '-', '--provider', 'claude', '--title', 'Reviewer'], `${tricky}\n`)
+  expect(agents.spawned.at(-1)?.input).toEqual({ prompt: tricky, provider: 'claude', title: 'Reviewer' })
   await send(['spawn', 'note', '--config', '-'], JSON.stringify({ body: tricky }))
-  expect(gateway.executed.slice(-2).map((entry) => entry.command)).toMatchObject([
-    { node: { entityType: 'agent', title: 'Reviewer', config: { prompt: tricky } } },
-    { node: { entityType: 'note', config: { body: tricky } } }
-  ])
-
-  await send(['prompt', lead, '-'], `${tricky}\n`)
-  expect(agents.prompts.at(-1)?.text).toBe(tricky)
+  expect(gateway.executed.at(-1)?.command).toMatchObject({ node: { entityType: 'note', config: { body: tricky } } })
 })
 
 test('only one value per command can come from stdin, and a "-" among other words is literal', async () => {
@@ -284,7 +332,7 @@ test('only one value per command can come from stdin, and a "-" among other word
   expect(gateway.node(sketch).title).toBe('A - B')
 
   expect((await cli(['help'], {})).stdout).toContain('stdin')
-  expect((await cli(['help', 'prompt'], {})).stdout).toContain('-')
+  expect((await cli(['help', 'rename'], {})).stdout).toContain('-')
   expect((await cli(['skill'], {})).stdout).toContain('stdin')
 })
 

@@ -56,6 +56,27 @@ export type ProviderSubagentInfo = {
   updatedAt: string
 }
 
+// A Paseo agent whose Paseo parent is another agent (SPADE-38). It is listed on its owner's node and is
+// "collapsed" until the user expands it into a node of its own. Ownership is direct only.
+export type ChildAgentInfo = {
+  agentId: string
+  title: string | null
+  provider: string
+  model: string | null
+  mode: string | null
+  status: string
+  activity: AgentActivity
+  resourceState: AgentResourceState
+  pendingPermissions: AgentPermissionRequest[]
+  lastError: string | null
+  updatedAt: string
+  // The child's own node on this canvas when expanded; null while collapsed.
+  nodeId: string | null
+  // A collapsed child's own children, so anything waiting on the user surfaces on the nearest expanded
+  // owner. Always empty when the child is expanded: its node lists them.
+  children: ChildAgentInfo[]
+}
+
 export type AgentResourceState =
   // Read from Paseo since the last (re)connection.
   | 'live'
@@ -81,6 +102,8 @@ export type AgentRuntime = {
   cwd: string | null
   pendingPermissions: AgentPermissionRequest[]
   providerSubagents: ProviderSubagentInfo[]
+  // Paseo-managed children of this agent (empty for a provider-native sub-agent node).
+  children: ChildAgentInfo[]
   lastError: string | null
   updatedAt: string
 }

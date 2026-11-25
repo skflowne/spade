@@ -99,6 +99,14 @@ export type SpadeHostBridge = {
     respondToPermission(nodeId: string, requestId: string, behavior: PermissionBehavior): Promise<Result>
     // Opens a provider-native sub-agent as a delegated child node of its parent agent node.
     openProviderSubagent(nodeId: string, subagentId: string): Promise<Result<{ nodeId: string }>>
+    // Agent-keyed, so they work on a collapsed Paseo child from its owner's list.
+    respondToAgentPermission(agentId: string, requestId: string, behavior: PermissionBehavior): Promise<Result>
+    setMode(agentId: string, modeId: string): Promise<Result>
+    // Expands a Paseo child into a delegated child node of `ownerNodeId`. Collapsing it back is the
+    // `removeNode` canvas command on that node.
+    expandChild(ownerNodeId: string, agentId: string): Promise<Result<{ nodeId: string }>>
+    // Re-resolves the daemon URL, reconnects and reconciles; the new state also arrives through app state.
+    refreshConnection(): Promise<Result<{ connection: PaseoConnection }>>
   }
   files: {
     // Lazy existence check for a path found in a conversation. Never throws for a missing path.

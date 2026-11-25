@@ -18,7 +18,14 @@ import {
 } from '../../src/renderer/src/entities/agent/conversationState'
 import { createAnswerSubmitter, formatSubmission } from '../../src/renderer/src/entities/agent/submission'
 import { mergeNewestPage, mergeOlderPage, type TimelineState } from '../../src/renderer/src/entities/agent/timeline'
-import type { AgentRuntime } from '../../src/shared/agents'
+import type { AgentRuntime, ChildAgentInfo } from '../../src/shared/agents'
+import {
+  childAttention,
+  collapsedDescendants,
+  modeLabel,
+  runTransitions
+} from '../../src/renderer/src/entities/agent/children'
+import { ProviderCatalog } from '../../src/renderer/src/entities/agent/providerCatalog'
 
 const at = '2026-01-01T00:00:00.000Z'
 
@@ -504,6 +511,7 @@ test.describe('agent status', () => {
     cwd: '/project',
     pendingPermissions: [],
     providerSubagents: [],
+    children: [],
     lastError: null,
     updatedAt: at,
     ...overrides
@@ -529,6 +537,110 @@ test.describe('agent status', () => {
     expect(lastAssistantExcerpt(items, 100)).toBe('Second line')
     expect(lastAssistantExcerpt([message('a', 'x'.repeat(20))], 10)).toBe(`${'x'.repeat(9)}…`)
     expect(lastAssistantExcerpt([tool('t', 'shell')], 10)).toBeNull()
+  })
+})
+
+test.describe('Paseo children on their owner', () => {
+  const child = (agentId: string, overrides: Partial<ChildAgentInfo> = {}): ChildAgentInfo => ({
+    agentId,
+    title: null,
+    provider: 'claude',
+    model: 'opus',
+    mode: 'default',
+    status: 'idle',
+    activity: 'idle',
+    resourceState: 'live',
+    pendingPermissions: [],
+    lastError: null,
+    updatedAt: at,
+    nodeId: null,
+    children: [],
+    ...overrides
+  })
+  const request = { id: 'r', kind: 'tool', name: 'Bash', title: null, description: null, detail: null }
+
+  test('a child shows the same status as an agent node, permissions first', () => {
+    expect(agentStatusOf(child('c', { activity: 'running', status: 'running' }))).toMatchObject({ label: 'running', tone: 'info' })
+    expect(agentStatusOf(child('c', { pendingPermissions: [request] }))).toMatchObject({ label: 'needs attention', tone: 'warning' })
+  })
+
+  test('collapsed descendants are the children without a node, and their own children, depth first', () => {
+    const tree = [
+      child('a', { children: [child('a1', { children: [child('a1x')] }), child('a2')] }),
+      child('b', { nodeId: 'node-b' }),
+      child('c')
+    ]
+    expect(collapsedDescendants(tree).map((entry) => entry.agentId)).toEqual(['a', 'a1', 'a1x', 'a2', 'c'])
+  })
+
+  test('counts what waits on the user among collapsed descendants only', () => {
+    const tree = [
+      child('a', { pendingPermissions: [request, { ...request, id: 'r2' }], children: [child('a1', { activity: 'error', lastError: 'boom' })] }),
+      // An expanded child's node shows its own state.
+      child('b', { nodeId: 'node-b', pendingPermissions: [request], activity: 'error' }),
+      child('c')
+    ]
+    expect(childAttention(tree, new Set(['c', 'b']))).toEqual({ permissions: 2, errors: 1, finished: 1 })
+    expect(childAttention([], new Set())).toEqual({ permissions: 0, errors: 0, finished: 0 })
+  })
+
+  test('a collapsed child that stops running finished a run; one that starts again has not', () => {
+    const before = [child('a', { activity: 'running' }), child('b', { activity: 'idle' }), child('c', { activity: 'starting', children: [child('c1', { activity: 'running' })] })]
+    const after = [child('a', { activity: 'idle' }), child('b', { activity: 'running' }), child('c', { activity: 'closed', children: [child('c1', { activity: 'running' })] })]
+    expect(runTransitions(before, after)).toEqual({ finished: ['a', 'c'], resumed: ['b'] })
+    // Errors are their own signal, and an expanded child is followed on its own node.
+    expect(runTransitions([child('a', { activity: 'running' })], [child('a', { activity: 'error' })]).finished).toEqual([])
+    expect(runTransitions([child('a', { activity: 'running' })], [child('a', { activity: 'idle', nodeId: 'node-a' })]).finished).toEqual([])
+  })
+
+  test('a mode shows its provider label, or its id when the provider does not list it', () => {
+    const modes = [{ id: 'default', label: 'Always ask' }, { id: 'plan', label: 'Plan' }]
+    expect(modeLabel('plan', modes)).toBe('Plan')
+    expect(modeLabel('bypass', modes)).toBe('bypass')
+    expect(modeLabel('plan', null)).toBe('plan')
+  })
+
+  test('provider modes are read once per connection and read again after a daemon switch or a reconnection', async () => {
+    const answers: Array<(providers: string[]) => void> = []
+    const catalog = new ProviderCatalog(
+      () =>
+        new Promise((resolve) =>
+          answers.push((ids) =>
+            resolve({
+              ok: true,
+              providers: ids.map((id) => ({ id, label: id, available: true, status: 'ready', error: null, models: [], modes: [], defaultModeId: null }))
+            })
+          )
+        )
+    )
+    const settle = async (ids: string[]) => {
+      answers.at(-1)!(ids)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+    const listed = () => catalog.snapshot().providers.map((provider) => provider.id)
+
+    catalog.observe({ state: 'connected', url: 'ws://a/ws' })
+    catalog.load()
+    catalog.load()
+    await settle(['claude'])
+    catalog.load()
+    expect(answers).toHaveLength(1)
+    expect(listed()).toEqual(['claude'])
+
+    // The same daemon came back: read again.
+    catalog.observe({ state: 'reconnecting', url: 'ws://a/ws' })
+    catalog.observe({ state: 'connected', url: 'ws://a/ws' })
+    catalog.load()
+    expect(answers).toHaveLength(2)
+    // A switch while that read is out makes its answer stale.
+    catalog.observe({ state: 'connected', url: 'ws://b/ws' })
+    catalog.load()
+    expect(answers).toHaveLength(3)
+    await settle(['codex'])
+    answers[1](['claude'])
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(listed()).toEqual(['codex'])
+    expect(catalog.snapshot().status).toBe('ready')
   })
 })
 

@@ -40,6 +40,7 @@ type DriverMethod =
   | 'createAgent'
   | 'sendAgentMessage'
   | 'cancelAgent'
+  | 'setAgentMode'
   | 'archiveAgent'
   | 'respondToPermission'
   | 'fetchAgentTimeline'
@@ -122,7 +123,7 @@ type Observation = { ready: Promise<unknown>; release(): Promise<void> }
 type ProviderEntries = Awaited<ReturnType<PaseoDaemonDriver['getProvidersSnapshot']>>['entries']
 
 export class PaseoAdapter {
-  readonly url: string
+  private currentUrl: string
   private readonly disabled: boolean
   private readonly createDriver: (url: string) => PaseoDaemonDriver
   private readonly providerDiscoveryTimeoutMs: number
@@ -139,14 +140,20 @@ export class PaseoAdapter {
   private requestedTimelineIds: string[] = []
   private timelineQueue: Promise<void> = Promise.resolve()
   private readonly seenAgentIds = new Set<string>()
+  private requestedUrl: string | null = null
+  private reconnecting: Promise<void> = Promise.resolve()
 
   constructor(options: PaseoAdapterOptions) {
-    this.url = options.url
+    this.currentUrl = options.url
     this.disabled = options.disabled ?? false
     this.createDriver = options.createDriver ?? ((url) => new DaemonClient(daemonClientOptions(url)))
     this.providerDiscoveryTimeoutMs = options.providerDiscoveryTimeoutMs ?? 30_000
     this.providerDiscoveryPollMs = options.providerDiscoveryPollMs ?? 250
     this.current = { state: this.disabled ? 'disabled' : 'disconnected', url: this.url, error: null }
+  }
+
+  get url(): string {
+    return this.currentUrl
   }
 
   connection(): PaseoConnection {
@@ -228,7 +235,32 @@ export class PaseoAdapter {
     this.finishStart()
     await Promise.allSettled(observations.map((observation) => observation.release()))
     await driver.close()
-    this.setConnection('disconnected', null)
+    // A client started meanwhile owns the connection state now.
+    if (this.driver === null) this.setConnection('disconnected', null)
+  }
+
+  // Points the adapter at `url`. A different URL, or a connection that is not up, closes the client and
+  // starts a new one; a connected adapter already on `url` is left alone. Resolves like `start`.
+  // Overlapping calls run one after the other, and the URL asked for last wins.
+  reconnect(url: string): Promise<void> {
+    this.requestedUrl = url
+    const run = this.reconnecting.then(() => this.reconnectNow())
+    this.reconnecting = run.catch(() => undefined)
+    return run
+  }
+
+  private async reconnectNow(): Promise<void> {
+    const url = this.requestedUrl ?? this.currentUrl
+    if (this.disabled) {
+      this.currentUrl = url
+      this.current = { ...this.current, url }
+      this.emit({ type: 'connection', connection: this.current })
+      return
+    }
+    if (url === this.currentUrl && this.driver && this.current.state === 'connected') return
+    await this.stop()
+    this.currentUrl = url
+    await this.start()
   }
 
   // Resolves when connected; rejects with PaseoUnavailableError when disabled or after the timeout.
@@ -318,6 +350,11 @@ export class PaseoAdapter {
 
   async interrupt(agentId: string): Promise<void> {
     await this.requireDriver().cancelAgent(agentId)
+  }
+
+  // Mode ids are the provider's own, as `listProviders` reports them.
+  async setAgentMode(agentId: string, modeId: string): Promise<void> {
+    await this.requireDriver().setAgentMode(agentId, modeId)
   }
 
   // Returns Paseo's archival timestamp.

@@ -11,6 +11,7 @@ import {
   formatNodes,
   formatProjects,
   formatProviders,
+  formatSpawnedAgent,
   formatTree,
   formatWhoAmI
 } from './format'
@@ -79,7 +80,7 @@ const COMMANDS: Record<string, Command> = {
   },
   whoami: {
     usage: 'spade whoami',
-    summary: 'Your own node, project, parent, and children',
+    summary: 'Who you are: your Paseo agent, its owner, your node when expanded, project, parent, children',
     positionals: [0, 0],
     async run({ rpc, print }) {
       const result = await rpc('whoami', {})
@@ -185,9 +186,10 @@ const COMMANDS: Record<string, Command> = {
   spawn: {
     usage:
       'spade spawn <type> [config flags | --config <json>] [--title <t>] [--description <d>] [--parent <node> | --tree <node> | --new-tree] [--project <p>]',
-    summary: 'Create a node; by default a child of your own node',
+    summary: 'Create a node (only when the user asks for one), or start a Paseo agent you own',
     details: [
-      'Target (default: a child of your own node, continuing your tree):',
+      'Target of a node (default: a child of your own node, or of your nearest expanded owner’s while you are',
+      'collapsed into its list):',
       '  --parent <node>   child of any node, e.g. one below you to continue a branch',
       '  --tree <node>     child of the root of that node’s tree',
       '  --new-tree        a new root (in your project, or --project)',
@@ -195,8 +197,13 @@ const COMMANDS: Record<string, Command> = {
       '  note     --body <text>',
       '  image    --path <file> | --asset <id>  [--caption <text>]',
       '  webpage  --url <http(s) url>',
-      '  agent    --prompt <text> [--provider <id>] [--model <id>] [--mode <id>]  (unset ones follow yours)',
-      '  any      --config <json>'
+      '  agent    --prompt <text> [--provider <id>] [--model <id>] [--mode <id>]',
+      '  any      --config <json>',
+      'An agent is not a node: `spade spawn agent` starts a Paseo agent owned by you, exactly as Paseo’s own',
+      'tools do, and prints its Paseo id; it is listed under you. It takes --title but no target, --description,',
+      'or --project. Without --provider the user’s saved default provider (and its model) applies; see',
+      '`spade providers`. Otherwise an unset --model or --mode is left to Paseo. Message other agents with',
+      'Paseo’s tools.'
     ].join('\n'),
     stdinText: { flags: ['body', 'prompt', 'caption', 'title', 'description', 'config'] },
     options: {
@@ -212,15 +219,23 @@ const COMMANDS: Record<string, Command> = {
     positionals: [1, 1],
     async run({ args, rpc, print, io }) {
       const entityType = args.positionals[0]
+      const title = args.options.title === undefined ? {} : { title: text(args, 'title') }
+      if (entityType === 'agent') {
+        const misplaced = ['parent', 'tree', 'new-tree', 'description', 'project'].find((flag) => args.options[flag] !== undefined)
+        if (misplaced) throw new UsageError(`--${misplaced} does not apply to an agent: it is listed under you, not placed on the canvas`)
+        const result = await rpc('spawn', { entityType, config: spawnConfig(entityType, args, io.cwd), ...title })
+        print('agentId' in result ? formatSpawnedAgent(result) : formatMutation('spawned agent', result), result)
+        return
+      }
       const result = await rpc('spawn', {
         ...project(args),
         entityType,
         config: spawnConfig(entityType, args, io.cwd),
         placement: placement(args),
-        ...(args.options.title === undefined ? {} : { title: text(args, 'title') }),
+        ...title,
         ...(args.options.description === undefined ? {} : { description: text(args, 'description') })
       })
-      print(formatMutation(`spawned ${entityType}`, result), result)
+      print('agentId' in result ? formatSpawnedAgent(result) : formatMutation(`spawned ${entityType}`, result), result)
     }
   },
   reparent: {
@@ -340,18 +355,6 @@ const COMMANDS: Record<string, Command> = {
     async run(context) {
       await execute(context, 'disconnected', { type: 'disconnectNodes', edgeId: context.args.positionals[0] })
     }
-  },
-  prompt: {
-    usage: 'spade prompt <agent-node> (<text…> | -)',
-    summary: 'Send a prompt to an agent node',
-    details: 'With "-" as the text, the prompt is read from stdin: the safe way to send arbitrary text.',
-    positionals: [2, Infinity],
-    stdinText: { rest: 1 },
-    async run({ args, rpc, print }) {
-      const [nodeId, ...words] = args.positionals
-      const result = await rpc('prompt', { nodeId, text: words.join(' ') })
-      print(`ok: prompted ${result.nodeId}`, result)
-    }
   }
 }
 
@@ -415,10 +418,7 @@ export async function runCli(argv: readonly string[], env: Record<string, string
   try {
     const rpc: RpcClient = command.offline
       ? () => Promise.reject(new Error('offline command'))
-      : createRpcClient(await readDiscovery(env), {
-          agentId: env[PASEO_AGENT_ID_ENV] || undefined,
-          asUser: args.options['as-user'] === true
-        })
+      : createRpcClient(await readDiscovery(env), env[PASEO_AGENT_ID_ENV] || undefined)
     await command.run({
       args,
       rpc,
@@ -450,7 +450,7 @@ function usageFailure(io: CliIo, name: string, error: unknown): number {
 }
 
 function parseArgs(tokens: readonly string[], command: Command): Args {
-  const accepted: Record<string, boolean> = { json: false, help: false, 'as-user': false, ...command.options }
+  const accepted: Record<string, boolean> = { json: false, help: false, ...command.options }
   const positionals: string[] = []
   const options: Options = {}
   for (let index = 0; index < tokens.length; index += 1) {
@@ -605,12 +605,12 @@ function overview(): string {
     ...lines,
     '',
     'Every command accepts --json for structured output and --help for details.',
-    'Free text (prompt, rename, describe, edit, spawn --body/--prompt/--title/--description/--caption/--config,',
+    'Free text (rename, describe, edit, spawn --body/--prompt/--title/--description/--caption/--config,',
     'connect --label) can be "-" to read that one value from stdin: the safe way to pass arbitrary text,',
-    'since no shell or cmd.exe re-reads it. Example: spade prompt <node> - < message.txt',
-    'Agents act as their own canvas node (from PASEO_AGENT_ID); every change is attributed to them.',
-    'Without PASEO_AGENT_ID, changes are refused unless a person at a terminal passes --as-user to act as the',
-    'user. Agents never pass --as-user.'
+    'since no shell or cmd.exe re-reads it. Example: spade spawn note --title Findings --body - < findings.md',
+    'Agents act as themselves, the Paseo agent named by PASEO_AGENT_ID, whether or not the canvas shows their',
+    'own node; every change is attributed to them. Without PASEO_AGENT_ID the CLI only reads: the user changes',
+    'the canvas in SPADE itself.'
   ].join('\n')
 }
 

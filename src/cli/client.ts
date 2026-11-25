@@ -63,18 +63,15 @@ export type RpcClient = <Method extends RpcMethod>(
   params: RpcMethods[Method]['params']
 ) => Promise<RpcMethods[Method]['result']>
 
-export function createRpcClient(
-  discovery: ControlDiscovery & { file: string },
-  identity: { agentId: string | undefined; asUser: boolean }
-): RpcClient {
-  const { agentId, asUser } = identity
+// `agentId` is the caller's PASEO_AGENT_ID; without one, SPADE only answers reads.
+export function createRpcClient(discovery: ControlDiscovery & { file: string }, agentId: string | undefined): RpcClient {
   return async (method, params) => {
     let response: Response
     try {
       response = await fetch(new URL(RPC_PATH, discovery.url), {
         method: 'POST',
         headers: { authorization: `Bearer ${discovery.token}`, 'content-type': 'application/json' },
-        body: JSON.stringify({ method, params, ...(agentId ? { agentId } : {}), ...(asUser ? { asUser: true } : {}) }),
+        body: JSON.stringify({ method, params, ...(agentId ? { agentId } : {}) }),
         signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS)
       })
     } catch (error) {

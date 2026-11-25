@@ -1,36 +1,13 @@
 import { useId } from 'react'
-import type { SpawnTarget } from '@shared/commands'
 import type { Canvas } from '@shared/domain'
 import { NodeChooser } from './NodeChooser'
-
-// The three spawn targets of plan §4.6.
-export type TargetChoice =
-  | { kind: 'source' }
-  | { kind: 'pick'; nodeId: string | null; attach: 'node' | 'root' }
-  | { kind: 'new-tree' }
-
-export function defaultTargetChoice(sourceNodeId: string | null): TargetChoice {
-  return sourceNodeId === null ? { kind: 'new-tree' } : { kind: 'source' }
-}
-
-// Null while the choice is incomplete (no node picked yet).
-export function spawnTargetOf(choice: TargetChoice, sourceNodeId: string | null): SpawnTarget | null {
-  switch (choice.kind) {
-    case 'source':
-      return sourceNodeId === null ? null : { kind: 'child', parentNodeId: sourceNodeId }
-    case 'pick':
-      if (choice.nodeId === null) return null
-      return choice.attach === 'node'
-        ? { kind: 'child', parentNodeId: choice.nodeId }
-        : { kind: 'tree', nodeId: choice.nodeId }
-    case 'new-tree':
-      return { kind: 'new-tree' }
-  }
-}
+import { agentAnchorOf, spawnTargetOf, type TargetChoice } from './spawnCommand'
 
 type TargetPickerProps = {
   canvas: Canvas
   sourceNodeId: string | null
+  // The type of the node being created: a new agent is never attached under an agent node.
+  entityType: string
   value: TargetChoice
   onChange(choice: TargetChoice): void
   // Hands the canvas to the user to click a node; the picker gets the result through onChange.
@@ -42,6 +19,8 @@ export function TargetPicker(props: TargetPickerProps): React.JSX.Element {
   const attachName = useId()
   const source = props.canvas.nodes.find((node) => node.id === props.sourceNodeId)
   const pick = props.value.kind === 'pick' ? props.value : null
+  const sourceAnchor = source ? agentAnchorOf(props.canvas, props.entityType, { kind: 'child', parentNodeId: source.id }) : null
+  const pickedAnchor = pick ? agentAnchorOf(props.canvas, props.entityType, spawnTargetOf(pick, props.sourceNodeId)) : null
 
   return (
     <fieldset className="target-picker">
@@ -54,7 +33,7 @@ export function TargetPicker(props: TargetPickerProps): React.JSX.Element {
             checked={props.value.kind === 'source'}
             onChange={() => props.onChange({ kind: 'source' })}
           />
-          <span>Child of {source.title}</span>
+          <span>{sourceAnchor ? `Next to ${source.title}, not connected` : `Child of ${source.title}`}</span>
         </label>
       ) : null}
       <label className="cr-choice">
@@ -94,6 +73,12 @@ export function TargetPicker(props: TargetPickerProps): React.JSX.Element {
               <span>Attach to its tree's root</span>
             </label>
           </div>
+          {pickedAnchor ? (
+            <p className="target-picker__note" data-testid="agent-placement">
+              The new agent is placed next to {pickedAnchor.title}, not connected: only Paseo's own children connect to an
+              agent.
+            </p>
+          ) : null}
         </div>
       ) : null}
       <label className="cr-choice">

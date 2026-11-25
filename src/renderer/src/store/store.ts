@@ -1,7 +1,9 @@
-import type { AgentRuntime } from '@shared/agents'
-import type { CanvasCommand, CanvasCommandResponse } from '@shared/commands'
-import type { AppSettings, Canvas } from '@shared/domain'
-import type { AppState, Failure, Result, SpadeHostBridge } from '@shared/ipc'
+// Relative shared imports: this module is also loaded by plain Playwright specs, which do not resolve `@shared`.
+import type { AgentRuntime } from '../../../shared/agents'
+import type { CanvasCommand, CanvasCommandResponse } from '../../../shared/commands'
+import type { AppSettings, Canvas } from '../../../shared/domain'
+import type { AppState, Failure, Result, SpadeHostBridge } from '../../../shared/ipc'
+import { runTransitions } from '../entities/agent/children'
 import { shareCanvas, shareRecords } from './sharing'
 
 // The renderer's view of SPADE's records. The main process is authoritative: everything here is a copy
@@ -19,8 +21,8 @@ export type Notice = {
 // How long an info notice stays before it dismisses itself.
 export const INFO_NOTICE_MS = 8_000
 
-// Renderer-only choices that last until the app quits.
-export type SessionPreferences = { minimap: boolean }
+// Renderer-only choices that last until the app quits. `openDrawers`: nodes whose side drawer is open.
+export type SessionPreferences = { minimap: boolean; openDrawers: ReadonlySet<string> }
 
 export type StoreState = {
   app: AppState | null
@@ -30,6 +32,8 @@ export type StoreState = {
   canvases: ReadonlyMap<string, Canvas>
   // Agent runtimes by node id, across every project.
   runtimes: ReadonlyMap<string, AgentRuntime>
+  // Collapsed Paseo children (by agent id) seen finishing a run that the user has not looked at yet.
+  finishedAgents: ReadonlySet<string>
   notices: readonly Notice[]
   session: SessionPreferences
 }
@@ -42,8 +46,9 @@ export class SpadeStore {
     startupError: null,
     canvases: new Map(),
     runtimes: new Map(),
+    finishedAgents: new Set(),
     notices: [],
-    session: { minimap: true }
+    session: { minimap: true, openDrawers: new Set() }
   }
   private readonly listeners = new Set<() => void>()
   private readonly loadingCanvases = new Set<string>()
@@ -155,6 +160,16 @@ export class SpadeStore {
     this.update({ notices: this.state.notices.filter((notice) => notice.id !== id) })
   }
 
+  // --- Agents ---
+
+  // The user has seen that this agent finished its run.
+  acknowledgeFinished(agentId: string): void {
+    if (!this.state.finishedAgents.has(agentId)) return
+    const finishedAgents = new Set(this.state.finishedAgents)
+    finishedAgents.delete(agentId)
+    this.update({ finishedAgents })
+  }
+
   // --- Settings and session ---
 
   async updateSettings(patch: Partial<AppSettings>): Promise<boolean> {
@@ -170,6 +185,14 @@ export class SpadeStore {
 
   setSession(patch: Partial<SessionPreferences>): void {
     this.update({ session: { ...this.state.session, ...patch } })
+  }
+
+  setDrawerOpen(nodeId: string, open: boolean): void {
+    if (this.state.session.openDrawers.has(nodeId) === open) return
+    const openDrawers = new Set(this.state.session.openDrawers)
+    if (open) openDrawers.add(nodeId)
+    else openDrawers.delete(nodeId)
+    this.setSession({ openDrawers })
   }
 
   // --- Internals ---
@@ -201,9 +224,18 @@ export class SpadeStore {
   }
 
   private receiveRuntime(runtime: AgentRuntime): void {
+    const previous = this.state.runtimes.get(runtime.nodeId)
     const runtimes = new Map(this.state.runtimes)
     runtimes.set(runtime.nodeId, runtime)
-    this.update({ runtimes })
+    const { finished, resumed } = runTransitions(previous?.children ?? [], runtime.children)
+    if (finished.length === 0 && !resumed.some((agentId) => this.state.finishedAgents.has(agentId))) {
+      this.update({ runtimes })
+      return
+    }
+    const finishedAgents = new Set(this.state.finishedAgents)
+    for (const agentId of finished) finishedAgents.add(agentId)
+    for (const agentId of resumed) finishedAgents.delete(agentId)
+    this.update({ runtimes, finishedAgents })
   }
 
   private loadRuntimes(projectId: string): void {
@@ -230,7 +262,19 @@ export class SpadeStore {
     if (canvas === previous) return
     const canvases = new Map(this.state.canvases)
     canvases.set(canvas.projectId, canvas)
-    this.update({ canvases })
+    // The canvas is the source of truth for which agent nodes exist: the agent service stops reporting a
+    // removed node without saying so, so its last runtime goes with it here.
+    const present = new Set(canvas.nodes.map((node) => node.id))
+    const gone = [...this.state.runtimes.values()].filter(
+      (runtime) => runtime.projectId === canvas.projectId && !present.has(runtime.nodeId)
+    )
+    if (gone.length === 0) {
+      this.update({ canvases })
+      return
+    }
+    const runtimes = new Map(this.state.runtimes)
+    for (const runtime of gone) runtimes.delete(runtime.nodeId)
+    this.update({ canvases, runtimes })
   }
 
   private fail(what: string, failure: Failure): void {
