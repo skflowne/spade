@@ -9,7 +9,7 @@ import { _electron as electron, expect, test, type ElectronApplication, type Pag
 import { build } from 'esbuild'
 import type { FileService } from '../../src/main/contracts'
 import { WEB_PAGE_PARTITION } from '../../src/shared/builtinEntities'
-import type { Project } from '../../src/shared/domain'
+import { DOMAIN_RECORD_VERSION, type Project } from '../../src/shared/domain'
 
 // Wires the real Electron binding of the file service into a minimal app, so the image protocol and the
 // guest webview policy run inside Chromium rather than against fakes.
@@ -86,7 +86,7 @@ async function withHarness(run: (harness: Harness) => Promise<void>): Promise<vo
   try {
     const window = await app.firstWindow()
     await expect.poll(() => app.evaluate(() => 'fileService' in globalThis)).toBe(true)
-    const project: Project = { version: 2, id: 'p', name: 'P', rootPath: root, createdAt: '2026-01-01T00:00:00.000Z' }
+    const project: Project = { version: DOMAIN_RECORD_VERSION, id: 'p', name: 'P', rootPath: root, createdAt: '2026-01-01T00:00:00.000Z' }
     await run({ app, window, directory, root, project })
   } finally {
     await app.close()

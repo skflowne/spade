@@ -146,23 +146,16 @@ async function main(): Promise<void> {
     const reopened = await spade.service.openProviderSubagent(rootNodeId, subagentId, user)
     check(opened.nodeId === reopened.nodeId, 'opening a provider sub-agent twice yields one node')
 
-    // 3. A child spawned by the root agent through SPADE: Paseo records the root as its parent.
-    const agentActor: Actor = { kind: 'agent', nodeId: rootNodeId, agentId: rootAgentId }
-    const spawnedChild = await spade.gateway.execute(
-      project.id,
-      {
-        type: 'spawnChild',
-        sourceNodeId: rootNodeId,
-        origin: 'spawned',
-        node: { entityType: 'agent', config: { provider, model, mode, prompt: 'Reply with the single word CHILD.' }, title: 'Spawned child' }
-      },
-      agentActor
-    )
-    canvas = await spade.gateway.getCanvas(project.id)
-    const spawnedChildAgentId = canvas.nodes.find((node) => node.id === spawnedChild.nodeId)!.resourceRef!.id
-    created.add(spawnedChildAgentId)
+    // 3. A child the root agent starts through SPADE: a pass-through to Paseo with the root as parent, no node.
+    const spawnedChild = await spade.service.spawnChildAgent(rootAgentId, {
+      provider,
+      model,
+      title: 'Spawned child',
+      prompt: 'Reply with the single word CHILD.'
+    })
+    created.add(spawnedChild.agentId)
 
-    // 4. A managed child created in Paseo alone (as an agent's own delegation would): reconciliation adopts it.
+    // 4. A child created in Paseo alone (as an agent's own delegation would): listed on the root, no node.
     const managed = await spade.adapter.spawnAgent({
       cwd: projectDirectory,
       provider,
@@ -174,25 +167,25 @@ async function main(): Promise<void> {
       prompt: 'Reply with the single word MANAGED.'
     })
     created.add(managed.id)
-    const managedNode = await waitFor('the managed child node', async () => {
-      const current = await spade!.gateway.getCanvas(project.id)
-      return current.nodes.find((node) => node.resourceRef?.id === managed.id) ?? null
-    }, 30_000)
-
-    await waitFor('both children to settle', () => {
-      const states = [spawnedChild.nodeId!, managedNode.id].map((nodeId) => runtimeOf(spade!, project, nodeId)?.status)
-      return states.every((status) => status === 'idle') ? true : null
+    const listed = await waitFor('both children to settle in the root agent’s list', () => {
+      const children = runtimeOf(spade!, project, rootNodeId)?.children ?? []
+      const ids = [spawnedChild.agentId, managed.id]
+      const settled = children.filter((child) => ids.includes(child.agentId) && child.status === 'idle')
+      return settled.length === ids.length ? settled : null
     })
+    log('children', listed.map(({ agentId, mode: childMode, status, nodeId }) => ({ agentId, mode: childMode, status, nodeId })))
+    check(listed.every((child) => child.nodeId === null), 'children are listed collapsed, without nodes')
+    const located = await spade.service.locateAgent(spawnedChild.agentId)
+    check(located?.placements[0]?.anchorNodeId === rootNodeId, 'a collapsed child is located on its owner’s node')
+    check(located?.parentAgentId === rootAgentId, 'the spawned child has the root as Paseo parent')
     canvas = await spade.gateway.getCanvas(project.id)
-    const spawnedEntry = canvas.activity.find((entry) => entry.nodeIds[0] === spawnedChild.nodeId)
-    const managedEdge = canvas.edges.find((edge) => edge.toNodeId === managedNode.id)
-    log('children', {
-      spawnedChild: { agentId: spawnedChildAgentId, paseoParent: runtimeOf(spade, project, spawnedChild.nodeId!)?.parentAgentId, actor: spawnedEntry?.actor },
-      managedChild: { agentId: managed.id, collapsed: managedNode.collapsed, edge: managedEdge && { from: managedEdge.fromNodeId === rootNodeId ? 'root' : managedEdge.fromNodeId, origin: managedEdge.origin } }
-    })
-    check(runtimeOf(spade, project, spawnedChild.nodeId!)?.parentAgentId === rootAgentId, 'the agent-spawned child has the root as Paseo parent')
-    check(spawnedEntry?.actor.kind === 'agent', 'the agent-spawned child is attributed to the root agent')
-    check(managedNode.collapsed && managedEdge?.fromNodeId === rootNodeId && managedEdge.origin === 'delegated', 'the managed child is a collapsed delegated child of the root')
+    check(!refKeys(canvas).some((key) => key.endsWith(spawnedChild.agentId) || key.endsWith(managed.id)), 'no node was created for either child')
+
+    // The user expands the managed child into a delegated node.
+    const expanded = await spade.service.expandChildAgent(rootNodeId, managed.id, user)
+    canvas = await spade.gateway.getCanvas(project.id)
+    const managedEdge = canvas.edges.find((edge) => edge.toNodeId === expanded.nodeId)
+    check(managedEdge?.fromNodeId === rootNodeId && managedEdge.origin === 'delegated', 'an expanded child is a delegated child of its owner')
 
     // 5. Both timelines.
     const rootTimeline = await spade.service.timeline(rootNodeId)

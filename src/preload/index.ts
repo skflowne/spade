@@ -59,7 +59,12 @@ const bridge: SpadeHostBridge = {
     interrupt: (nodeId) => request('agents.interrupt', nodeId),
     respondToPermission: (nodeId, requestId, behavior) =>
       request('agents.respondToPermission', nodeId, requestId, behavior),
-    openProviderSubagent: (nodeId, subagentId) => request('agents.openProviderSubagent', nodeId, subagentId)
+    openProviderSubagent: (nodeId, subagentId) => request('agents.openProviderSubagent', nodeId, subagentId),
+    respondToAgentPermission: (agentId, requestId, behavior) =>
+      request('agents.respondToAgentPermission', agentId, requestId, behavior),
+    setMode: (agentId, modeId) => request('agents.setMode', agentId, modeId),
+    expandChild: (ownerNodeId, agentId) => request('agents.expandChild', ownerNodeId, agentId),
+    refreshConnection: () => request('agents.refreshConnection')
   },
   files: {
     inspectPath: (projectId, path, options) => unwrap('files.inspectPath', projectId, path, options),

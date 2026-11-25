@@ -58,14 +58,12 @@ function post(
   })
 }
 
-// `asUser` stands for a person at a terminal passing --as-user.
-async function call(info: ControlServerInfo, method: string, params: unknown = {}, agentId?: string | { asUser: true }) {
-  const caller = typeof agentId === 'string' ? { agentId } : (agentId ?? {})
-  const reply = await post(info, { method, params, ...caller })
+async function call(info: ControlServerInfo, method: string, params: unknown = {}, agentId?: string) {
+  const reply = await post(info, { method, params, ...(agentId === undefined ? {} : { agentId }) })
   return reply.body
 }
 
-async function ok<Result>(info: ControlServerInfo, method: string, params: unknown = {}, agentId?: string | { asUser: true }) {
+async function ok<Result>(info: ControlServerInfo, method: string, params: unknown = {}, agentId?: string) {
   const body = await call(info, method, params, agentId)
   expect(body.error).toBeUndefined()
   return body.result as Result
@@ -90,7 +88,7 @@ const directories: string[] = []
 
 async function world(options: { maxBodyBytes?: number; identityTimeoutMs?: number } = {}): Promise<World> {
   const gateway = new FakeGateway()
-  const agents = new FakeAgentService()
+  const agents = new FakeAgentService(gateway)
   gateway.addProject('alpha', 'Alpha')
   gateway.addProject('beta', 'Beta')
   const lead = gateway.seedTree('alpha', agentSeed('agent-lead', 'Lead'))
@@ -186,15 +184,57 @@ test.describe('identity and attribution', () => {
     expect(entry.nodeIds).toContain(result.nodeId)
   })
 
-  test('waits a bounded time for a just-created agent node to be reconciled', async () => {
-    const { info, gateway, lead } = await world()
-    gateway.resourceMisses = 3
+  test('waits a bounded time for a just-created agent to be reported by Paseo', async () => {
+    const { info, agents, lead } = await world()
+    agents.locateMisses = 3
     const me = await ok<{ node: { id: string } }>(info, 'whoami', {}, 'agent-lead')
     expect(me.node.id).toBe(lead)
-    expect(gateway.resourceLookups).toBe(4)
+    expect(agents.locateCalls).toBe(4)
   })
 
-  test('an agent id with no canvas node fails after the bounded wait', async () => {
+  test('a collapsed child acts as itself, from its nearest expanded owner’s place, without a node of its own', async () => {
+    const { info, gateway, agents, lead, plan } = await world()
+    agents.locations.set('agent-child', {
+      agentId: 'agent-child',
+      parentAgentId: 'agent-lead',
+      placements: [{ projectId: 'alpha', nodeId: null, anchorNodeId: lead }]
+    })
+    const actor: Actor = { kind: 'agent', nodeId: null, agentId: 'agent-child' }
+
+    const me = await ok<Record<string, unknown>>(info, 'whoami', {}, 'agent-child')
+    expect(me).toEqual({
+      actor,
+      project: { id: 'alpha', name: 'Alpha', rootPath: '/work/Alpha' },
+      node: null,
+      ownerAgentId: 'agent-lead',
+      anchorNodeId: lead,
+      childIds: []
+    })
+    const tree = await ok<{ projectId: string; selfNodeId: string | null }>(info, 'tree', {}, 'agent-child')
+    expect(tree).toMatchObject({ projectId: 'alpha', selfNodeId: null })
+
+    const finding = await ok<{ nodeId: string }>(
+      info,
+      'spawn',
+      { entityType: 'note', config: { body: 'found it' }, placement: { kind: 'self' } },
+      'agent-child'
+    )
+    expect(gateway.parentOf(finding.nodeId)).toBe(lead)
+    const detail = await ok<{ nodeId: string }>(
+      info,
+      'spawn',
+      { entityType: 'note', config: { body: 'more' }, placement: { kind: 'child', parentNodeId: plan } },
+      'agent-child'
+    )
+    expect(gateway.parentOf(detail.nodeId)).toBe(plan)
+    expect(gateway.executed.map((entry) => [entry.command, entry.actor])).toEqual([
+      [expect.objectContaining({ type: 'spawnChild', sourceNodeId: lead }), actor],
+      [expect.objectContaining({ type: 'spawnChild', sourceNodeId: lead }), actor]
+    ])
+    expect(gateway.canvas('alpha').activity.at(-1)?.actor).toEqual(actor)
+  })
+
+  test('an agent id Paseo does not place on any canvas fails after the bounded wait', async () => {
     const { info } = await world({ identityTimeoutMs: 150 })
     const started = Date.now()
     const body = await call(info, 'whoami', {}, 'agent-unknown')
@@ -216,46 +256,44 @@ test.describe('identity and attribution', () => {
     expect(byName.projectId).toBe('alpha')
   })
 
-  test('a change without an agent id is refused unless the caller explicitly acts as the user', async () => {
-    const { info, gateway, agents, lead, plan } = await world()
+  test('a change without an agent identity is refused, and nobody can act as the user', async () => {
+    const { info, gateway, agents, plan } = await world()
     const before = gateway.canvas('alpha')
     for (const [method, params] of [
       ['execute', { command: { type: 'collapseNode', nodeId: plan } }],
       ['spawn', { entityType: 'note', config: { body: 'x' }, placement: { kind: 'child', parentNodeId: plan } }],
-      ['prompt', { nodeId: lead, text: 'status?' }]
+      ['spawn', { entityType: 'agent', config: { prompt: 'Review', provider: 'claude' } }]
     ] as const) {
       const refused = await call(info, method, params)
       expect(refused.error?.code, method).toBe('identity-required')
       expect(refused.error?.message, method).toContain('PASEO_AGENT_ID')
-      expect(refused.error?.message, method).toContain('--as-user')
+      expect(refused.error?.message, method).not.toContain('--as-user')
     }
+
+    // The old escape hatch is not part of the protocol, even posted directly.
+    const asUser = await post(info, { method: 'execute', params: { command: { type: 'collapseNode', nodeId: plan } }, asUser: true })
+    expect(asUser.status).toBe(400)
+    expect(asUser.body.error?.code).toBe('bad-request')
+    const both = await post(info, { method: 'execute', params: { command: { type: 'collapseNode', nodeId: plan } }, agentId: 'agent-lead', asUser: true })
+    expect(both.body.error?.code).toBe('bad-request')
     expect(gateway.executed).toEqual([])
     expect(gateway.canvas('alpha')).toBe(before)
-    expect(agents.prompts).toEqual([])
-
-    await ok(info, 'execute', { command: { type: 'collapseNode', nodeId: plan } }, { asUser: true })
-    await ok(info, 'prompt', { nodeId: lead, text: 'status?' }, { asUser: true })
-    expect(gateway.executed.at(-1)?.actor).toEqual({ kind: 'user' })
-    expect(agents.prompts.at(-1)?.actor).toEqual({ kind: 'user' })
+    expect(agents.spawned).toEqual([])
   })
 
-  test('an agent identity and acting as the user cannot be combined, and asUser must be exactly true', async () => {
-    const { info, gateway, plan } = await world()
-    const both = await post(info, { method: 'execute', params: { command: { type: 'collapseNode', nodeId: plan } }, agentId: 'agent-lead', asUser: true })
-    expect(both.body.error?.code).toBe('invalid-params')
-    const loose = await post(info, { method: 'execute', params: { command: { type: 'collapseNode', nodeId: plan } }, asUser: 'yes' })
-    expect(loose.status).toBe(400)
-    expect(loose.body.error?.code).toBe('bad-request')
-    expect(gateway.executed).toEqual([])
+  test('agents message each other through Paseo: there is no prompt method', async () => {
+    const { info, lead } = await world()
+    const reply = await post(info, { method: 'prompt', params: { nodeId: lead, text: 'status?' }, agentId: 'agent-lead' })
+    expect(reply.status).toBe(400)
+    expect(reply.body.error?.code).toBe('unknown-method')
   })
 
   test('every change method is attributed to the calling agent', async () => {
-    const { info, gateway, agents, lead, plan, detail } = await world()
+    const { info, gateway, lead, plan, detail } = await world()
     const actor: Actor = { kind: 'agent', nodeId: lead, agentId: 'agent-lead' }
     await ok(info, 'execute', { command: { type: 'reparent', nodeId: detail, newParentId: lead } }, 'agent-lead')
     await ok(info, 'execute', { command: { type: 'updateNode', nodeId: plan, patch: { title: 'Plan v2' } } }, 'agent-lead')
     await ok(info, 'execute', { command: { type: 'connectNodes', fromNodeId: plan, toNodeId: detail } }, 'agent-lead')
-    await ok(info, 'prompt', { nodeId: lead, text: 'status?' }, 'agent-lead')
 
     expect(gateway.executed.map((entry) => entry.actor)).toEqual([actor, actor, actor])
     expect(gateway.canvas('alpha').activity.slice(-3).map((entry) => [entry.command, entry.actor])).toEqual([
@@ -263,7 +301,6 @@ test.describe('identity and attribution', () => {
       ['updateNode', actor],
       ['connectNodes', actor]
     ])
-    expect(agents.prompts).toEqual([{ nodeId: lead, text: 'status?', actor }])
   })
 })
 
@@ -314,22 +351,73 @@ test.describe('commands', () => {
     }
   })
 
-  test('a spawned agent inherits the caller’s provider, model, and mode unless overridden', async () => {
-    const { info, gateway } = await world()
-    await ok(info, 'spawn', { entityType: 'agent', config: { prompt: 'Review' }, placement: { kind: 'self' } }, 'agent-lead')
-    expect(gateway.executed.at(-1)?.command).toMatchObject({
-      node: { entityType: 'agent', config: { provider: 'codex', model: 'gpt', mode: 'auto', prompt: 'Review' } }
-    })
-
-    await ok(
+  test('spawning an agent forwards the request to Paseo with the caller as parent and creates no node', async () => {
+    const { info, gateway, agents } = await world()
+    const before = gateway.canvas('alpha')
+    const started = await ok<Record<string, unknown>>(
       info,
       'spawn',
-      { entityType: 'agent', config: { prompt: 'Draw', provider: 'claude' }, placement: { kind: 'self' } },
+      { entityType: 'agent', config: { prompt: 'Review', provider: 'codex', model: 'gpt', mode: 'auto' }, title: 'Reviewer' },
       'agent-lead'
     )
-    expect(gateway.executed.at(-1)?.command).toMatchObject({
-      node: { config: { provider: 'claude', model: null, mode: null, prompt: 'Draw' } }
+    expect(started).toEqual({ agentId: 'paseo-child-1', ownerAgentId: 'agent-lead' })
+    expect(agents.spawned).toEqual([
+      { callerAgentId: 'agent-lead', input: { prompt: 'Review', provider: 'codex', model: 'gpt', mode: 'auto', title: 'Reviewer' } }
+    ])
+    expect(gateway.executed).toEqual([])
+    expect(gateway.canvas('alpha')).toBe(before)
+
+    // A child collapsed into its owner's list spawns its own children the same way.
+    agents.locations.set('agent-child', {
+      agentId: 'agent-child',
+      parentAgentId: 'agent-lead',
+      placements: [{ projectId: 'alpha', nodeId: null, anchorNodeId: 'unused' }]
     })
+    await ok(info, 'spawn', { entityType: 'agent', config: { prompt: 'Dig', provider: 'claude' } }, 'agent-child')
+    expect(agents.spawned.at(-1)).toEqual({ callerAgentId: 'agent-child', input: { prompt: 'Dig', provider: 'claude' } })
+  })
+
+  test('an agent spawn without a provider uses the user’s saved default provider and its model, never its mode', async () => {
+    const { info, gateway, agents } = await world()
+    const spawn = (config: Record<string, unknown>) => call(info, 'spawn', { entityType: 'agent', config }, 'agent-lead')
+
+    const refused = await spawn({ prompt: 'Review' })
+    expect(refused.error?.code).toBe('invalid-params')
+    expect(refused.error?.message).toContain('--provider')
+    expect(refused.error?.message).toContain('spade providers')
+    expect(agents.spawned).toEqual([])
+
+    gateway.settings = { ...gateway.settings, agentDefaults: { provider: 'claude', model: 'opus', mode: 'plan' } }
+    await spawn({ prompt: 'Review' })
+    await spawn({ prompt: 'Review', provider: 'claude' })
+    await spawn({ prompt: 'Review', provider: 'codex' })
+    await spawn({ prompt: 'Review', model: 'sonnet', mode: null })
+    expect(agents.spawned.map((entry) => entry.input)).toEqual([
+      { prompt: 'Review', provider: 'claude', model: 'opus' },
+      { prompt: 'Review', provider: 'claude', model: 'opus' },
+      { prompt: 'Review', provider: 'codex' },
+      { prompt: 'Review', provider: 'claude', model: 'sonnet' }
+    ])
+  })
+
+  test('an agent is not placed on the canvas: tree targets, a description, or a project are refused', async () => {
+    const { info, agents, plan } = await world()
+    for (const extra of [
+      { placement: { kind: 'self' } },
+      { placement: { kind: 'child', parentNodeId: plan } },
+      { placement: { kind: 'tree', nodeId: plan } },
+      { placement: { kind: 'new-tree' } },
+      { description: 'Reviews' },
+      { project: 'Alpha' }
+    ]) {
+      const reply = await call(info, 'spawn', { entityType: 'agent', config: { prompt: 'Review', provider: 'claude' }, ...extra }, 'agent-lead')
+      expect(reply.error?.code, JSON.stringify(extra)).toBe('invalid-params')
+    }
+    for (const config of [{ provider: 'claude' }, { prompt: '', provider: 'claude' }, { prompt: 'x', provider: 'claude', cwd: '/tmp' }, 'Review']) {
+      const reply = await call(info, 'spawn', { entityType: 'agent', config }, 'agent-lead')
+      expect(reply.error?.code, JSON.stringify(config)).toBe('invalid-params')
+    }
+    expect(agents.spawned).toEqual([])
   })
 
   test('failures carry the reducer’s error codes and never fall back', async () => {
@@ -361,11 +449,11 @@ test.describe('commands', () => {
   })
 
   test('agent service failures keep their stable codes; anything else is internal', async () => {
-    const { info, agents, lead } = await world()
-    agents.promptFailure = new AgentServiceError('agent-missing', `Paseo no longer has the agent behind node ${lead}.`)
-    expect((await call(info, 'prompt', { nodeId: lead, text: 'status?' }, 'agent-lead')).error).toEqual({
-      code: 'agent-missing',
-      message: `Paseo no longer has the agent behind node ${lead}.`
+    const { info, agents } = await world()
+    agents.spawnFailure = new AgentServiceError('unknown-agent', 'Paseo has no agent agent-lead.')
+    expect((await call(info, 'spawn', { entityType: 'agent', config: { prompt: 'Review', provider: 'claude' } }, 'agent-lead')).error).toEqual({
+      code: 'unknown-agent',
+      message: 'Paseo has no agent agent-lead.'
     })
 
     agents.providersFailure = new AgentServiceError('paseo-unavailable', 'Paseo is not connected (connecting).')
@@ -405,25 +493,22 @@ test.describe('commands', () => {
     )
     expect(extraField.error?.code).toBe('invalid-params')
   })
-
-  test('prompting requires an agent node', async () => {
-    const { info, plan } = await world()
-    const body = await call(info, 'prompt', { nodeId: plan, text: 'hi' }, 'agent-lead')
-    expect(body.error?.code).toBe('invalid-command')
-  })
 })
 
 test.describe('reads', () => {
-  test('whoami names the caller’s node, project, parent, and children', async () => {
+  test('whoami names the caller’s node, owner, project, parent, and children', async () => {
     const { info, lead, plan } = await world()
-    const me = await ok<{ node: { id: string; parentId: string | null }; project: { name: string }; childIds: string[] }>(
-      info,
-      'whoami',
-      {},
-      'agent-lead'
-    )
+    const me = await ok<{
+      node: { id: string; parentId: string | null }
+      project: { name: string }
+      ownerAgentId: string | null
+      anchorNodeId: string
+      childIds: string[]
+    }>(info, 'whoami', {}, 'agent-lead')
     expect(me.node.id).toBe(lead)
     expect(me.node.parentId).toBeNull()
+    expect(me.ownerAgentId).toBeNull()
+    expect(me.anchorNodeId).toBe(lead)
     expect(me.project.name).toBe('Alpha')
     expect(me.childIds).toEqual([plan])
   })
@@ -556,7 +641,7 @@ test.describe('discovery and launcher shims', () => {
     )
     const server = createControlServer({
       gateway: new FakeGateway(),
-      agentService: new FakeAgentService(),
+      agentService: new FakeAgentService(null),
       entities: new FakeGateway().entities,
       dataDirectory,
       cliScriptPath,
@@ -658,6 +743,11 @@ test.describe('agent instructions', () => {
     expect(posix).toContain("`'/home/me/.config/SPADE data/bin/spade' skill`")
     expect(posix.split('\n').length).toBeLessThanOrEqual(6)
     expect(posix).not.toContain('## ')
+    // Agents change the canvas only when asked, and message each other through Paseo.
+    expect(posix).toContain('only when the user asks')
+    expect(posix).toContain('Paseo')
+    expect(posix).not.toContain('--as-user')
+    expect(posix).not.toContain('prompt')
 
     const windows = formatAgentInstructions({
       nodeId: 'node-7',

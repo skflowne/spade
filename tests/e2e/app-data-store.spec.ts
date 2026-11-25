@@ -15,7 +15,6 @@ import {
 } from '../../src/main/persistence'
 import {
   CANVAS_ACTIVITY_LIMIT,
-  CANVAS_DISMISSED_RESOURCE_LIMIT,
   DEFAULT_APP_SETTINGS,
   DOMAIN_RECORD_VERSION,
   createEmptyCanvas,
@@ -116,9 +115,17 @@ function populatedCanvas(projectId: string): Canvas {
         command: 'spawnChild',
         summary: 'Spawned Note',
         nodeIds: ['child']
+      },
+      {
+        id: 'activity-2',
+        at: createdAt,
+        // An agent collapsed into its owner's list acts without a node of its own.
+        actor: { kind: 'agent', nodeId: null, agentId: 'agent-2' },
+        command: 'spawnChild',
+        summary: 'Spawned Note',
+        nodeIds: ['child']
       }
-    ],
-    dismissedResources: [{ provider: 'paseo', kind: 'agent', id: 'agent-removed' }]
+    ]
   }
 }
 
@@ -360,9 +367,9 @@ test('malformed records are refused before anything is written', async () => {
       { ...valid, version: 1 },
       { ...valid, activity: Array.from({ length: CANVAS_ACTIVITY_LIMIT + 1 }, () => valid.activity[0]) },
       { ...valid, activity: [{ ...valid.activity[0], actor: { kind: 'robot' } }] },
-      { ...valid, dismissedResources: undefined },
-      { ...valid, dismissedResources: [{ provider: 'paseo', kind: 'agent' }] },
-      { ...valid, dismissedResources: Array.from({ length: CANVAS_DISMISSED_RESOURCE_LIMIT + 1 }, () => valid.dismissedResources[0]) }
+      { ...valid, activity: [{ ...valid.activity[0], actor: { kind: 'agent', nodeId: '', agentId: 'agent-1' } }] },
+      { ...valid, activity: [{ ...valid.activity[0], actor: { kind: 'agent', agentId: 'agent-1' } }] },
+      { ...valid, dismissedResources: [] }
     ]
     for (const malformed of malformedCanvases) {
       await expect(store.saveCanvas(malformed as Canvas)).rejects.toBeInstanceOf(InvalidRecordError)
@@ -437,17 +444,55 @@ test('an older file is backed up before it is migrated and the migrated form is 
 
 test('an older file with no registered migration is refused and left untouched', async () => {
   await withTemporaryDirectory(async (directory) => {
-    const legacy = JSON.stringify({ version: DOMAIN_RECORD_VERSION - 1, projects: [] })
+    // Format 1 was never persisted, so nothing migrates from it.
+    const legacy = JSON.stringify({ version: 1, projects: [] })
     await writeFile(join(directory, 'index.json'), legacy)
     const store = new AppDataStore({ directory })
 
     const failure = await store.loadIndex().catch((error: unknown) => error)
 
     expect(failure).toBeInstanceOf(UnsupportedVersionError)
-    expect(failure).toMatchObject({ foundVersion: DOMAIN_RECORD_VERSION - 1, supportedVersion: DOMAIN_RECORD_VERSION })
+    expect(failure).toMatchObject({ foundVersion: 1, supportedVersion: DOMAIN_RECORD_VERSION })
     await expect(store.saveIndex(index([]))).rejects.toBeInstanceOf(UnsupportedVersionError)
     expect(await readFile(join(directory, 'index.json'), 'utf8')).toBe(legacy)
     expect(await listFiles(directory)).toEqual(['index.json'])
+  })
+})
+
+test('format 2 files load as the current format: canvases drop the dismissed-resource list, nested records are restamped', async () => {
+  await withTemporaryDirectory(async (directory) => {
+    const current = populatedCanvas('alpha')
+    const restamp = <Value extends object>(records: Value[]) => records.map((record) => ({ ...record, version: 2 }))
+    const formatTwoCanvas = {
+      ...current,
+      version: 2,
+      nodes: restamp(current.nodes),
+      edges: restamp(current.edges),
+      workspaces: restamp(current.workspaces),
+      // Format 2 canvases recorded only agents shown by the canvas, never with nodeId null.
+      activity: current.activity.slice(0, 1),
+      dismissedResources: [{ provider: 'paseo', kind: 'agent', id: 'agent-removed' }]
+    }
+    const currentIndex = index([project('alpha')], 'alpha')
+    const formatTwoIndex = { ...currentIndex, version: 2, projects: restamp(currentIndex.projects) }
+    await mkdir(join(directory, 'canvases'), { recursive: true })
+    await writeFile(join(directory, 'canvases', 'alpha.json'), JSON.stringify(formatTwoCanvas))
+    await writeFile(join(directory, 'index.json'), JSON.stringify(formatTwoIndex))
+
+    const store = new AppDataStore({ directory, now: () => fixedNow })
+    const expectedCanvas = { ...current, activity: current.activity.slice(0, 1) }
+    expect(await store.loadCanvas('alpha')).toEqual(expectedCanvas)
+    expect(await store.loadIndex()).toEqual(currentIndex)
+
+    expect(await listFiles(directory)).toEqual([
+      `backups/canvas-alpha.v2.${fixedStamp}.json`,
+      `backups/index.v2.${fixedStamp}.json`,
+      'canvases/alpha.json',
+      'index.json'
+    ])
+    const persisted = JSON.parse(await readFile(join(directory, 'canvases', 'alpha.json'), 'utf8'))
+    expect(persisted).toEqual(expectedCanvas)
+    expect(persisted).not.toHaveProperty('dismissedResources')
   })
 })
 

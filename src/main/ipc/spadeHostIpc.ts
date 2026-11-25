@@ -126,6 +126,19 @@ export function registerSpadeHostIpc(options: SpadeHostIpcOptions): () => void {
       ),
     'agents.openProviderSubagent': (nodeId, subagentId) =>
       result(() => agents.openProviderSubagent(args.id(nodeId, 'nodeId'), args.id(subagentId, 'subagentId'), USER)),
+    'agents.respondToAgentPermission': (agentId, requestId, behavior) =>
+      result(() =>
+        agents.respondToAgentPermission(
+          args.id(agentId, 'agentId'),
+          args.id(requestId, 'requestId'),
+          args.permissionBehavior(behavior)
+        )
+      ),
+    'agents.setMode': (agentId, modeId) =>
+      result(() => agents.setAgentMode(args.id(agentId, 'agentId'), args.id(modeId, 'modeId'))),
+    'agents.expandChild': (ownerNodeId, agentId) =>
+      result(() => agents.expandChildAgent(args.id(ownerNodeId, 'ownerNodeId'), args.id(agentId, 'agentId'), USER)),
+    'agents.refreshConnection': () => result(async () => ({ connection: await agents.refreshConnection() })),
 
     'files.inspectPath': (projectId, path, options) =>
       envelope(() => files.inspectPath(project(projectId), args.text(path, 'path'), args.pathAccess(options))),

@@ -39,7 +39,7 @@ export type ControlErrorCode =
   | 'invalid-params'
   | 'unknown-agent'
   | 'project-required'
-  // A change came without an agent identity and without `asUser`.
+  // A change came without an agent identity; only agents change the canvas through the CLI.
   | 'identity-required'
 
 export type ControlError = { code: ControlErrorCode; message: string }
@@ -47,15 +47,12 @@ export type ControlError = { code: ControlErrorCode; message: string }
 export type RpcRequest = {
   method: string
   params?: unknown
-  // The caller's PASEO_AGENT_ID; absent when a human runs the CLI.
+  // The caller's PASEO_AGENT_ID; absent when a human runs the CLI, who may only read.
   agentId?: string
-  // A person at a terminal (`--as-user`) acting as the user. Changes without an agentId are refused
-  // unless this is set; it is never combined with an agentId.
-  asUser?: true
 }
 
-// Methods that change the canvas or an agent; they never fall back to the user silently.
-export const MUTATING_METHODS: readonly RpcMethod[] = ['spawn', 'execute', 'prompt']
+// Methods that change the canvas or start an agent; refused without an agent identity.
+export const MUTATING_METHODS: readonly RpcMethod[] = ['spawn', 'execute']
 
 export type RpcResponse<Result = unknown> = { ok: true; result: Result } | { ok: false; error: ControlError }
 
@@ -79,8 +76,15 @@ export type NodeSummary = NodeFlags & {
 
 export type WhoAmIResult = {
   actor: Actor
+  // The project of the canvas the agent shows on (its own node's, or its nearest expanded owner's).
   project: ProjectSummary | null
+  // The agent's own node while it is expanded; null while it is collapsed into its owner's list.
   node: NodeSummary | null
+  // The Paseo agent that owns it; null for a top-level agent and for the user.
+  ownerAgentId: string | null
+  // Where its spawns go by default: its own node, or its nearest expanded owner's.
+  anchorNodeId: string | null
+  // Children of its own node.
   childIds: string[]
 }
 
@@ -134,20 +138,28 @@ export type NodeDetail = NodeSummary & {
 
 export type EntitySummary = { type: string; displayName: string; version: number; config: string }
 
-// Where `spawn` attaches the new node. `self` is a child of the calling agent's own node.
+// Where `spawn` attaches the new node. `self` is a child of the calling agent's own node, or of its
+// nearest expanded owner's while it is collapsed.
 export type SpawnPlacement =
   | { kind: 'self' }
   | { kind: 'child'; parentNodeId: string }
   | { kind: 'tree'; nodeId: string }
   | { kind: 'new-tree' }
 
+// An agent is not a node: spawning one starts a Paseo agent owned by the caller, and takes no placement,
+// description, or project.
 export type SpawnParams = ProjectParams & {
   entityType: string
   config: unknown
   title?: string
   description?: string
-  placement: SpawnPlacement
+  placement?: SpawnPlacement
 }
+
+export type AgentSpawnConfig = { prompt: string; provider?: string; model?: string; mode?: string }
+
+// The new Paseo agent, listed under its owner (the caller) rather than placed on the canvas.
+export type SpawnedAgent = { agentId: string; ownerAgentId: string }
 
 // The project comes from the nodes or edge the command names.
 export type ExecuteParams = { command: CanvasCommand }
@@ -160,8 +172,6 @@ export type MutationResult = {
   removedNodeIds?: string[]
 }
 
-export type PromptParams = { nodeId: string; text: string }
-
 export type RpcMethods = {
   whoami: { params: Record<string, never>; result: WhoAmIResult }
   projects: { params: Record<string, never>; result: ProjectSummary[] }
@@ -172,9 +182,8 @@ export type RpcMethods = {
   activity: { params: ProjectParams & PageParams; result: Page<ActivityEntry> & { projectId: string } }
   entities: { params: Record<string, never>; result: EntitySummary[] }
   providers: { params: Record<string, never>; result: AgentProviderInfo[] }
-  spawn: { params: SpawnParams; result: MutationResult }
+  spawn: { params: SpawnParams; result: MutationResult | SpawnedAgent }
   execute: { params: ExecuteParams; result: MutationResult }
-  prompt: { params: PromptParams; result: { nodeId: string } }
 }
 
 export type RpcMethod = keyof RpcMethods

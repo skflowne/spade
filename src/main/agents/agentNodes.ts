@@ -1,6 +1,12 @@
 import type { PaseoAgentSnapshot } from '../paseo'
 import { agentActivity } from '../paseo'
-import type { AgentActivity, AgentResourceState, AgentRuntime, ProviderSubagentInfo } from '../../shared/agents'
+import type {
+  AgentActivity,
+  AgentResourceState,
+  AgentRuntime,
+  ChildAgentInfo,
+  ProviderSubagentInfo
+} from '../../shared/agents'
 import {
   AGENT_ENTITY,
   PASEO_AGENT_KIND,
@@ -91,10 +97,11 @@ export function agentRuntimeOf(input: {
   snapshot: PaseoAgentSnapshot | undefined
   state: AgentResourceState
   providerSubagents: ProviderSubagentInfo[]
+  children: ChildAgentInfo[]
   fallbackCwd: string | null
 }): AgentRuntime {
-  const { projectId, node, agentId, snapshot, state, providerSubagents } = input
-  const base = { projectId, nodeId: node.id, agentId, resourceState: state, providerSubagents }
+  const { projectId, node, agentId, snapshot, state, providerSubagents, children } = input
+  const base = { projectId, nodeId: node.id, agentId, resourceState: state, providerSubagents, children }
   if (!snapshot) {
     const config = agentConfigOf(node)
     return {
@@ -158,8 +165,35 @@ export function providerSubagentRuntimeOf(input: {
     cwd: parent?.cwd ?? null,
     pendingPermissions: [],
     providerSubagents: (listed ?? []).filter((candidate) => candidate.parentSubagentId === subagentId),
+    children: [],
     lastError: null,
     updatedAt: row?.updatedAt ?? node.updatedAt
+  }
+}
+
+// A Paseo child as its owner's node lists it. `children` is filled only while the child is collapsed.
+export function childAgentInfoOf(input: {
+  snapshot: PaseoAgentSnapshot
+  state: AgentResourceState
+  nodeId: string | null
+  children: ChildAgentInfo[]
+}): ChildAgentInfo {
+  const { snapshot, state } = input
+  const missing = state === 'missing'
+  return {
+    agentId: snapshot.id,
+    title: paseoTitle(snapshot.title),
+    provider: snapshot.provider,
+    model: snapshot.model,
+    mode: snapshot.mode,
+    status: snapshot.status,
+    activity: missing ? 'closed' : agentActivity(snapshot.status, snapshot.pendingPermissions.length),
+    resourceState: state,
+    pendingPermissions: missing ? [] : snapshot.pendingPermissions,
+    lastError: snapshot.lastError,
+    updatedAt: snapshot.updatedAt,
+    nodeId: input.nodeId,
+    children: input.nodeId === null ? input.children : []
   }
 }
 
