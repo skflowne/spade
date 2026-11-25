@@ -38,6 +38,8 @@ class FakePaseo implements PaseoPort {
   watched: string[] = []
   // Runs inside spawnAgent after the agent exists in Paseo and before the call resolves.
   onSpawn: ((agent: PaseoAgentSnapshot) => Promise<void> | void) | null = null
+  // Runs inside listChildAgents after the listing is taken and before it is returned.
+  onListedChildren: (() => Promise<void> | void) | null = null
   private current: PaseoConnection = { state: 'disconnected', url: 'ws://fake/ws', error: null }
   private readonly listeners = new Set<(event: PaseoAdapterEvent) => void>()
   private nextId = 1
@@ -133,7 +135,10 @@ class FakePaseo implements PaseoPort {
 
   async listChildAgents(parentAgentIds: readonly string[]): Promise<PaseoAgentSnapshot[]> {
     this.require(`listChildAgents ${[...parentAgentIds].sort().join(',')}`)
-    return [...this.agents.values()].filter((agent) => agent.parentAgentId && parentAgentIds.includes(agent.parentAgentId))
+    const listed = [...this.agents.values()].filter((agent) => agent.parentAgentId && parentAgentIds.includes(agent.parentAgentId))
+    // Paseo has answered; the answer is still on its way back.
+    await this.onListedChildren?.()
+    return listed
   }
 
   async sendPrompt(agentId: string, text: string): Promise<void> {
@@ -512,6 +517,52 @@ test('Paseo children and grandchildren are listed on their owner node, collapsed
       ['child', ['grandchild']],
       ['sibling', []]
     ])
+  })
+})
+
+test('a child that appears while Paseo’s children listing is on its way back is kept', async () => {
+  await withFixture(async ({ project, open }) => {
+    const paseo = new FakePaseo()
+    const session = await open(paseo)
+    const rootNodeId = await spawnRoot(session, project)
+    paseo.agents.set('child', snapshot('child', { parentAgentId: 'spawned-1' }))
+    paseo.updated('child', true)
+    await session.service.whenIdle()
+
+    let started: { agentId: string } | null = null
+    paseo.onListedChildren = async () => {
+      paseo.onListedChildren = null
+      started = await session.service.spawnChildAgent('spawned-1', { prompt: 'Late', provider: 'claude' })
+    }
+    await session.service.refreshConnection()
+    await session.service.whenIdle()
+
+    expect(started).not.toBeNull()
+    expect(runtimeOf(session, project, rootNodeId)!.children.map((child) => child.agentId)).toEqual(['child', started!.agentId])
+  })
+})
+
+test('archived children leave their owner’s list, and agents no longer under a shown agent are no longer followed', async () => {
+  await withFixture(async ({ project, open }) => {
+    const paseo = new FakePaseo()
+    const session = await open(paseo)
+    const rootNodeId = await spawnRoot(session, project)
+    paseo.agents.set('child', snapshot('child', { parentAgentId: 'spawned-1' }))
+    paseo.agents.set('grandchild', snapshot('grandchild', { parentAgentId: 'child' }))
+    paseo.agents.set('done', snapshot('done', { parentAgentId: 'spawned-1', archivedAt: OLD, status: 'archived' }))
+    for (const agentId of ['child', 'grandchild', 'done']) paseo.updated(agentId, true)
+    await session.service.whenIdle()
+    expect(runtimeOf(session, project, rootNodeId)!.children.map((child) => child.agentId)).toEqual(['child'])
+    expect(session.service.followedAgentIds()).toEqual(['child', 'done', 'grandchild', 'spawned-1'])
+
+    // Paseo forgets the grandchild; the next reconciliation stops following it.
+    paseo.agents.delete('grandchild')
+    await session.service.refreshConnection()
+    expect(session.service.followedAgentIds()).toEqual(['child', 'done', 'spawned-1'])
+
+    await session.gateway.execute(project.id, { type: 'removeNode', nodeId: rootNodeId }, user)
+    await session.service.whenIdle()
+    expect(session.service.followedAgentIds()).toEqual([])
   })
 })
 
@@ -1009,13 +1060,27 @@ test('removing or archiving agent nodes never touches Paseo, and a removed node 
   })
 })
 
-test('providers are listed for the project root and cached briefly', async () => {
+test('providers are listed for the project root and cached briefly, until the connection is made again', async () => {
   await withFixture(async ({ projectDirectory, open }) => {
     const paseo = new FakePaseo()
     const session = await open(paseo)
     const providers = await session.service.listProviders()
     expect(providers.map((provider) => provider.id)).toEqual(['claude'])
     await session.service.listProviders()
-    expect(paseo.calls.filter((call) => call.startsWith('listProviders'))).toEqual([`listProviders ${projectDirectory}`])
+    const reads = () => paseo.calls.filter((call) => call.startsWith('listProviders')).length
+    expect(reads()).toBe(1)
+    expect(paseo.calls).toContain(`listProviders ${projectDirectory}`)
+
+    // Another daemon may offer other providers.
+    await session.service.refreshConnection()
+    await session.service.listProviders()
+    expect(reads()).toBe(2)
+
+    // So may the same daemon after it came back.
+    paseo.drop()
+    paseo.connect()
+    await session.service.whenIdle()
+    await session.service.listProviders()
+    expect(reads()).toBe(3)
   })
 })

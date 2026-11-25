@@ -202,7 +202,8 @@ const COMMANDS: Record<string, Command> = {
       'An agent is not a node: `spade spawn agent` starts a Paseo agent owned by you, exactly as Paseo’s own',
       'tools do, and prints its Paseo id; it is listed under you. It takes --title but no target, --description,',
       'or --project. Without --provider the user’s saved default provider (and its model) applies; see',
-      '`spade providers`. An unset --model or --mode is left to Paseo. Message other agents with Paseo’s tools.'
+      '`spade providers`. Otherwise an unset --model or --mode is left to Paseo. Message other agents with',
+      'Paseo’s tools.'
     ].join('\n'),
     stdinText: { flags: ['body', 'prompt', 'caption', 'title', 'description', 'config'] },
     options: {

@@ -1,5 +1,8 @@
 import { expect, test } from '@playwright/test'
 import { shareCanvas, shareRecords } from '../../src/renderer/src/store/sharing'
+import { SpadeStore } from '../../src/renderer/src/store/store'
+import type { AgentRuntime } from '../../src/shared/agents'
+import type { AppState, SpadeHostBridge } from '../../src/shared/ipc'
 import {
   DOMAIN_RECORD_VERSION,
   createEmptyCanvas,
@@ -136,5 +139,62 @@ test.describe('record lists', () => {
     const renamed = shareRecords(previous, [{ id: 'p1', name: 'One' }, { id: 'p2', name: 'Deux' }])
     expect(renamed[0]).toBe(previous[0])
     expect(renamed[1]).toEqual({ id: 'p2', name: 'Deux' })
+  })
+})
+
+test.describe('agent runtimes', () => {
+  // The bridge as far as the store's pushes go; reads answer with nothing new.
+  function fakeHost() {
+    const listeners: { state?: (app: AppState) => void; canvas?: (canvas: Canvas) => void; runtime?: (runtime: AgentRuntime) => void } = {}
+    const host = {
+      app: { onState: (listener: (app: AppState) => void) => ((listeners.state = listener), () => {}), getState: () => new Promise(() => {}) },
+      canvas: { onChanged: (listener: (canvas: Canvas) => void) => ((listeners.canvas = listener), () => {}), get: () => new Promise(() => {}) },
+      agents: { onRuntime: (listener: (runtime: AgentRuntime) => void) => ((listeners.runtime = listener), () => {}), getRuntimes: async () => [] }
+    }
+    return { host: host as unknown as SpadeHostBridge, listeners }
+  }
+
+  function runtime(projectId: string, nodeId: string): AgentRuntime {
+    return {
+      projectId,
+      nodeId,
+      agentId: `agent-${nodeId}`,
+      resourceState: 'live',
+      parentAgentId: null,
+      provider: 'claude',
+      model: null,
+      mode: null,
+      title: null,
+      status: 'idle',
+      activity: 'idle',
+      cwd: null,
+      pendingPermissions: [],
+      providerSubagents: [],
+      children: [],
+      lastError: null,
+      updatedAt: '2026-11-21T00:00:00.000Z'
+    }
+  }
+
+  test('the canvas decides which runtimes exist: a node removed from it drops its runtime', () => {
+    const { host, listeners } = fakeHost()
+    const store = new SpadeStore(host)
+    store.start()
+    const project = (id: string) => ({ version: DOMAIN_RECORD_VERSION, id, name: id, rootPath: `/work/${id}`, createdAt: '2026-11-21T00:00:00.000Z' })
+    listeners.state!({
+      projects: [project('project'), project('other')],
+      selectedProjectId: null,
+      settings: { agentDefaults: null, conversationExpansion: { toolCall: true, diff: true, html: true, thinking: true, read: false }, paseoUrl: null },
+      paseo: { state: 'connected', url: 'ws://x/ws', error: null },
+      appVersion: '0.0.0',
+      problems: []
+    } as AppState)
+    listeners.canvas!(canvasOf())
+    for (const entry of [runtime('project', 'a'), runtime('project', 'b'), runtime('other', 'elsewhere')]) listeners.runtime!(entry)
+
+    // "Collapse into owner" removes b's node; the agent service stops reporting it.
+    listeners.canvas!(pushed(canvasOf({ nodes: [node('a')], edges: [] })))
+
+    expect([...store.getSnapshot().runtimes.keys()].sort()).toEqual(['a', 'elsewhere'])
   })
 })

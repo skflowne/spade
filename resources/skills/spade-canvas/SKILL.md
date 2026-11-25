@@ -83,8 +83,8 @@ spade spawn agent --prompt "…" --provider codex --model gpt-5 --mode auto
 ```
 
 Name the provider (and model, if it matters) yourself; `spade providers` lists them. Without `--provider`
-the user's saved default provider and its model apply, and nothing else is filled in: an unset `--mode` is
-left to Paseo. An agent takes no `--parent`, `--tree`, `--new-tree`, `--description`, or `--project`.
+the user's saved default provider and its model apply. Nothing else is filled in: with `--provider` and no
+`--model`, Paseo picks the model, and an unset `--mode` is left to Paseo. An agent takes no `--parent`, `--tree`, `--new-tree`, `--description`, or `--project`.
 
 **Message other agents with Paseo's own tools**, not through SPADE; the agents you start are reachable there
 by the id `spade spawn agent` printed.

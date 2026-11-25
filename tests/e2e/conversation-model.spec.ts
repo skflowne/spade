@@ -25,6 +25,7 @@ import {
   modeLabel,
   runTransitions
 } from '../../src/renderer/src/entities/agent/children'
+import { ProviderCatalog } from '../../src/renderer/src/entities/agent/providerCatalog'
 
 const at = '2026-01-01T00:00:00.000Z'
 
@@ -597,6 +598,49 @@ test.describe('Paseo children on their owner', () => {
     expect(modeLabel('plan', modes)).toBe('Plan')
     expect(modeLabel('bypass', modes)).toBe('bypass')
     expect(modeLabel('plan', null)).toBe('plan')
+  })
+
+  test('provider modes are read once per connection and read again after a daemon switch or a reconnection', async () => {
+    const answers: Array<(providers: string[]) => void> = []
+    const catalog = new ProviderCatalog(
+      () =>
+        new Promise((resolve) =>
+          answers.push((ids) =>
+            resolve({
+              ok: true,
+              providers: ids.map((id) => ({ id, label: id, available: true, status: 'ready', error: null, models: [], modes: [], defaultModeId: null }))
+            })
+          )
+        )
+    )
+    const settle = async (ids: string[]) => {
+      answers.at(-1)!(ids)
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    }
+    const listed = () => catalog.snapshot().providers.map((provider) => provider.id)
+
+    catalog.observe({ state: 'connected', url: 'ws://a/ws' })
+    catalog.load()
+    catalog.load()
+    await settle(['claude'])
+    catalog.load()
+    expect(answers).toHaveLength(1)
+    expect(listed()).toEqual(['claude'])
+
+    // The same daemon came back: read again.
+    catalog.observe({ state: 'reconnecting', url: 'ws://a/ws' })
+    catalog.observe({ state: 'connected', url: 'ws://a/ws' })
+    catalog.load()
+    expect(answers).toHaveLength(2)
+    // A switch while that read is out makes its answer stale.
+    catalog.observe({ state: 'connected', url: 'ws://b/ws' })
+    catalog.load()
+    expect(answers).toHaveLength(3)
+    await settle(['codex'])
+    answers[1](['claude'])
+    await new Promise((resolve) => setTimeout(resolve, 0))
+    expect(listed()).toEqual(['codex'])
+    expect(catalog.snapshot().status).toBe('ready')
   })
 })
 

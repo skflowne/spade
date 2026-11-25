@@ -72,6 +72,8 @@ export type AgentServiceOptions = {
 export type SpadeAgentService = AgentService & {
   // Resolves once every event received so far has been reconciled and written. For tests and scripts.
   whenIdle(): Promise<void>
+  // Every Paseo agent the service follows, sorted. For tests and scripts.
+  followedAgentIds(): string[]
 }
 
 const DEFAULT_TIMING: AgentServiceTiming = {
@@ -136,6 +138,9 @@ class PaseoAgentService implements SpadeAgentService {
   private readonly subagentLists = new Map<string, ProviderSubagentInfo[]>()
   private readonly subagentObservable = new Map<string, boolean>()
   private readonly paseoTitles = new Map<string, Set<string>>()
+  // When each agent's snapshot was last applied, so a listing never undoes what arrived after it started.
+  private readonly appliedAt = new Map<string, number>()
+  private applied = 0
 
   private pending = emptyPending()
   private readonly presentationDirty = new Set<string>()
@@ -223,6 +228,7 @@ class PaseoAgentService implements SpadeAgentService {
   async refreshConnection(): Promise<PaseoConnection> {
     const setting = this.gateway.getSettings().paseoUrl
     this.urlSetting = setting
+    this.providerCache = null
     await this.paseo.reconnect(this.resolveUrl(setting))
     // A reconnection sweeps by itself; this also covers a connection that was already up.
     if (this.running && this.paseo.connection().state === 'connected') {
@@ -585,9 +591,9 @@ class PaseoAgentService implements SpadeAgentService {
     this.canvases.set(projectId, event.canvas)
     this.rebuildIndex()
 
-    for (const nodeId of before) {
-      if (!this.nodes.has(nodeId)) this.dropRuntime(nodeId)
-    }
+    const removed = [...before].filter((nodeId) => !this.nodes.has(nodeId))
+    for (const nodeId of removed) this.dropRuntime(nodeId)
+    if (removed.length > 0) this.forgetUnfollowed()
     for (const entry of this.nodes.values()) {
       if (entry.projectId !== projectId) continue
       if (!before.has(entry.node.id)) {
@@ -614,6 +620,8 @@ class PaseoAgentService implements SpadeAgentService {
       case 'connection':
         this.emit({ type: 'connection', connection: event.connection })
         if (event.connection.state === 'connected') {
+          // Another daemon, or the same one restarted, may offer other providers.
+          this.providerCache = null
           this.request((pending) => (pending.sweep = true))
         } else {
           this.markAllStale()
@@ -716,6 +724,7 @@ class PaseoAgentService implements SpadeAgentService {
     }
     this.syncTimelineWatch()
     await this.writePresentations()
+    this.forgetUnfollowed()
   }
 
   // Full pass over every agent node and everything Paseo reports under them: run on start and on every
@@ -764,12 +773,16 @@ class PaseoAgentService implements SpadeAgentService {
     const visited = new Set(parentAgentIds)
     let frontier = parentAgentIds
     while (frontier.length > 0 && this.running) {
+      const listingStarted = this.applied
       const children = await this.paseo.listChildAgents(frontier)
+      // A child applied after the listing started (just spawned, or just reported) is newer than it.
+      const unlisted = (childId: string, listed: Set<string>): boolean =>
+        !listed.has(childId) && (this.appliedAt.get(childId) ?? 0) <= listingStarted
       for (const parentAgentId of frontier) {
         const listed = new Set(children.filter((child) => child.parentAgentId === parentAgentId).map((child) => child.id))
         const known = this.childIds.get(parentAgentId)
-        if (known && [...known].some((childId) => !listed.has(childId))) {
-          this.childIds.set(parentAgentId, new Set([...known].filter((childId) => listed.has(childId))))
+        if (known && [...known].some((childId) => unlisted(childId, listed))) {
+          this.childIds.set(parentAgentId, new Set([...known].filter((childId) => !unlisted(childId, listed))))
           this.updateAgentRuntimes(parentAgentId)
         }
       }
@@ -816,6 +829,38 @@ class PaseoAgentService implements SpadeAgentService {
     return this.nodesByAgent.get(agentId)?.find((entry) => entry.target.kind === 'agent' && entry.projectId === projectId)
   }
 
+  followedAgentIds(): string[] {
+    return [...this.followedSet()].sort()
+  }
+
+  // Agents shown on a canvas and, recursively, every Paseo child SPADE knows under them.
+  private followedSet(): Set<string> {
+    const followed = new Set<string>()
+    const pending = [...this.nodesByAgent.keys()]
+    for (let agentId = pending.pop(); agentId !== undefined; agentId = pending.pop()) {
+      if (followed.has(agentId)) continue
+      followed.add(agentId)
+      pending.push(...(this.childIds.get(agentId) ?? []))
+    }
+    return followed
+  }
+
+  // Drops what SPADE knows about agents no longer under any shown agent; they are read again if they return.
+  private forgetUnfollowed(): void {
+    const followed = this.followedSet()
+    for (const byAgent of [
+      this.snapshots,
+      this.states,
+      this.childIds,
+      this.paseoTitles,
+      this.appliedAt,
+      this.subagentLists,
+      this.subagentObservable
+    ]) {
+      for (const agentId of [...byAgent.keys()]) if (!followed.has(agentId)) byAgent.delete(agentId)
+    }
+  }
+
   // True for an agent shown on a canvas (or whose provider sub-agent is) and for every agent Paseo reports
   // under one, at any depth.
   private follows(agentId: string): boolean {
@@ -850,6 +895,8 @@ class PaseoAgentService implements SpadeAgentService {
   // Runtimes
 
   private applySnapshot(snapshot: PaseoAgentSnapshot): void {
+    this.applied += 1
+    this.appliedAt.set(snapshot.id, this.applied)
     this.snapshots.set(snapshot.id, snapshot)
     this.states.set(snapshot.id, 'live')
     if (snapshot.parentAgentId !== null) {
@@ -942,6 +989,8 @@ class PaseoAgentService implements SpadeAgentService {
       const snapshot = this.snapshots.get(childId)
       if (!snapshot || seen.has(childId) || seen.size >= OWNERSHIP_DEPTH_LIMIT) continue
       const own = this.agentNodeOn(childId, projectId)
+      // An archived child is done; only a node the user keeps for it still shows it.
+      if (snapshot.archivedAt !== null && !own) continue
       children.push(
         childAgentInfoOf({
           snapshot,
