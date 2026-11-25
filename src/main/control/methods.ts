@@ -185,7 +185,7 @@ export function createControlMethods(options: ControlMethodsOptions): ControlMet
   }
 
   // A pass-through to Paseo with the caller as parent. SPADE fills in only the provider Paseo requires,
-  // from the user's saved default; Paseo applies its own rules to everything left unset.
+  // from the user's saved default (with its model); Paseo applies its own rules to everything left unset.
   async function spawnAgent(input: Record<string, unknown>, caller: Caller): Promise<SpawnedAgent> {
     for (const [field, flag] of [
       ['placement', '--parent, --tree, --new-tree'],
@@ -202,14 +202,16 @@ export function createControlMethods(options: ControlMethodsOptions): ControlMet
     const title = optionalText(input, 'title')
     if (caller.actor.kind !== 'agent') throw new ControlFailure('identity-required', 'Only an agent can start an agent it owns')
     const defaults = gateway.getSettings().agentDefaults
-    const provider = optionalSetting(config, 'provider') ?? defaults?.provider
+    const named = optionalSetting(config, 'provider')
+    const provider = named ?? defaults?.provider
     if (provider === undefined) {
       throw new ControlFailure(
         'invalid-params',
         'Name the agent’s provider with --provider <id> (run `spade providers` to list them); the user has saved no default provider in SPADE'
       )
     }
-    const model = optionalSetting(config, 'model') ?? (defaults?.provider === provider && defaults.model ? defaults.model : undefined)
+    // The saved model comes only with the saved provider; a provider the caller names gets Paseo's choice.
+    const model = optionalSetting(config, 'model') ?? (named === undefined && defaults?.model ? defaults.model : undefined)
     const mode = optionalSetting(config, 'mode')
     const { agentId } = await agentService.spawnChildAgent(caller.actor.agentId, {
       prompt,

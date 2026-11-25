@@ -140,6 +140,8 @@ export class PaseoAdapter {
   private requestedTimelineIds: string[] = []
   private timelineQueue: Promise<void> = Promise.resolve()
   private readonly seenAgentIds = new Set<string>()
+  private requestedUrl: string | null = null
+  private reconnecting: Promise<void> = Promise.resolve()
 
   constructor(options: PaseoAdapterOptions) {
     this.currentUrl = options.url
@@ -233,12 +235,22 @@ export class PaseoAdapter {
     this.finishStart()
     await Promise.allSettled(observations.map((observation) => observation.release()))
     await driver.close()
-    this.setConnection('disconnected', null)
+    // A client started meanwhile owns the connection state now.
+    if (this.driver === null) this.setConnection('disconnected', null)
   }
 
   // Points the adapter at `url`. A different URL, or a connection that is not up, closes the client and
   // starts a new one; a connected adapter already on `url` is left alone. Resolves like `start`.
-  async reconnect(url: string): Promise<void> {
+  // Overlapping calls run one after the other, and the URL asked for last wins.
+  reconnect(url: string): Promise<void> {
+    this.requestedUrl = url
+    const run = this.reconnecting.then(() => this.reconnectNow())
+    this.reconnecting = run.catch(() => undefined)
+    return run
+  }
+
+  private async reconnectNow(): Promise<void> {
+    const url = this.requestedUrl ?? this.currentUrl
     if (this.disabled) {
       this.currentUrl = url
       this.current = { ...this.current, url }

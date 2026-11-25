@@ -1,7 +1,8 @@
-import type { AgentRuntime } from '@shared/agents'
-import type { CanvasCommand, CanvasCommandResponse } from '@shared/commands'
-import type { AppSettings, Canvas } from '@shared/domain'
-import type { AppState, Failure, Result, SpadeHostBridge } from '@shared/ipc'
+// Relative shared imports: this module is also loaded by plain Playwright specs, which do not resolve `@shared`.
+import type { AgentRuntime } from '../../../shared/agents'
+import type { CanvasCommand, CanvasCommandResponse } from '../../../shared/commands'
+import type { AppSettings, Canvas } from '../../../shared/domain'
+import type { AppState, Failure, Result, SpadeHostBridge } from '../../../shared/ipc'
 import { runTransitions } from '../entities/agent/children'
 import { shareCanvas, shareRecords } from './sharing'
 
@@ -261,7 +262,19 @@ export class SpadeStore {
     if (canvas === previous) return
     const canvases = new Map(this.state.canvases)
     canvases.set(canvas.projectId, canvas)
-    this.update({ canvases })
+    // The canvas is the source of truth for which agent nodes exist: the agent service stops reporting a
+    // removed node without saying so, so its last runtime goes with it here.
+    const present = new Set(canvas.nodes.map((node) => node.id))
+    const gone = [...this.state.runtimes.values()].filter(
+      (runtime) => runtime.projectId === canvas.projectId && !present.has(runtime.nodeId)
+    )
+    if (gone.length === 0) {
+      this.update({ canvases })
+      return
+    }
+    const runtimes = new Map(this.state.runtimes)
+    for (const runtime of gone) runtimes.delete(runtime.nodeId)
+    this.update({ canvases, runtimes })
   }
 
   private fail(what: string, failure: Failure): void {

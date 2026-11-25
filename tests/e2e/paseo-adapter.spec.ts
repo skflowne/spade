@@ -119,7 +119,11 @@ class FakeDriver {
     this.record('connect')
     if (this.autoConnect) this.setStatus({ status: 'connected' })
   }
-  close = async () => { this.record('close') }
+  closeDelayMs = 0
+  close = async () => {
+    this.record('close')
+    if (this.closeDelayMs > 0) await new Promise((resolve) => setTimeout(resolve, this.closeDelayMs))
+  }
   subscribeConnectionStatus = (listener: (status: ConnectionState) => void) => {
     this.statusListener = listener
     return () => { this.statusListener = null }
@@ -368,6 +372,37 @@ test('switches to another daemon URL with a new client, and reconnects only when
   const disabled = new PaseoAdapter({ url: URL_UNDER_TEST, disabled: true, createDriver: () => { throw new Error('never') } })
   await disabled.reconnect(other)
   expect(disabled.connection()).toEqual({ state: 'disabled', url: other, error: null })
+})
+
+test('overlapping reconnects run one after the other, the latest URL wins, and a slow old client never overrides the new one', async () => {
+  const drivers: Array<{ url: string; driver: FakeDriver }> = []
+  const adapter = new PaseoAdapter({
+    url: URL_UNDER_TEST,
+    createDriver: (url) => {
+      const driver = new FakeDriver()
+      driver.agents.set('agent-1', agentRecord('agent-1'))
+      drivers.push({ url, driver })
+      return driver as unknown as PaseoDaemonDriver
+    }
+  })
+  await adapter.start()
+  drivers[0].driver.closeDelayMs = 200
+  const other = 'ws://127.0.0.1:17999/ws'
+
+  await Promise.all([adapter.reconnect(other), adapter.reconnect(other)])
+
+  expect(adapter.connection()).toEqual({ state: 'connected', url: other, error: null })
+  const live = drivers.filter(({ driver }) => driver.callsOf('close').length === 0)
+  expect(live.map(({ url }) => url)).toEqual([other])
+  expect((await adapter.getAgent('agent-1'))?.id).toBe('agent-1')
+
+  // Two quick saves: the second URL is where the adapter ends up.
+  const third = 'ws://127.0.0.1:18000/ws'
+  live[0].driver.closeDelayMs = 100
+  await Promise.all([adapter.reconnect(URL_UNDER_TEST), adapter.reconnect(third)])
+  expect(adapter.connection()).toEqual({ state: 'connected', url: third, error: null })
+  expect(drivers.filter(({ driver }) => driver.callsOf('close').length === 0).map(({ url }) => url)).toEqual([third])
+  await adapter.stop()
 })
 
 test('lists providers for a directory after discovery settles', async () => {

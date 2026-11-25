@@ -377,7 +377,7 @@ test.describe('commands', () => {
     expect(agents.spawned.at(-1)).toEqual({ callerAgentId: 'agent-child', input: { prompt: 'Dig', provider: 'claude' } })
   })
 
-  test('an agent spawn without a provider uses the user’s saved default provider and its model, never its mode', async () => {
+  test('an agent spawn without a provider uses the user’s saved default provider and its model, never its mode; a named provider gets no model', async () => {
     const { info, gateway, agents } = await world()
     const spawn = (config: Record<string, unknown>) => call(info, 'spawn', { entityType: 'agent', config }, 'agent-lead')
 
@@ -394,7 +394,8 @@ test.describe('commands', () => {
     await spawn({ prompt: 'Review', model: 'sonnet', mode: null })
     expect(agents.spawned.map((entry) => entry.input)).toEqual([
       { prompt: 'Review', provider: 'claude', model: 'opus' },
-      { prompt: 'Review', provider: 'claude', model: 'opus' },
+      // Named by the caller, even the saved provider: Paseo picks the model.
+      { prompt: 'Review', provider: 'claude' },
       { prompt: 'Review', provider: 'codex' },
       { prompt: 'Review', provider: 'claude', model: 'sonnet' }
     ])
