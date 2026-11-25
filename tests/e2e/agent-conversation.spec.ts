@@ -82,6 +82,10 @@ async function showAgent(session: Session, nodeId: string, conversation: Convers
   await setTimeline(session.app, nodeId, { epoch: 'e1', items: conversation, olderCursor: null })
 }
 
+function agentsPane(page: Page, title: string): Locator {
+  return page.getByRole('region', { name: `Agents of ${title}` })
+}
+
 async function activate(page: Page, title: string): Promise<Locator> {
   const body = nodeBody(page, title)
   await nodeHeader(page, title).click({ position: { x: 60, y: 10 } })
@@ -478,7 +482,8 @@ test('permissions, prompts with shared context, interrupting, and provider sub-a
     const spec = await execute(page, { type: 'spawnChild', sourceNodeId: nodeId, origin: 'spawned', node: { entityType: 'note', config: { body: 'Spec text' }, title: 'Spec' } })
     const elsewhere = await execute(page, { type: 'startTree', node: { entityType: 'note', config: { body: '' }, title: 'Elsewhere' } })
     if (!spec.ok || !elsewhere.ok) throw new Error('seeding failed')
-    await setReply(app, 'agents.openProviderSubagent', { ok: true, nodeId: spec.nodeId! })
+    // The opened node is centered; answering with the agent's own node keeps it, and its pane, in view.
+    await setReply(app, 'agents.openProviderSubagent', { ok: true, nodeId })
     await showAgent(
       session,
       nodeId,
@@ -554,12 +559,14 @@ test('permissions, prompts with shared context, interrupting, and provider sub-a
     await expect.poll(async () => (await agentCalls(app, 'agents.interrupt')).length).toBe(2)
 
     await activate(page, 'Agent')
-    await body.getByRole('button', { name: /Sub-agents/ }).click()
-    const entry = body.getByRole('listitem', { name: 'Sub-agent Explore' })
+    // Sub-agents are listed in the node's agents pane, not in its conversation.
+    await canvasNode(page, 'Agent').getByRole('button', { name: /^Agents\s*1$/ }).click()
+    const entry = agentsPane(page, 'Agent').getByRole('region', { name: 'Provider sub-agents' }).getByRole('listitem', { name: 'Sub-agent Explore' })
     await expect(entry).toContainText('Explore the parser')
     await entry.getByRole('button', { name: 'Open as node' }).click()
     await expect.poll(() => agentCalls(app, 'agents.openProviderSubagent')).toEqual([[nodeId, 'sub-1']])
     // The sub-agent's tool call links to the same action.
+    await activate(page, 'Agent')
     await body.locator('[data-tool-kind="subagent"]').getByRole('button', { name: 'Open as node' }).click()
     await expect.poll(async () => (await agentCalls(app, 'agents.openProviderSubagent')).length).toBe(2)
 
@@ -596,7 +603,30 @@ test('an owner lists its Paseo children: what waits on the user surfaces, and ea
     await execute(page, { type: 'expandNode', nodeId })
 
     const body = await activate(page, 'Lead')
-    const list = body.getByRole('region', { name: 'Child agents' })
+    // The node is its conversation: the agents pane is closed until asked for, and opening it beside the node
+    // resizes neither the node nor its conversation.
+    const pane = agentsPane(page, 'Lead')
+    await expect(pane).toHaveCount(0)
+    await expect(body.getByRole('region', { name: 'Child agents' })).toHaveCount(0)
+    const nodeBox = (await canvasNode(page, 'Lead').boundingBox())!
+    const bodyBox = (await body.boundingBox())!
+    expect(bodyBox.width).toBeGreaterThan(nodeBox.width - 4)
+    const toggle = canvasNode(page, 'Lead').getByRole('button', { name: /^Agents\s*2$/ })
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    // Something waits on the user: the closed pane's toggle says so.
+    await expect(toggle).toHaveClass(/agents-toggle--attention/)
+    const sizeBefore = (await readCanvas(page)).nodes.find((node) => node.id === nodeId)!.size
+    await status.getByRole('button', { name: '1 child request' }).click()
+    await expect(pane).toBeVisible()
+    await expect(toggle).toHaveAttribute('aria-expanded', 'true')
+    expect(await canvasNode(page, 'Lead').boundingBox()).toEqual(nodeBox)
+    expect((await body.boundingBox())!.width).toBe(bodyBox.width)
+    const paneBox = (await pane.boundingBox())!
+    expect(paneBox.x).toBeGreaterThanOrEqual(nodeBox.x + nodeBox.width)
+    expect(Math.abs(paneBox.height - nodeBox.height)).toBeLessThan(4)
+    expect((await readCanvas(page)).nodes.find((node) => node.id === nodeId)!.size).toEqual(sizeBefore)
+
+    const list = pane.getByRole('region', { name: 'Child agents' })
     const workerRow = list.getByRole('listitem', { name: 'Agent Worker' })
     await expect(workerRow).toContainText('needs attention')
     // A collapsed child's own children are listed under it.
@@ -616,6 +646,7 @@ test('an owner lists its Paseo children: what waits on the user surfaces, and ea
     await expect(workerMode.locator('option')).toHaveText(['Default', 'Plan'])
     await workerMode.selectOption('default')
     await expect.poll(() => agentCalls(app, 'agents.setMode')).toEqual([['worker', 'default']])
+    // The owner's own mode stays on its toolbar.
     const ownMode = body.getByRole('combobox', { name: 'Mode', exact: true })
     await expect(ownMode).toHaveValue('default')
     await ownMode.selectOption('plan')
@@ -645,10 +676,18 @@ test('an owner lists its Paseo children: what waits on the user surfaces, and ea
     await reviewerRow.getByRole('button', { name: 'Go to node' }).click()
     await expectCenteredInView(page, canvasNode(page, 'Reviewer'))
 
+    // Closing the pane leaves the owner exactly as it was.
+    await pane.getByRole('button', { name: 'Close the agents pane' }).click()
+    await expect(pane).toHaveCount(0)
+    await expect(toggle).toHaveAttribute('aria-expanded', 'false')
+    expect((await readCanvas(page)).nodes.find((node) => node.id === nodeId)!.size).toEqual(sizeBefore)
+
     // Collapsing it removes its node; its owner lists it again.
     await nodeMenu(page, 'Reviewer', 'Collapse into owner')
     await expect.poll(async () => (await readCanvas(page)).nodes.map((node) => node.title)).toEqual(['Lead'])
     await showAgent(session, nodeId, [], lead([{ ...worker, children: [helper] }, reviewer]))
+    await fitAll(page)
+    await toggle.click()
     await expect(reviewerRow.getByRole('button', { name: 'Expand' })).toBeVisible()
 
     // A collapsed child that finishes a run waits on the user until it is seen.

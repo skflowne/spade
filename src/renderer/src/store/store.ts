@@ -20,8 +20,8 @@ export type Notice = {
 // How long an info notice stays before it dismisses itself.
 export const INFO_NOTICE_MS = 8_000
 
-// Renderer-only choices that last until the app quits.
-export type SessionPreferences = { minimap: boolean }
+// Renderer-only choices that last until the app quits. `openDrawers`: nodes whose side drawer is open.
+export type SessionPreferences = { minimap: boolean; openDrawers: ReadonlySet<string> }
 
 export type StoreState = {
   app: AppState | null
@@ -47,7 +47,7 @@ export class SpadeStore {
     runtimes: new Map(),
     finishedAgents: new Set(),
     notices: [],
-    session: { minimap: true }
+    session: { minimap: true, openDrawers: new Set() }
   }
   private readonly listeners = new Set<() => void>()
   private readonly loadingCanvases = new Set<string>()
@@ -184,6 +184,14 @@ export class SpadeStore {
 
   setSession(patch: Partial<SessionPreferences>): void {
     this.update({ session: { ...this.state.session, ...patch } })
+  }
+
+  setDrawerOpen(nodeId: string, open: boolean): void {
+    if (this.state.session.openDrawers.has(nodeId) === open) return
+    const openDrawers = new Set(this.state.session.openDrawers)
+    if (open) openDrawers.add(nodeId)
+    else openDrawers.delete(nodeId)
+    this.setSession({ openDrawers })
   }
 
   // --- Internals ---

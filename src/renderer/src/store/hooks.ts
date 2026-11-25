@@ -92,6 +92,10 @@ export function useNotices(): readonly Notice[] {
   return useStoreState((state) => state.notices)
 }
 
+export function useDrawerOpen(nodeId: string): boolean {
+  return useStoreState((state) => state.session.openDrawers.has(nodeId))
+}
+
 export function useSession(): SessionPreferences {
   return useStoreState((state) => state.session)
 }

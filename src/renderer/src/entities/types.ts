@@ -57,6 +57,19 @@ export type EntityStatusProps<Config = unknown> = {
   project: Project
   // Marks the whole node as waiting for the user, visibly even while collapsed.
   setAttention(attention: boolean): void
+  // The entity's side drawer (EntityRendererDefinition.Drawer), opened and closed from the header.
+  drawerOpen: boolean
+  setDrawerOpen(open: boolean): void
+}
+
+// A pane attached outside the node's right edge, at the node's height, collapsed by default. It never resizes the
+// node or its body; whether it is open is session state per node.
+export type EntityDrawerProps<Config = unknown> = {
+  node: CanvasNode
+  config: Config
+  project: Project
+  host: EntityHost
+  close(): void
 }
 
 export type EntityCreateFormProps = {
@@ -90,6 +103,8 @@ export type EntityRendererDefinition<Config = unknown> = {
   // Omitted: the entity cannot be created from the New node menu or Spawn connected….
   CreateForm?: ComponentType<EntityCreateFormProps>
   Status?: ComponentType<EntityStatusProps<Config>>
+  // Omitted: the node has no side drawer.
+  Drawer?: ComponentType<EntityDrawerProps<Config>>
   // Entity-specific entries shown above the generic entries in the node menu.
   menuActions?(context: EntityMenuContext<Config>): EntityMenuAction[]
 }

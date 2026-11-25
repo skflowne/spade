@@ -8,7 +8,6 @@ import type { AnnotateHandler, SubmitHandler } from '../../rich'
 import { useAgentRuntime, useAppState } from '../../store/hooks'
 import type { EntityBodyProps } from '../types'
 import { ArtifactLayer } from './ArtifactLayer'
-import { ChildAgents } from './ChildAgents'
 import { Composer } from './Composer'
 import { ConversationContext, type ConversationServices } from './ConversationContext'
 import { ConversationView } from './ConversationView'
@@ -18,7 +17,7 @@ import { ExpansionControl } from './ExpansionControl'
 import { ModeSelect } from './ModeSelect'
 import { Permissions } from './Permissions'
 import { agentStatusOf, lastAssistantExcerpt, promptBlockReason, runtimeIdentity } from './status'
-import { Subagents } from './Subagents'
+import { openSubagentNode } from './Subagents'
 import { createAnswerSubmitter } from './submission'
 import { useTimeline } from './useTimeline'
 
@@ -88,14 +87,8 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
   )
 
   const openSubagent = useCallback(
-    async (subagentId: string): Promise<void> => {
-      const result = await window.spadeHost.agents
-        .openProviderSubagent(latest.current.nodeId, subagentId)
-        .catch((reason: unknown) => ({ ok: false as const, error: { code: 'failed', message: String(reason) } }))
-      if (result.ok) host.focusNode(result.nodeId)
-      else notify(`Could not open the sub-agent: ${result.error.message}`)
-    },
-    [host, notify]
+    (subagentId: string): Promise<void> => openSubagentNode(latest.current.nodeId, subagentId, host),
+    [host]
   )
 
   const canvasActions = useCanvasActions()
@@ -166,8 +159,6 @@ function AgentConversation({ node, config, project, host }: EntityBodyProps<Agen
             error={timeline.error}
             onRetry={timeline.reload}
           />
-          {runtime ? <ChildAgents ownerNodeId={node.id} children={runtime.children} host={host} /> : null}
-          {subagentList ? <Subagents subagents={subagentList} onOpen={openSubagent} /> : null}
           <ConversationView
             nodeId={node.id}
             items={items}

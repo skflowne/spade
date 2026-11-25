@@ -4,6 +4,7 @@ import { defineEntityRenderer } from '../registry'
 import type { EntityMenuAction, EntityMenuContext } from '../types'
 import { AgentBody } from './AgentBody'
 import { AgentCreateForm } from './AgentCreateForm'
+import { AgentsPane } from './AgentsPane'
 import { AgentStatus } from './AgentStatus'
 import { agentNodeHandles } from './nodeHandles'
 import { promptBlockReason } from './status'
@@ -65,5 +66,6 @@ export const agentRenderer = defineEntityRenderer<AgentConfig>({
   Body: AgentBody,
   Status: AgentStatus,
   CreateForm: AgentCreateForm,
+  Drawer: AgentsPane,
   menuActions
 })

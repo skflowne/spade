@@ -1,9 +1,9 @@
-import { useEffect, useId, useMemo, useState } from 'react'
+import { useState } from 'react'
 import type { ChildAgentInfo } from '@shared/agents'
 import { useFinishedAgents, useSpadeStore } from '../../store/hooks'
 import { StatusBadge } from '../../ui/StatusBadge'
 import type { EntityHost } from '../types'
-import { childAttention, childTitle, needsUser } from './children'
+import { childTitle } from './children'
 import { ModeSelect } from './ModeSelect'
 import { Permissions } from './Permissions'
 import { agentStatusOf } from './status'
@@ -14,41 +14,21 @@ type ChildAgentsProps = {
   host: Pick<EntityHost, 'focusNode' | 'notify'>
 }
 
-// The agents Paseo reports as this agent's children (SPADE-38). Collapsed by default: listed here with live
-// status, answerable and switchable without a node of their own. A collapsed child's own children are listed
-// under it, so whatever waits on the user surfaces on the nearest expanded owner.
+// The agents Paseo reports as this agent's children, in the agent's side pane. Collapsed by default: listed here
+// with live status, answerable and switchable without a node of their own. A collapsed child's own children are
+// listed under it, so whatever waits on the user surfaces on the nearest expanded owner.
 export function ChildAgents({ ownerNodeId, children, host }: ChildAgentsProps): React.JSX.Element | null {
-  const finished = useFinishedAgents()
-  const waiting = needsUser(useMemo(() => childAttention(children, finished), [children, finished]))
-  const [open, setOpen] = useState(waiting)
-  const listId = useId()
-  useEffect(() => {
-    if (waiting) setOpen(true)
-  }, [waiting])
   if (children.length === 0) return null
   return (
-    <section className="agent-children" aria-label="Child agents">
-      <button
-        type="button"
-        className="agent-subagents__toggle"
-        aria-expanded={open}
-        aria-controls={listId}
-        onClick={() => setOpen(!open)}
-      >
-        <span className="agent-pane__chevron" aria-hidden="true">
-          {open ? '▾' : '▸'}
-        </span>
-        <span className="agent-pane__label">Child agents</span>
-        <span className="agent-subagents__count">{children.length}</span>
-        {waiting ? <span className="cr-badge cr-badge--warning">needs you</span> : null}
-      </button>
-      {open ? (
-        <ul id={listId} className="agent-children__list">
-          {children.map((child) => (
-            <ChildRow key={child.agentId} child={child} ownerNodeId={ownerNodeId} nested={false} host={host} />
-          ))}
-        </ul>
-      ) : null}
+    <section className="agents-pane__section" aria-label="Child agents">
+      <h4 className="agents-pane__heading">
+        Child agents <span className="agents-pane__count">{children.length}</span>
+      </h4>
+      <ul className="agent-children__list">
+        {children.map((child) => (
+          <ChildRow key={child.agentId} child={child} ownerNodeId={ownerNodeId} nested={false} host={host} />
+        ))}
+      </ul>
     </section>
   )
 }
@@ -93,14 +73,30 @@ function ChildRow({
 
   return (
     <li className="agent-child" aria-label={child.title === null ? title : `Agent ${child.title}`}>
-      <div className="agent-child__head">
-        <div className="agent-child__text">
-          <p className="agent-child__title">{title}</p>
-          <p className="agent-child__identity mono">{[child.provider, child.model].filter(Boolean).join(' · ')}</p>
-        </div>
+      <div className="agent-child__line">
+        <p className="agent-child__title" title={title}>
+          {title}
+        </p>
         <StatusBadge status={agentStatusOf(child)} />
         {finished ? <span className="cr-badge cr-badge--success">finished</span> : null}
         {child.nodeId !== null ? <span className="cr-badge">expanded</span> : null}
+        {finished ? (
+          <button type="button" className="cr-button cr-button--ghost agent-child__action" onClick={() => store.acknowledgeFinished(child.agentId)}>
+            Mark seen
+          </button>
+        ) : null}
+        {child.nodeId !== null ? (
+          <button type="button" className="cr-button agent-child__action" onClick={() => host.focusNode(child.nodeId!)}>
+            Go to node
+          </button>
+        ) : nested ? null : (
+          <button type="button" className="cr-button agent-child__action" disabled={expanding} onClick={() => void expand()}>
+            {expanding ? 'Expanding…' : 'Expand'}
+          </button>
+        )}
+      </div>
+      <div className="agent-child__line">
+        <span className="agent-child__detail mono">{[child.provider, child.model].filter(Boolean).join(' · ')}</span>
         <ModeSelect
           agentId={child.agentId}
           provider={child.provider}
@@ -109,22 +105,6 @@ function ChildRow({
           blocked={blocked}
           notify={host.notify}
         />
-        <div className="agent-child__actions">
-          {finished ? (
-            <button type="button" className="cr-button cr-button--ghost" onClick={() => store.acknowledgeFinished(child.agentId)}>
-              Mark seen
-            </button>
-          ) : null}
-          {child.nodeId !== null ? (
-            <button type="button" className="cr-button" onClick={() => host.focusNode(child.nodeId!)}>
-              Go to node
-            </button>
-          ) : nested ? null : (
-            <button type="button" className="cr-button" disabled={expanding} onClick={() => void expand()}>
-              {expanding ? 'Expanding…' : 'Expand'}
-            </button>
-          )}
-        </div>
       </div>
       {child.lastError ? <p className="agent-child__error">{child.lastError}</p> : null}
       {child.nodeId === null ? (

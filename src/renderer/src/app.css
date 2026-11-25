@@ -1062,6 +1062,27 @@ legend {
   font-variant-numeric: tabular-nums;
 }
 
+/* A side drawer hangs outside the node's right edge, at the node's height; the node itself never resizes. */
+.spade-node__drawer {
+  position: absolute;
+  top: 0;
+  left: calc(100% + var(--cr-space-3));
+  width: 360px;
+  height: 100%;
+  min-height: 320px;
+  overflow: hidden;
+  border: var(--cr-border);
+  border-radius: var(--cr-radius-panel);
+  background: var(--panel);
+  box-shadow: var(--cr-shadow-2);
+  cursor: auto;
+}
+
+/* An open drawer stays above neighbouring nodes, selected ones included (React Flow lifts those by 1000). */
+.react-flow__node:has(> .spade-node__drawer) {
+  z-index: 1500 !important;
+}
+
 .spade-node__body {
   position: relative;
   flex: 1;
