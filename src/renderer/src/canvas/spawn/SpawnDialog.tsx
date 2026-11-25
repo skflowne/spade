@@ -4,7 +4,8 @@ import { entities, entityRenderers } from '../../entities'
 import type { SpawnRequest } from '../../entities/types'
 import { Dialog } from '../../ui/Dialog'
 import { useCanvasActions, useCanvasData } from '../CanvasContext'
-import { defaultTargetChoice, spawnTargetOf, TargetPicker, type TargetChoice } from './TargetPicker'
+import { defaultTargetChoice, spawnCommand, spawnTargetOf, type TargetChoice } from './spawnCommand'
+import { TargetPicker } from './TargetPicker'
 
 export type SpawnDialogMode =
   // New node from the toolbar (entityType set, no source) or Spawn connected… from a node (source set).
@@ -20,31 +21,6 @@ type SpawnDialogProps = {
   onCreate(command: CanvasCommand): Promise<CanvasCommandResponse>
   // Escape, Cancel, or Close while the node is being created (the creation still completes).
   onCancel(): void
-}
-
-// Builds the command for a seed and a target. Without a source, the picked node is the source.
-export function spawnCommand(input: {
-  seed: NodeSeed
-  sourceNodeId: string | null
-  choice: TargetChoice
-  origin: SpawnRequest['origin']
-  sourceArtifact?: SpawnRequest['sourceArtifact']
-}): CanvasCommand | null {
-  const target = spawnTargetOf(input.choice, input.sourceNodeId)
-  if (target === null) return null
-  if (input.sourceNodeId === null) {
-    if (target.kind === 'new-tree') return { type: 'startTree', node: input.seed }
-    const anchor = target.kind === 'child' ? target.parentNodeId : target.nodeId
-    return { type: 'spawnChild', sourceNodeId: anchor, node: input.seed, target, origin: input.origin }
-  }
-  return {
-    type: 'spawnChild',
-    sourceNodeId: input.sourceNodeId,
-    node: input.seed,
-    target,
-    origin: input.origin,
-    ...(input.sourceArtifact ? { sourceArtifact: input.sourceArtifact } : {})
-  }
 }
 
 export function SpawnDialog({ mode, open, onCreate, onCancel }: SpawnDialogProps): React.JSX.Element {
@@ -74,6 +50,8 @@ export function SpawnDialog({ mode, open, onCreate, onCancel }: SpawnDialogProps
 
   const spawn = async (seed: NodeSeed): Promise<void> => {
     const command = spawnCommand({
+      canvas: actions.getCanvas(),
+      entities,
       seed,
       sourceNodeId,
       choice,
@@ -158,6 +136,7 @@ export function SpawnDialog({ mode, open, onCreate, onCancel }: SpawnDialogProps
       <TargetPicker
         canvas={canvas}
         sourceNodeId={sourceNodeId}
+        entityType={entityType}
         value={choice}
         onChange={setChoice}
         onPickOnCanvas={() => void pickOnCanvas()}

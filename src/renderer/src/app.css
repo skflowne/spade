@@ -465,6 +465,11 @@ legend {
   gap: var(--cr-space-2);
 }
 
+.target-picker__note {
+  color: var(--muted);
+  font-size: var(--cr-text-sm);
+}
+
 .node-chooser {
   display: grid;
   grid-template-columns: 1fr auto;
@@ -638,7 +643,20 @@ legend {
   border-top: var(--cr-border);
 }
 
+.paseo-status__row {
+  display: flex;
+  align-items: center;
+  gap: var(--cr-space-2);
+}
+
+.paseo-status__refresh:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
 .paseo-status__toggle {
+  flex: 1;
+  min-width: 0;
   display: flex;
   align-items: center;
   gap: var(--cr-space-4);
@@ -1042,6 +1060,27 @@ legend {
   color: var(--accent);
   font: 700 var(--cr-text-xs) var(--mono);
   font-variant-numeric: tabular-nums;
+}
+
+/* A side drawer hangs outside the node's right edge, at the node's height; the node itself never resizes. */
+.spade-node__drawer {
+  position: absolute;
+  top: 0;
+  left: calc(100% + var(--cr-space-3));
+  width: 360px;
+  height: 100%;
+  min-height: 320px;
+  overflow: hidden;
+  border: var(--cr-border);
+  border-radius: var(--cr-radius-panel);
+  background: var(--panel);
+  box-shadow: var(--cr-shadow-2);
+  cursor: auto;
+}
+
+/* An open drawer stays above neighbouring nodes, selected ones included (React Flow lifts those by 1000). */
+.react-flow__node:has(> .spade-node__drawer) {
+  z-index: 1500 !important;
 }
 
 .spade-node__body {

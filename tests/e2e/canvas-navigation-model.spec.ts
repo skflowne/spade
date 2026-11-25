@@ -1,5 +1,11 @@
 import { expect, test } from '@playwright/test'
-import { activityItems, recentAgentChanges, relativeTime, RECENT_AGENT_CHANGE_MS } from '../../src/renderer/src/canvas/model/activityView'
+import {
+  activityItems,
+  agentDirectory,
+  recentAgentChanges,
+  relativeTime,
+  RECENT_AGENT_CHANGE_MS
+} from '../../src/renderer/src/canvas/model/activityView'
 import { archivedEntries, archivedEntryOf, newlyArchived } from '../../src/renderer/src/canvas/model/archivedNodes'
 import { canvasIndex } from '../../src/renderer/src/canvas/model/canvasIndex'
 import {
@@ -13,6 +19,7 @@ import { detailForZoom, overviewTitleScale, PREVIEW_ZOOM_THRESHOLD } from '../..
 import { relatedTarget } from '../../src/renderer/src/canvas/model/relatedNodes'
 import { searchNodes, type SearchCandidate } from '../../src/renderer/src/canvas/model/search'
 import { canvasShortcut, type KeyChord } from '../../src/renderer/src/canvas/model/shortcuts'
+import type { AgentRuntime, ChildAgentInfo } from '../../src/shared/agents'
 import {
   DOMAIN_RECORD_VERSION,
   createEmptyCanvas,
@@ -176,7 +183,7 @@ test.describe('activity presentation', () => {
       ['2', 'Lead agent', 'doc'],
       ['1', 'You', 'doc']
     ])
-    expect(items[2].actor).toEqual({ kind: 'agent', label: 'Lead agent', nodeId: 'lead', entityType: 'agent', exists: true })
+    expect(items[2].actor).toEqual({ kind: 'agent', label: 'Lead agent', agentId: 'paseo-lead', nodeId: 'lead', entityType: 'agent', exists: true })
     expect(items[0].actor).toMatchObject({ kind: 'agent', exists: false })
   })
 
@@ -192,7 +199,13 @@ test.describe('activity presentation', () => {
     ])
     const { changes, expiresAt } = recentAgentChanges(withNewer, at + 60_000)
     expect([...changes.keys()].sort()).toEqual(['doc', 'old'])
-    expect(changes.get('doc')).toEqual({ agentNodeId: 'lead', agentLabel: 'Lead agent', at: '2026-11-21T10:04:00.000Z', summary: 'Renamed doc' })
+    expect(changes.get('doc')).toEqual({
+      agentId: 'paseo-lead',
+      agentNodeId: 'lead',
+      agentLabel: 'Lead agent',
+      at: '2026-11-21T10:04:00.000Z',
+      summary: 'Renamed doc'
+    })
     expect(expiresAt).toBe(at + RECENT_AGENT_CHANGE_MS)
 
     expect(recentAgentChanges(withNewer, at + RECENT_AGENT_CHANGE_MS + 4 * 60_000).changes.size).toBe(0)
@@ -204,6 +217,89 @@ test.describe('activity presentation', () => {
       entry('6', '2026-11-21T10:05:00.000Z', agentActor('lead'), ['doc', 'lead'], 'Spawned doc under Lead agent')
     ])
     expect([...recentAgentChanges(spawned, at).changes.keys()]).toEqual(['doc'])
+  })
+
+  test('shows an agent acting while collapsed by the agent, and marks what it changed but not its owner', () => {
+    const child = (agentId: string, title: string | null, children: ChildAgentInfo[] = []): ChildAgentInfo => ({
+      agentId,
+      title,
+      provider: 'claude',
+      model: null,
+      mode: null,
+      status: 'running',
+      activity: 'running',
+      resourceState: 'live',
+      pendingPermissions: [],
+      lastError: null,
+      updatedAt: '2026-11-21T10:00:00.000Z',
+      nodeId: null,
+      children
+    })
+    const runtime = (nodeId: string, agentId: string, title: string | null, children: ChildAgentInfo[], projectId = 'project'): AgentRuntime => ({
+      projectId,
+      nodeId,
+      agentId,
+      resourceState: 'live',
+      parentAgentId: null,
+      provider: 'claude',
+      model: null,
+      mode: null,
+      title,
+      status: 'idle',
+      activity: 'idle',
+      cwd: null,
+      pendingPermissions: [],
+      providerSubagents: [],
+      children,
+      lastError: null,
+      updatedAt: '2026-11-21T10:00:00.000Z'
+    })
+    const agents = agentDirectory(
+      [
+        runtime('lead', 'paseo-lead', 'Lead', [child('worker', 'Worker', [child('helper', null)]), child('anon', null)]),
+        runtime('other', 'paseo-other', 'Elsewhere', [child('foreign', 'Foreign')], 'another-project')
+      ],
+      'project'
+    )
+    expect([...agents.titles]).toEqual([['paseo-lead', 'Lead'], ['worker', 'Worker']])
+    expect([...agents.owners]).toEqual([['worker', 'lead'], ['helper', 'lead'], ['anon', 'lead']])
+
+    const collapsed = (agentId: string): Actor => ({ kind: 'agent', nodeId: null, agentId })
+    const log = canvasOf(canvas.nodes, [], [
+      entry('7', '2026-11-21T10:05:00.000Z', collapsed('worker'), ['doc', 'lead'], 'Spawned doc under Lead agent'),
+      entry('8', '2026-11-21T10:06:00.000Z', collapsed('helper'), ['old']),
+      entry('9', '2026-11-21T10:07:00.000Z', collapsed('unknown'), ['doc'])
+    ])
+    const items = activityItems(log, { agents })
+    expect(items.map((item) => [item.id, item.actor.label, item.targetNodeId])).toEqual([
+      ['9', 'Agent unknown', 'doc'],
+      ['8', 'Agent helper', null],
+      ['7', 'Worker', 'doc']
+    ])
+    expect(items[2].actor).toEqual({ kind: 'agent', label: 'Worker', agentId: 'worker', nodeId: null, entityType: null, exists: false })
+    // Without the directory, the log still reads.
+    expect(activityItems(log)[2].actor.label).toBe('Agent worker')
+
+    const { changes } = recentAgentChanges(log, Date.parse('2026-11-21T10:08:00.000Z'), agents)
+    expect([...changes.keys()].sort()).toEqual(['doc', 'old'])
+    expect(changes.get('doc')).toMatchObject({ agentId: 'unknown', agentNodeId: null, agentLabel: 'Agent unknown' })
+    expect(changes.get('old')).toMatchObject({ agentId: 'helper', agentLabel: 'Agent helper' })
+  })
+
+  test('finds a collapsed agent that was expanded since by its node', () => {
+    const expanded = canvasOf(
+      [...canvas.nodes, node('worker-node', { entityType: 'agent', title: 'Worker node', resourceRef: { provider: 'paseo', kind: 'agent', id: 'worker' } })],
+      [],
+      [entry('10', '2026-11-21T10:05:00.000Z', { kind: 'agent', nodeId: null, agentId: 'worker' }, ['doc'])]
+    )
+    expect(activityItems(expanded)[0].actor).toEqual({
+      kind: 'agent',
+      label: 'Worker node',
+      agentId: 'worker',
+      nodeId: 'worker-node',
+      entityType: 'agent',
+      exists: true
+    })
   })
 
   test('describes how long ago something happened', () => {

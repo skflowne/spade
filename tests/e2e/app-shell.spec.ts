@@ -154,6 +154,7 @@ test('adds only the typed host bridge to the renderer global scope', async () =>
       projects: ['changeRoot', 'open', 'remove', 'rename', 'select'],
       canvas: ['execute', 'get', 'onChanged'],
       agents: [
+        'expandChild',
         'getRuntimes',
         'getTimeline',
         'interrupt',
@@ -162,7 +163,10 @@ test('adds only the typed host bridge to the renderer global scope', async () =>
         'onTimelineChanged',
         'openProviderSubagent',
         'prompt',
-        'respondToPermission'
+        'refreshConnection',
+        'respondToAgentPermission',
+        'respondToPermission',
+        'setMode'
       ],
       files: [
         'copyText',

@@ -1,17 +1,19 @@
 import { useId, useMemo, useState } from 'react'
 import { entityRenderers } from '../../entities'
+import { useAgentDirectory } from '../../store/hooks'
 import { useCanvasActions, useCanvasData } from '../CanvasContext'
 import { activityItems, relativeTime, type ActivityActorView } from '../model/activityView'
 import { SidePanel, useNow } from './SidePanel'
 
 // Who changed what (plan §4.6): the canvas's activity log, newest first.
 export function ActivityPanel(): React.JSX.Element {
-  const { canvas } = useCanvasData()
+  const { canvas, project } = useCanvasData()
+  const agents = useAgentDirectory(project.id)
   const actions = useCanvasActions()
   const [agentsOnly, setAgentsOnly] = useState(false)
   const filterId = useId()
   const now = useNow(30_000)
-  const items = useMemo(() => activityItems(canvas, { agentsOnly }), [canvas, agentsOnly])
+  const items = useMemo(() => activityItems(canvas, { agentsOnly, agents }), [canvas, agentsOnly, agents])
 
   return (
     <SidePanel

@@ -84,7 +84,7 @@ export function SettingsDialog({ app, onDone }: { app: AppState; onDone(): void 
                   (now <span className="mono">{app.paseo.url}</span>)
                 </>
               ) : null}
-              . Also accepts host:port or a port. A change applies the next time SPADE starts.
+              . Also accepts host:port or a port. Saving reconnects to the daemon at once.
             </>
           }
         />

@@ -20,7 +20,7 @@ import type { CanvasCommand } from '@shared/commands'
 import type { Canvas, CanvasNode, Point, Project, Rect, Size, Viewport } from '@shared/domain'
 import { entities } from '../entities'
 import type { SpawnRequest } from '../entities/types'
-import { useCanvas, useSession, useSpadeStore } from '../store/hooks'
+import { useAgentDirectory, useCanvas, useSession, useSpadeStore } from '../store/hooks'
 import { usePrompts } from '../ui/prompts'
 import {
   AgentChangeContext,
@@ -154,7 +154,8 @@ function CanvasSurface({ project, canvas }: { project: Project; canvas: Canvas }
     if (activeNodeId !== null && !bodyShown(canvas, view, activeNodeId)) setActiveNodeId(null)
   }, [canvas, view, activeNodeId])
 
-  const agentChanges = useAgentChanges(canvas)
+  const agents = useAgentDirectory(project.id)
+  const agentChanges = useAgentChanges(canvas, agents)
 
   // The overview title scale follows the zoom through a CSS variable, so zooming never re-renders nodes.
   useEffect(() => {

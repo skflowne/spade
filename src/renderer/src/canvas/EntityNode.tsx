@@ -1,9 +1,9 @@
-import { Component, memo, useEffect, useId, useMemo, useState, type ErrorInfo, type ReactNode } from 'react'
+import { Component, memo, useCallback, useEffect, useId, useMemo, useState, type ErrorInfo, type ReactNode } from 'react'
 import { Handle, NodeResizer, Position, useReactFlow, useStore, type Node, type NodeProps } from '@xyflow/react'
 import type { CanvasNode } from '@shared/domain'
 import { entityRenderers, resolveEntity } from '../entities'
 import type { EntityHost, NodeStatus } from '../entities/types'
-import { useSpadeStore } from '../store/hooks'
+import { useDrawerOpen, useSpadeStore } from '../store/hooks'
 import { DetailList } from '../ui/fields'
 import { MenuButton, type MenuItem } from '../ui/Menu'
 import { usePrompts } from '../ui/prompts'
@@ -45,6 +45,8 @@ function EntityNodeView({ id, data, selected }: NodeProps<EntityFlowNode>): Reac
   const revealOnScreen = useRevealOnScreen()
   const typeName = resolved.definition?.displayName ?? record.entityType
   const active = activeNodeId === id && !record.collapsed
+  const drawerOpen = useDrawerOpen(id)
+  const setDrawerOpen = useCallback((open: boolean) => store.setDrawerOpen(id, open), [store, id])
   // A body's status describes the mounted body; collapsing unmounts it.
   useEffect(() => {
     if (record.collapsed) setStatus(null)
@@ -75,99 +77,120 @@ function EntityNodeView({ id, data, selected }: NodeProps<EntityFlowNode>): Reac
     .filter(Boolean)
     .join(' ')
 
+  const Drawer = resolved.kind === 'ready' ? resolved.renderer.Drawer : undefined
+
   return (
-    <article className={className} data-testid="canvas-node" data-node-id={id} data-detail={detail} aria-labelledby={titleId}>
-      <NodeResizer
-        isVisible={!record.collapsed && !picking}
-        minWidth={MIN_RESIZE_SIZE.width}
-        minHeight={MIN_RESIZE_SIZE.height}
-        lineClassName="spade-node__resize-line"
-        handleClassName="spade-node__resize-handle"
-        onResizeEnd={(_event, params) => actions.finishResize(id, params)}
-      />
-      <Handle type="target" position={Position.Left} isConnectable={false} className="spade-node__handle" />
-      <header
-        className={`spade-node__header ${DRAG_HANDLE_CLASS}`}
-        data-testid="node-header"
-        role="group"
-        aria-label={`${record.title}, ${typeName}`}
-        aria-describedby={record.collapsed ? undefined : `${titleId}-hint`}
-        tabIndex={0}
-        onClick={() => {
-          if (!picking) actions.setActiveNode(null)
-        }}
-        onFocus={(event) => {
-          if (event.target !== event.currentTarget) return
-          actions.setCurrentNode(id)
-          if (event.currentTarget.matches(':focus-visible')) revealOnScreen(event.currentTarget)
-        }}
-        onKeyDown={(event) => {
-          if (event.target !== event.currentTarget || event.key !== 'Enter' || record.collapsed || picking) return
-          event.preventDefault()
-          actions.setActiveNode(id)
-        }}
-      >
-        <span className="spade-node__icon" aria-hidden="true">
-          {resolved.renderer?.icon ?? '?'}
-        </span>
-        <div className="spade-node__titles">
-          <NodeTitle id={titleId} record={record} />
-          <p className="spade-node__meta">
-            <span className="spade-node__type">{typeName}</span>
-            {agentChange ? (
-              <span
-                className="spade-node__agent-change"
-                data-testid="agent-change-marker"
-                title={`${agentChange.summary} (${new Date(agentChange.at).toLocaleTimeString()})`}
-              >
-                Changed by {agentChange.agentLabel}
-              </span>
-            ) : null}
-            {record.shortDescription ? <span className="spade-node__description"> · {record.shortDescription}</span> : null}
-          </p>
-          {record.collapsed ? null : (
-            <span id={`${titleId}-hint`} hidden>
-              Press Enter to use its content, Escape to return.
-            </span>
-          )}
-        </div>
-        <div className="spade-node__status">
-          {Status && resolved.kind === 'ready' ? <Status node={record} config={resolved.config} project={project} setAttention={setAttention} /> : null}
-          {status ? <StatusBadge status={status} /> : null}
-        </div>
-        <NodeControls record={record} view={view} host={host} resolved={resolved} />
-      </header>
-      {view.parentArchived ? <ParentArchived nodeId={id} /> : null}
-      {record.collapsed ? null : (
-        <div
-          className={active ? 'spade-node__body nodrag nowheel nopan' : 'spade-node__body'}
-          data-testid="node-body"
-          data-active={active}
-          data-detail={detail}
+    <>
+      <article className={className} data-testid="canvas-node" data-node-id={id} data-detail={detail} aria-labelledby={titleId}>
+        <NodeResizer
+          isVisible={!record.collapsed && !picking}
+          minWidth={MIN_RESIZE_SIZE.width}
+          minHeight={MIN_RESIZE_SIZE.height}
+          lineClassName="spade-node__resize-line"
+          handleClassName="spade-node__resize-handle"
+          onResizeEnd={(_event, params) => actions.finishResize(id, params)}
+        />
+        <Handle type="target" position={Position.Left} isConnectable={false} className="spade-node__handle" />
+        <header
+          className={`spade-node__header ${DRAG_HANDLE_CLASS}`}
+          data-testid="node-header"
+          role="group"
+          aria-label={`${record.title}, ${typeName}`}
+          aria-describedby={record.collapsed ? undefined : `${titleId}-hint`}
+          tabIndex={0}
           onClick={() => {
-            if (!picking && !active) actions.setActiveNode(id)
+            if (!picking) actions.setActiveNode(null)
+          }}
+          onFocus={(event) => {
+            if (event.target !== event.currentTarget) return
+            actions.setCurrentNode(id)
+            if (event.currentTarget.matches(':focus-visible')) revealOnScreen(event.currentTarget)
+          }}
+          onKeyDown={(event) => {
+            if (event.target !== event.currentTarget || event.key !== 'Enter' || record.collapsed || picking) return
+            event.preventDefault()
+            actions.setActiveNode(id)
           }}
         >
-          <div className="spade-node__content" inert={!active}>
-            <BodyBoundary key={record.entityType} resetKey={record.updatedAt}>
-              {resolved.kind === 'ready' ? (
-                <resolved.renderer.Body
-                  node={record}
-                  config={resolved.config}
-                  project={project}
-                  active={active}
-                  detail={detail}
-                  host={host}
-                />
-              ) : (
-                <FallbackBody record={record} problem={resolved.problem} />
-              )}
-            </BodyBoundary>
+          <span className="spade-node__icon" aria-hidden="true">
+            {resolved.renderer?.icon ?? '?'}
+          </span>
+          <div className="spade-node__titles">
+            <NodeTitle id={titleId} record={record} />
+            <p className="spade-node__meta">
+              <span className="spade-node__type">{typeName}</span>
+              {agentChange ? (
+                <span
+                  className="spade-node__agent-change"
+                  data-testid="agent-change-marker"
+                  title={`${agentChange.summary} (${new Date(agentChange.at).toLocaleTimeString()})`}
+                >
+                  Changed by {agentChange.agentLabel}
+                </span>
+              ) : null}
+              {record.shortDescription ? <span className="spade-node__description"> · {record.shortDescription}</span> : null}
+            </p>
+            {record.collapsed ? null : (
+              <span id={`${titleId}-hint`} hidden>
+                Press Enter to use its content, Escape to return.
+              </span>
+            )}
           </div>
-        </div>
-      )}
-      <Handle type="source" position={Position.Right} isConnectable={false} className="spade-node__handle" />
-    </article>
+          <div className="spade-node__status">
+            {Status && resolved.kind === 'ready' ? (
+              <Status
+                node={record}
+                config={resolved.config}
+                project={project}
+                setAttention={setAttention}
+                drawerOpen={drawerOpen}
+                setDrawerOpen={setDrawerOpen}
+              />
+            ) : null}
+            {status ? <StatusBadge status={status} /> : null}
+          </div>
+          <NodeControls record={record} view={view} host={host} resolved={resolved} />
+        </header>
+        {view.parentArchived ? <ParentArchived nodeId={id} /> : null}
+        {record.collapsed ? null : (
+          <div
+            className={active ? 'spade-node__body nodrag nowheel nopan' : 'spade-node__body'}
+            data-testid="node-body"
+            data-active={active}
+            data-detail={detail}
+            onClick={() => {
+              if (!picking && !active) actions.setActiveNode(id)
+            }}
+          >
+            <div className="spade-node__content" inert={!active}>
+              <BodyBoundary key={record.entityType} resetKey={record.updatedAt}>
+                {resolved.kind === 'ready' ? (
+                  <resolved.renderer.Body
+                    node={record}
+                    config={resolved.config}
+                    project={project}
+                    active={active}
+                    detail={detail}
+                    host={host}
+                  />
+                ) : (
+                  <FallbackBody record={record} problem={resolved.problem} />
+                )}
+              </BodyBoundary>
+            </div>
+          </div>
+        )}
+        <Handle type="source" position={Position.Right} isConnectable={false} className="spade-node__handle" />
+      </article>
+      {Drawer && drawerOpen && detail === 'full' && resolved.kind === 'ready' ? (
+        // Outside the node's box: the node keeps its size and its body its width.
+        <aside className="spade-node__drawer nodrag nowheel nopan" data-testid="node-drawer">
+          <BodyBoundary key={record.entityType} resetKey={record.updatedAt}>
+            <Drawer node={record} config={resolved.config} project={project} host={host} close={() => setDrawerOpen(false)} />
+          </BodyBoundary>
+        </aside>
+      ) : null}
+    </>
   )
 }
 

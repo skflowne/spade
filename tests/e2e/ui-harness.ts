@@ -211,6 +211,30 @@ export async function releaseCanvasCommands(app: ElectronApplication): Promise<v
   })
 }
 
+type RecordGlobal = { __canvasCommands?: unknown[] }
+
+// Records every canvas command the window sends from now on; each still runs as usual.
+export async function recordCanvasCommands(app: ElectronApplication): Promise<void> {
+  await app.evaluate(({ ipcMain }) => {
+    const channel = 'spade:canvas.execute'
+    const state = globalThis as unknown as RecordGlobal
+    if (state.__canvasCommands) return
+    const recorded: unknown[] = []
+    state.__canvasCommands = recorded
+    const handlers = (ipcMain as unknown as { _invokeHandlers: Map<string, (...args: unknown[]) => unknown> })._invokeHandlers
+    const original = handlers.get(channel)!
+    ipcMain.removeHandler(channel)
+    ipcMain.handle(channel, (event, ...args: unknown[]) => {
+      recorded.push(args[1])
+      return original(event, ...args)
+    })
+  })
+}
+
+export async function recordedCanvasCommands(app: ElectronApplication): Promise<CanvasCommand[]> {
+  return app.evaluate(() => ((globalThis as unknown as RecordGlobal).__canvasCommands ?? []) as never)
+}
+
 type RenderGlobal = { __spadeBodyRenders: Record<string, number> }
 
 // Counts, per node id, the React commits in which that node's entity body rendered, through the hook React

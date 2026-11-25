@@ -1,8 +1,10 @@
 import { AGENT_ENTITY, type AgentConfig } from '@shared/builtinEntities'
+import type { Canvas } from '@shared/domain'
 import { defineEntityRenderer } from '../registry'
 import type { EntityMenuAction, EntityMenuContext } from '../types'
 import { AgentBody } from './AgentBody'
 import { AgentCreateForm } from './AgentCreateForm'
+import { AgentsPane } from './AgentsPane'
 import { AgentStatus } from './AgentStatus'
 import { agentNodeHandles } from './nodeHandles'
 import { promptBlockReason } from './status'
@@ -11,7 +13,14 @@ import './agent.css'
 // The agent conversation entity (plan §7.1): spawn form, header status, conversation, composer,
 // permissions, provider sub-agents, and rich conversation artifacts.
 
-function menuActions({ node }: EntityMenuContext<AgentConfig>): EntityMenuAction[] {
+// The agent node this node was expanded from (a Paseo child or a provider sub-agent), or null.
+function ownerOf(canvas: Canvas, nodeId: string): string | null {
+  const edge = canvas.edges.find((candidate) => candidate.relation === 'child' && candidate.toNodeId === nodeId)
+  if (!edge || edge.origin !== 'delegated') return null
+  return canvas.nodes.some((candidate) => candidate.id === edge.fromNodeId && candidate.entityType === AGENT_ENTITY) ? edge.fromNodeId : null
+}
+
+function menuActions({ node, host }: EntityMenuContext<AgentConfig>): EntityMenuAction[] {
   const handle = agentNodeHandles.get(node.id)
   const runtime = handle?.runtime ?? null
   const notify = handle?.notify ?? ((message: string) => console.error(message))
@@ -26,6 +35,14 @@ function menuActions({ node }: EntityMenuContext<AgentConfig>): EntityMenuAction
           if (!result.ok) notify(`Could not interrupt the agent: ${result.error.message}`)
         })
       }
+    })
+  }
+  if (handle && ownerOf(handle.getCanvas(), node.id) !== null) {
+    // Removing the node returns the agent to its owner's list; the agent itself keeps running in Paseo.
+    actions.push({
+      id: 'collapse-into-owner',
+      label: 'Collapse into owner',
+      onSelect: () => void host.execute({ type: 'removeNode', nodeId: node.id })
     })
   }
   const agentId = runtime?.agentId ?? node.resourceRef?.id
@@ -49,5 +66,6 @@ export const agentRenderer = defineEntityRenderer<AgentConfig>({
   Body: AgentBody,
   Status: AgentStatus,
   CreateForm: AgentCreateForm,
+  Drawer: AgentsPane,
   menuActions
 })
